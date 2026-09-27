@@ -127,6 +127,61 @@ def doc_coverage(manifest: dict) -> tuple[int, int]:
     return documented, total
 
 
+def load_reference_corpus(plugin_id: str) -> tuple[str, int]:
+    """把该工具包的参考文档快照拼成一份语料。
+
+    约定：`docs/reference/` 下**目录名以工具包 id 开头**的都算它的文档
+    （例如 7zip → 7zip-md、scoop → scoop-help/scoop-wiki、uv → uv-help/uv-docs）。
+    这样不必维护一张映射表，加新工具包时只要按约定命名即可。
+    """
+    reference = ROOT / "docs" / "reference"
+    if not reference.exists():
+        return "", 0
+
+    chunks: list[str] = []
+    files = 0
+
+    for directory in sorted(reference.iterdir()):
+        if not directory.is_dir() or not directory.name.lower().startswith(plugin_id.lower()):
+            continue
+
+        for path in sorted(directory.rglob("*")):
+            if path.is_file() and path.suffix.lower() in {".md", ".txt", ".json", ".html"}:
+                try:
+                    chunks.append(path.read_text(encoding="utf-8", errors="ignore"))
+                    files += 1
+                except OSError:
+                    continue
+
+    return "\n".join(chunks), files
+
+
+def switch_source_report(manifest: dict) -> tuple[list[str], int, int]:
+    """R1（不发明参数）的启发式检查：清单里用到的开关，是否能在该工具包的文档快照里找到。
+
+    **刻意只做提示、不做门禁**：语料可能不全（例如某个开关只写在官网而非已抓取的页面里），
+    短开关（-n）也容易在正文里偶然命中。它的价值是"给审阅者一个信号"，
+    而不是"自动判作者有罪"。真正的门禁是 7z 那种从官方文档逐命令提取出的白名单。
+    """
+    corpus, files = load_reference_corpus(str(manifest.get("id", "")))
+    if not corpus:
+        return [], 0, 0
+
+    missing: list[str] = []
+    checked = 0
+
+    for action in manifest.get("actions", []):
+        for field in action.get("fields", []):
+            for sw in field_switches(field):
+                checked += 1
+                # 前后要求是非标识符字符，避免 "-n" 命中 "-no-progress" 这类误判
+                pattern = r"(?<![\w-])" + re.escape(sw) + r"(?![\w])"
+                if not re.search(pattern, corpus):
+                    missing.append(f"动作 {action.get('id')} 字段 {field.get('id')}: 开关 {sw}")
+
+    return missing, checked, files
+
+
 def main() -> int:
     schema_path = ROOT / "docs" / "spec" / "manifest-v1.schema.json"
     if not schema_path.exists():
@@ -147,6 +202,8 @@ def main() -> int:
 
     failed = 0
     total_doc = total_fields = 0
+    total_switches = total_missing = 0
+    missing_report: list[str] = []
 
     for path in manifests:
         rel = path.relative_to(ROOT)
@@ -159,6 +216,14 @@ def main() -> int:
                 extra.append(f"id '{data['id']}' 与目录名 '{path.parent.name}' 不一致")
             if matrix:
                 extra += check_switch_whitelist(data, matrix)
+
+            # R1 的启发式检查（不阻断，只报告）
+            missing, checked, corpus_files = switch_source_report(data)
+            total_switches += checked
+            total_missing += len(missing)
+            missing_report += [
+                f"{data.get('id')} → {item}（参考快照 {corpus_files} 个文件）" for item in missing
+            ]
 
         if errors or extra:
             failed += 1
@@ -181,6 +246,18 @@ def main() -> int:
     print(f"\n{len(manifests) - failed}/{len(manifests)} 个 manifest 通过")
     if total_fields:
         print(f"字段出处覆盖率: {total_doc}/{total_fields} ({total_doc * 100 // total_fields}%)")
+
+    # R1（不发明参数）的启发式报告。只提示、不阻断——语料可能不全，短开关也可能偶然命中。
+    if total_switches:
+        print(
+            f"开关溯源（启发式，仅提示）: 检查 {total_switches} 个开关，"
+            f"{total_switches - total_missing} 个能在参考文档快照里找到"
+        )
+        for item in missing_report[:20]:
+            print(f"    [待确认] {item}")
+        if len(missing_report) > 20:
+            print(f"    …另有 {len(missing_report) - 20} 条，未逐条列出")
+
     return 1 if failed else 0
 
 
