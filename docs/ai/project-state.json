@@ -1,0 +1,193 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-09-27",
+  "purpose": "机器可读的项目状态。AI 智能体接手时先读这里，再跑 scripts/check-env.ps1 核对 environment 段是否过期。",
+
+  "project": {
+    "repo": "https://github.com/Kangmori/swpj",
+    "visibility": "private",
+    "branch": "main",
+    "hostStack": ".NET 10 + WinUI 3 (Windows App SDK 2.5.1), unpackaged",
+    "hostImplemented": false,
+    "specVersion": 1
+  },
+
+  "environment": {
+    "_note": "这里是【期望值】，全部经实测确认。check-env.ps1 会用它和真实探测结果对比，只比对这里出现过的键。",
+    "os": { "build": "26200", "arch": "x64" },
+    "user": { "isAdmin": false },
+    "workspace": { "path": "D:\\AI\\swpj", "writable": true },
+    "dotnet": { "sdk": "10.0.401" },
+    "visualStudio": {
+      "product": "Visual Studio Community 2026",
+      "version": "18.10.12217.157",
+      "winuiWorkload": true,
+      "windowsSdk": "10.0.26100.0"
+    },
+    "tools": {
+      "git": "2.55.0",
+      "pandoc": "3.11",
+      "uv": "0.11.15",
+      "scoop": "0.5.3",
+      "7z": "26.03",
+      "python": "3.14.7",
+      "node": "26.8.2"
+    },
+    "network": { "fakeIpActive": true }
+  },
+
+  "environmentNotes": {
+    "fakeIpDns": "Clash Verge (verge-mihomo) 开启 fake-ip，域名解析为 28.0.0.x。后果：harness 的 web_fetch 对所有站点失败（拒绝非公网 IP）。对策：改用 pwsh 的 Invoke-WebRequest。web_search 仍可用。",
+    "noAdmin": "当前账号非管理员。需要提权的操作（如某些安装）会失败，不要假设能提权。",
+    "noCppToolchain": "未安装 C++ 工作负载与 MSVC。宿主走纯 C# + P/Invoke，不要引入需要编译原生代码的依赖。",
+    "vsWorkloadId": "WinUI 开发工作负载的 id 是 Microsoft.VisualStudio.Workload.Universal（显示名 WinUI 应用程序开发）。这是历史改名遗留，不存在名为 WinUI 的 id。",
+    "consoleEncoding": "pwsh 捕获含中文的输出前需设 $OutputEncoding = [Console]::OutputEncoding = [Text.Encoding]::UTF8，否则中文乱码。",
+    "workspaceAcl": "D:\\AI\\swpj 曾因 DACL 缺显式 WRITE_DAC 导致沙箱无法写；已用 icacls 授予当前用户完全控制。若再现（所有命令被沙箱拦下），重跑该命令。"
+  },
+
+  "artifacts": [
+    { "path": "AGENTS.md", "role": "AI 入口：硬规则、必读顺序、命令速查", "verified": true },
+    { "path": "docs/ai/development.md", "role": "AI 开发文档：架构、环境事实、陷阱、变更流程、恢复流程", "verified": true },
+    { "path": "docs/ai/playbook-tool-package.md", "role": "工具包开发手册：从零到通过冒烟的逐步流程", "verified": true },
+    { "path": "docs/ai/templates/manifest.template.yaml", "role": "清单骨架模板", "verified": true },
+    { "path": "docs/ai/project-state.json", "role": "本文件", "verified": true },
+    { "path": "docs/spec/manifest-v1.md", "role": "清单规范（人读），唯一事实来源", "verified": true },
+    { "path": "docs/spec/manifest-v1.schema.json", "role": "清单 JSON Schema（机读）", "verified": true },
+    { "path": "docs/adr/0001-宿主技术栈.md", "role": "技术栈决定与放弃的方案", "verified": true },
+    { "path": "plugins/7zip/manifest.yaml", "role": "第一个工具包：7-Zip，11 动作 / 64 字段", "verified": true },
+    { "path": "plugins/7zip/NOTES.md", "role": "7z 覆盖范围、未做项、坑、冒烟实测结果", "verified": true },
+    { "path": "scripts/validate-plugins.py", "role": "清单校验器（本地与 CI 共用）", "verified": true },
+    { "path": "scripts/check-env.ps1", "role": "环境探测与漂移核对", "verified": true },
+    { "path": "scripts/fetch-scoop-help.ps1", "role": "抓 scoop 的结构化帮助（28 命令）", "verified": true },
+    { "path": "scripts/extract-7zip-matrix.ps1", "role": "从 7z CHM 提取命令×开关矩阵", "verified": true },
+    { "path": "docs/reference/", "role": "官方文档快照 + 提取事实 + 生成方法", "verified": true },
+    { "path": "spike/winui3-smoke/", "role": "WinUI 3 环境冒烟项目（Phase 1 后可删）", "verified": true },
+    { "path": "src/", "role": "宿主程序源码（空，未开始）", "verified": false }
+  ],
+
+  "verifiedChecks": [
+    {
+      "id": "winui-build-without-vs",
+      "claim": "不开 Visual Studio，dotnet build 也能编译 WinUI 3",
+      "command": "dotnet build spike\\winui3-smoke\\WinUiSmoke.csproj -c Debug",
+      "result": "成功，0 警告 0 错误，24 秒",
+      "implication": "GitHub Actions 的 windows-latest 可以做构建 CI",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "winui-launch-unpackaged",
+      "claim": "unpackaged WinUI 3 应用能在本机启动",
+      "command": "Start-Process WinUiSmoke.exe; 检查 MainWindowTitle",
+      "result": "窗口标题 'WinUI 3 smoke test'，进程稳定存活",
+      "implication": "unpackaged 路线可行，不需要 MSIX 证书",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "manifest-validates",
+      "claim": "7zip 工具包通过全部四层校验",
+      "command": "uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py",
+      "result": "11 动作 / 64 字段 / 字段出处标注 100%",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "whitelist-catches-error",
+      "claim": "开关白名单能拦住把 -o 挂到 a 命令上的错误",
+      "command": "注入 -o 到 add 动作后跑 check_switch_whitelist()",
+      "result": "报告 1 个问题，正确定位到具体的动作与字段",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "7z-smoke",
+      "claim": "7z 工具包里 examples 的 10 条命令行为符合文档",
+      "command": "在临时目录逐条实跑并检查退出码与产出",
+      "result": "全部 exit=0；x 保留目录结构、e 抹平、d 后归档缩到 22 字节",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "chm-decompile",
+      "claim": "hh.exe -decompile 能反编译 CHM 帮助文件",
+      "command": "hh.exe -decompile <out> C:\\Users\\Steve\\scoop\\apps\\7zip\\26.03\\7-zip.chm",
+      "result": "80 个文件",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "invoke-webrequest-works",
+      "claim": "pwsh 的 Invoke-WebRequest 在本机可以出网（web_fetch 不行）",
+      "command": "Invoke-WebRequest <官方文档 URL> -UseBasicParsing",
+      "result": "7 个 URL 中 6 个返回 200；dev.7-zip.org TLS 握手失败",
+      "verifiedAt": "2026-09-27"
+    }
+  ],
+
+  "plugins": [
+    {
+      "id": "7zip",
+      "name": "7-Zip",
+      "appVersion": "26.03",
+      "manifestVersion": "0.1.0",
+      "path": "plugins/7zip/manifest.yaml",
+      "commands": ["a", "x", "e", "l", "t", "h", "d", "rn", "u", "b", "i"],
+      "fields": 64,
+      "docCoverage": 1.0,
+      "dangerousActions": ["delete (destructive)", "add/extract/extract-flat/update (overwrite)"],
+      "smokeTested": true,
+      "smokeResult": "10/10 条 examples exit=0，详见 NOTES.md",
+      "docsSource": "7-zip.chm (26.03) → Command Line Version 章节；快照见 docs/reference/7zip-md/",
+      "switchMatrix": "docs/reference/7zip-switch-matrix.json",
+      "knownGaps": "未做 -m 家族的格式专属参数、-si/-so 流、冷门 -s* 开关；-t* / -t# 特殊类型未暴露"
+    }
+  ],
+
+  "openDecisions": [
+    { "id": "D1", "question": "空值（null / \"\" / []）统一为“不产生任何 token”是否可接受？", "impact": "影响所有工具包；代价是无法传真正的空字符串参数", "status": "待拍板" },
+    { "id": "D2", "question": "visibleWhen 的表达能力边界（v1 仅 == / != / && / ||）", "impact": "影响界面条件显示", "status": "待拍板" },
+    { "id": "D3", "question": "字段声明顺序即 argv 顺序是否足够（是否要 argOrder）", "impact": "有些工具要求开关排在位置参数之前", "status": "待拍板" },
+    { "id": "D4", "question": "fixedArgs（隐藏参数）保留还是删除", "impact": "倾向删除，与硬规则 R6（不隐藏命令）冲突", "status": "倾向删除" },
+    { "id": "D5", "question": "是否引入 requirements（如 -sfx 需要 7zCon.sfx 与主程序同目录）", "impact": "影响工具包的前置校验", "status": "待拍板" },
+    { "id": "D6", "question": "历史记录 / 收藏命令属于工具包还是宿主", "impact": "倾向宿主统一实现", "status": "倾向宿主" }
+  ],
+
+  "nextActions": [
+    {
+      "id": "N1",
+      "task": "编写 scoop 工具包",
+      "why": "第二个样板，用它检验规范能否表达 28 个命令、子命令与需要提权的操作；也是工具包手册的第一次实战演练",
+      "how": "照 docs/ai/playbook-tool-package.md 走；参数依据用 docs/reference/scoop-help/（脚本可重新生成，版本匹配）",
+      "doneWhen": "validate 全绿 + examples 冒烟通过 + NOTES.md 记录实测结果 + project-state.json 的 plugins 段更新",
+      "priority": 1
+    },
+    {
+      "id": "N2",
+      "task": "搭 GitHub Actions：校验 + 构建",
+      "why": "把校验变成推送时的自动门禁；并顺带验证 windows-latest 上的构建",
+      "how": "workflow 跑 uv 校验 + dotnet build spike 项目；只在 push main 与打 tag 时触发（私有仓库 Windows runner 按 2 倍计费）",
+      "doneWhen": "一次推送能在 Actions 里看到绿灯",
+      "priority": 2
+    },
+    {
+      "id": "N3",
+      "task": "实现宿主壳的空心版本（垂直切片）",
+      "why": "打通 ManifestLoader → ArgvBuilder → ProcessRunner → 输出展示这条链路，才能证明规范真的能驱动界面",
+      "how": "先写 ArgvBuilder 与其单元测试（最易错、最该被测）；再最小 WinUI 界面跑通 7z 解压",
+      "doneWhen": "能在界面上选一个 7z 文件与输出目录，点击解压，看到实时进度，并且能取消",
+      "priority": 3
+    },
+    {
+      "id": "N4",
+      "task": "文档漂移检测",
+      "why": "慢节奏开发的最大风险是工具包随官方文档更新而腐坏",
+      "how": "Actions 定时抓取已收录工具的官方文档页并 diff，有变化就自动开 issue",
+      "doneWhen": "至少覆盖 7z 与 scoop 的文档源",
+      "priority": 4
+    }
+  ],
+
+  "readingOrderForNewAgent": [
+    "AGENTS.md",
+    "pwsh -File scripts/check-env.ps1",
+    "docs/ai/project-state.json",
+    "docs/ai/development.md",
+    "（要加工具包）docs/ai/playbook-tool-package.md",
+    "（要改规范）docs/spec/manifest-v1.md"
+  ]
+}

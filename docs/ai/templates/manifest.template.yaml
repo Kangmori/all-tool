@@ -1,0 +1,159 @@
+# yaml-language-server: $schema=../../spec/manifest-v1.schema.json
+#
+# 工具包清单模板。用法：
+#   1. 复制到 plugins/<id>/manifest.yaml，把 <占位符> 全部替换掉
+#   2. 删掉不适用的动作与字段——这个模板只是形状参考，不是必须填满的表单
+#   3. 每写一个字段，先回答：这在文档哪一页（doc）、默认值是什么、对哪些命令有效
+#   4. 写完后跑：uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py
+#   5. 真机冒烟后把结果写进同目录的 NOTES.md
+#
+# 完整规则见 docs/spec/manifest-v1.md；逐步流程见 docs/ai/playbook-tool-package.md
+
+spec: 1
+id: <必须等于目录名，小写，可含 0-9 . _ ->
+name: <显示名>
+manifestVersion: 0.1.0          # 工具包自身版本
+appVersion: "<适配的软件版本>"   # 加引号，避免 26.03 被当成数字
+description: <一句话说明>
+homepage: <官网>
+license: <软件自身许可，会在界面提示用户>
+tags: [<标签>]
+
+# 整个工具包的文档来源
+sources:
+  - title: <文档标题>
+    url: file:///<本地帮助文件绝对路径>   # 或 https://...
+    retrieved: "<YYYY-MM-DD>"
+    appliesTo: "<版本>"
+    note: <补充说明，例如"离线转换文本见 docs/reference/xxx-md/">
+
+locate:
+  executable: <主程序名，不含路径>
+  alternativeNames: [<同族可执行名>]
+  searchPaths:
+    - "%USERPROFILE%\\scoop\\shims"
+    - "%ProgramFiles%\\<软件目录>"
+  versionArgs: ["<取版本的参数>"]      # 空数组表示直接运行程序本身
+  versionPattern: "(?m)^<正则，第一个捕获组是版本号>"
+  minVersion: "<最低支持版本>"
+  notFoundHint: <找不到时的安装建议>
+
+runtime:
+  encoding: auto                 # Windows 中文环境常见 gbk/oem；auto 让宿主探测
+  useShell: false                # 保持 false：参数以数组传递，绝不拼字符串
+  requiresAdmin: false
+  workingDirectory: inherit      # 会写文件到当前目录的程序，在动作级覆盖成 outputDir
+  timeoutSeconds: 0              # 0 = 不限
+  preventConcurrentRuns: false
+
+# 文档里列出的所有退出码都要覆盖
+exitCodes:
+  - { code: 0, meaning: <含义>, severity: ok }
+  - { code: 1, meaning: <含义>, severity: warning }
+  - { code: 2, meaning: <含义>, severity: error }
+
+actions:
+
+  # ===== 动作 1：会产出文件、需要展示进度的典型动作 =====
+  - id: <动作标识，小写连字符>
+    title: <界面上显示的名字>
+    description: <一句话；建议在括号里写出等价的命令行>
+    command: <传给程序的首个非开关参数>
+    # commandArgs: []            # 紧跟在 command 之后的固定参数
+    danger: none                 # none | overwrite | destructive
+    # confirmText: <destructive 时必填的确认文案>
+    # workingDirectory: outputDir
+    sources:
+      - title: <该命令的文档页标题>
+        url: file:///<...>
+        retrieved: "<YYYY-MM-DD>"
+        appliesTo: "<版本>"
+        note: <文档内部的页路径，例如 cmdline/commands/add.htm>
+    fields:
+      # ---- 位置参数：必须第一个出现的位置参数放最前面（声明顺序 = argv 顺序）----
+      - id: <字段名>
+        label: <标签>
+        type: file               # text|textarea|number|bool|enum|multiselect|file|files|directory|directories|paths|password
+        style: positional
+        required: true
+        save: true               # 记住上次的值
+        accept: [<扩展名过滤>]
+        help: <帮助文字>
+        doc: <文档内的页路径或锚点>
+      # ---- 可重复的位置参数 ----
+      - id: inputs
+        label: <标签>
+        type: paths
+        style: positional
+        required: true
+        repeatable: true
+        doc: <...>
+      # ---- 无参数开关 ----
+      - id: <字段名>
+        label: <标签>
+        type: bool
+        style: flag
+        prefix: "-<开关>"
+        default: false
+        group: 高级
+        advanced: true
+        doc: <...>
+      # ---- 带值开关（紧贴）----
+      - id: <字段名>
+        label: <标签>
+        type: enum
+        style: attached
+        prefix: "-<开关>"
+        default: "<默认项 value>"
+        doc: <...>
+        values:
+          - { value: "<值>", label: "<显示名>", isDefault: true }
+          - { value: "<值>", label: "<显示名>" }
+      # ---- 一个开关的多个变体（-r / -r- / -r0 这种）----
+      - id: <字段名>
+        label: <标签>
+        type: enum
+        style: literal
+        switchBase: "-<该字段对应文档里的哪个开关，用于 CI 白名单校验>"
+        default: "<默认项 value>"
+        doc: <...>
+        values:
+          - { value: "off", label: "关闭（默认）", isDefault: true, args: [] }      # 不输出任何参数
+          - { value: "on",  label: "开启", args: ["-<开关>"] }
+      # ---- 可重复的开关 ----
+      - id: <字段名>
+        label: <标签>
+        type: multiselect
+        style: repeated
+        prefix: "-<开关>"
+        repeatable: true
+        group: 高级
+        advanced: true
+        doc: <...>
+    output:
+      mode: progress             # stream | capture | progress
+      showCommandLine: true      # 不要改成 false（硬规则 R6）
+      # openOnFinish: explorer
+      progress: { pattern: "(\\d+)%", unit: percent, group: 1 }
+    examples:                    # 从官方文档的 Examples 里抄，冒烟测试直接跑这些
+      - { title: "<说明>", args: ["<command>", "<参数>", "<开关>"], expectExitCode: 0 }
+
+  # ===== 动作 2：只读、结果需要留在界面上的动作 =====
+  - id: <动作标识>
+    title: <...>
+    command: <...>
+    sources:
+      - title: <...>
+        url: file:///<...>
+        retrieved: "<YYYY-MM-DD>"
+        appliesTo: "<版本>"
+    fields:
+      - id: <...>
+        label: <...>
+        type: file
+        style: positional
+        required: true
+        doc: <...>
+    output:
+      mode: capture
+      showCommandLine: true
