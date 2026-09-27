@@ -50,9 +50,44 @@
 5. **`x` / `e` 默认解压到当前目录**，因此这两个动作用 `workingDirectory: outputDir` 覆盖工具包级的 `inherit`。
 6. **`-aoa` 会无提示覆盖**。界面里"已存在文件时"的默认值对 `x` 取 `-aoa`、对 `e` 取 `-aos`，是刻意的差异。
 
-## 待办
+## 真机冒烟测试结果（2026-09-27，7-Zip 26.03）
 
-- 用 `examples` 里的命令做真机冒烟测试，把实测结果补记到这里（规范要求每个工具包至少有"我实际跑通的一条命令"）。
+`manifest.yaml` 里 `examples` 的 10 条命令已在本机逐条实跑，全部 `exit=0`：
+
+| 动作 | 命令 | 结果 |
+|---|---|---|
+| `a` 打包子目录（保留前缀） | `7z a archive1.zip sub\` | exit 0，归档 279 字节 |
+| `a` 只存内容 | `7z a archive2.zip .\sub\` | exit 0 |
+| `a` 递归收集 txt | `7z a Files.7z *.txt -r` | exit 0 |
+| `a` 仅存储 jpg | `7z a archive.zip *.jpg -mx0` | exit 0 |
+| `l` 查看内容 | `7z l archive1.zip` | exit 0 |
+| `t` 测试完整性 | `7z t archive1.zip` | exit 0 |
+| `h` 只输出 SHA256 | `7z h -scrcsha256 -slfh -ba a.txt` | exit 0 |
+| `x` 解压 | `7z x archive1.zip -oout -aoa` | exit 0，得到 `out\sub\b.txt`（**目录结构保留**，符合预期） |
+| `e` 平铺解压 | `7z e archive1.zip -oflat -aos` | exit 0，得到 `flat\b.txt`（**结构被抹平**，符合预期） |
+| `d` 删除归档内文件 | `7z d archive.zip *.jpg -r` | exit 0，归档缩到 22 字节 |
+
+顺带确认了 `x` 与 `e` 的关键差异在真实文件系统上成立，以及默认覆盖策略（`x` 用 `-aoa`、`e` 用 `-aos`）能跑通。
+
+### 冒烟测试发现的坑
+
+**`7z i` 的输出第一行是空行**：
+
+```
+(空行)
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+(空行)
+(空行)
+Libs:
+ 0 : 26.03 : C:\Users\Steve\scoop\apps\7zip\current\7z.dll
+```
+
+所以 `versionPattern` 写成 `^7-Zip\s+([0-9.]+)` 时匹配不到任何东西（`^` 只在整段文本开头生效），
+必须写成 `(?m)^7-Zip\s+([0-9.]+)`。这条经验已经反馈进规范：`versionPattern` 明确要求按多行语义匹配。
+
+## 还没做的
+
+- `b`（基准测试）的 examples 没跑——`7z b` 会持续压测 CPU 十几秒以上，不适合放进快速冒烟，留给手工验证。
 - `-v` 分卷、`-sfx` 自解压需要 `7zCon.sfx` 等辅助模块与 `7z.exe` 同目录，是否要在规范里加 `requirements` 待定。
 - `rn` 命令的成对参数目前用 `textarea` + `positionalMode: perLine`（每行一对）表达，界面上是一张映射表。
   如果以后觉得别扭，可以考虑给规范加一个真正的 `pairs` 字段类型。

@@ -34,7 +34,8 @@ locate:
     - "%ProgramFiles%\\7-Zip"
     - "%ProgramFiles(x86)%\\7-Zip"
   versionArgs: ["i"]
-  versionPattern: "^7-Zip\\s+([0-9.]+)"
+  # 注意 (?m)：7z i 的输出首行是空行，不加多行标志时 ^ 匹配不到版本行。
+  versionPattern: "(?m)^7-Zip\\s+([0-9.]+)"
   minVersion: "23.00"
   notFoundHint: 可用 scoop install 7zip 或从 https://www.7-zip.org/ 安装。
 

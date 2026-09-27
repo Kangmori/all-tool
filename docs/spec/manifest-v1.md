@@ -36,6 +36,10 @@ plugins/<id>/
 ## 3. 执行模型（宿主怎么用这份清单）
 
 1. **发现**：用 `locate.executable` 在 PATH 中查找，找不到再依次试 `alternativeNames` 与 `searchPaths`（支持 `%ENV%` 展开）。找到后按 `versionArgs` 取版本，用 `versionPattern` 提取版本号，与 `minVersion` 比较；不满足则禁用该工具包并提示。
+
+   `versionPattern` 的匹配语义（必须实现成这样）：**逐行（`RegexOptions.Multiline`）匹配，取第一个捕获组作为版本号**。
+   这条规则是被真实测量逼出来的：`7z i` 的输出**第一行是空行**，所以 `^7-Zip\s+([0-9.]+)` 在不加多行标志时永远匹配不到。
+   工具包作者最好在正则里显式写上 `(?m)`——多余一点，但换个宿主实现也不会失效。
 2. **组装 argv**：
 
    ```
@@ -102,6 +106,9 @@ uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py
    `switches`（该命令页的"可用开关"一节）与 `mentioned`（该命令页任何位置提到过的开关）。
    合并两者是因为官方白名单只列"有独立帮助页"的开关，像 `-ba` 这种无独立页面但确有使用的开关只在 `mentioned` 里。
 4. **出处覆盖率**：统计有多少字段标注了 `doc`。这是质量指标，不阻断构建。
+5. **冒烟测试（半自动）**：`examples` 里的命令标上 `expectExitCode` 后就是真机冒烟夹具——
+   在临时目录里真跑一遍，验证"清单描述的行为"和"程序实际行为"一致。
+   这一层不进 CI（会真的读写文件系统），实测结果记入工具包的 `NOTES.md`。
 
 当前实测结果：
 
