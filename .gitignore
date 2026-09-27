@@ -1,0 +1,24 @@
+# 构建产物
+bin/
+obj/
+.vs/
+*.user
+*.suo
+[Dd]ebug/
+[Rr]elease/
+
+# 冒烟测试项目的产物
+spike/**/bin/
+spike/**/obj/
+
+# 从 CHM 反编译出的原始 HTML 快照（可由脚本重新生成，体积大且是派生数据）
+docs/reference/7zip-chm/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# 临时文件
+*.tmp
+*.log

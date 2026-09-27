@@ -1,0 +1,878 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# 7-Zip 命令行版本（7z.exe）工具包 —— 第一个样板。
+#
+# 参数知识来源：7-zip.chm (7-Zip 26.03) 的 "Command Line Version" 章节。
+# 该 CHM 已被反编译并转成 Markdown（见 docs/reference/README.md），
+# 并且每个命令的"可用开关白名单"已提取为 docs/reference/7zip-switch-matrix.json。
+# CI 会用那份白名单校验本文件里的开关，例如把 -o 挂到 a 命令上会被直接拦下。
+#
+# 约定：本文件里出现的每个开关，都能在 CHM 中找到出处；没有出处的参数一律不写。
+
+spec: 1
+id: 7zip
+name: 7-Zip
+manifestVersion: 0.1.0
+appVersion: "26.03"
+description: 7-Zip 的命令行版本。压缩、解压、查看、测试、计算哈希。
+homepage: https://www.7-zip.org/
+license: LGPL-2.1-or-later（unRAR 部分另有不得用于开发 RAR 压缩器的限制条款）
+tags: [压缩, 归档, 哈希]
+
+sources:
+  - title: 7-Zip 帮助文件 —— Command Line Version 章节
+    url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
+    retrieved: "2026-09-27"
+    appliesTo: "26.03"
+    note: 所有字段均以此文档为准；离线转换文本位于 docs/reference/7zip-md/。
+
+locate:
+  executable: 7z
+  alternativeNames: [7za, 7zz]
+  searchPaths:
+    - "%USERPROFILE%\\scoop\\shims"
+    - "%ProgramFiles%\\7-Zip"
+    - "%ProgramFiles(x86)%\\7-Zip"
+  versionArgs: ["i"]
+  versionPattern: "^7-Zip\\s+([0-9.]+)"
+  minVersion: "23.00"
+  notFoundHint: 可用 scoop install 7zip 或从 https://www.7-zip.org/ 安装。
+
+runtime:
+  encoding: auto
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+
+# 来源：cmdline/exit_codes.htm
+exitCodes:
+  - { code: 0,   meaning: 成功，无错误,                                severity: ok }
+  - { code: 1,   meaning: 警告（非致命错误，例如文件被占用而跳过）,    severity: warning }
+  - { code: 2,   meaning: 致命错误,                                    severity: error }
+  - { code: 7,   meaning: 命令行参数错误,                              severity: error }
+  - { code: 8,   meaning: 内存不足,                                    severity: error }
+  - { code: 255, meaning: 用户中止,                                    severity: warning }
+
+actions:
+
+  # =============================================================== a — 添加
+  - id: add
+    title: 添加到压缩包
+    description: 创建压缩包，或向已有压缩包添加文件（7z a）
+    command: a
+    danger: overwrite
+    sources:
+      - title: a (Add) command
+        url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
+        retrieved: "2026-09-27"
+        appliesTo: "26.03"
+        note: cmdline/commands/add.htm
+    fields:
+      - id: archive
+        label: 压缩包
+        type: file
+        style: positional
+        required: true
+        save: true
+        accept: [.7z, .zip, .tar, .gz, .bz2, .xz, .wim, .iso]
+        placeholder: 例如 D:\backup\data.7z
+        help: 必须是命令之后的第一个文件名。不写扩展名时 7-Zip 会自动追加 .7z。
+        doc: cmdline/commands/add.htm
+      - id: inputs
+        label: 要压缩的文件/文件夹
+        type: paths
+        style: positional
+        required: true
+        repeatable: true
+        help: 可多选。路径末尾带反斜杠时，目录名会作为前缀写进归档；不带则只存内容。
+        doc: cmdline/syntax.htm
+      - id: type
+        label: 归档格式
+        type: enum
+        style: attached
+        prefix: "-t"
+        group: 基础
+        default: "7z"
+        doc: cmdline/switches/type.htm
+        values:
+          - { value: "7z",  label: 7z（默认，压缩率最高） }
+          - { value: zip,   label: zip（兼容性最好） }
+          - { value: tar,   label: tar（仅打包不压缩） }
+          - { value: gzip,  label: gzip }
+          - { value: bzip2, label: bzip2 }
+          - { value: xz,    label: xz }
+          - { value: wim,   label: wim }
+      - id: level
+        label: 压缩级别
+        type: enum
+        style: attached
+        prefix: "-mx"
+        switchBase: "-m"
+        group: 基础
+        default: "5"
+        help: "-mx0 表示仅存储不压缩，-mx9 表示极限压缩（更慢）。"
+        doc: cmdline/switches/method.htm
+        values:
+          - { value: "0", label: 0 - 仅存储 }
+          - { value: "1", label: 1 - 最快 }
+          - { value: "5", label: 5 - 默认 }
+          - { value: "7", label: 7 - 较高 }
+          - { value: "9", label: 9 - 极限 }
+      - id: password
+        label: 密码
+        type: password
+        style: attached
+        prefix: "-p"
+        group: 安全
+        help: 留空则不加密。若只写 -p 而不给密码，7-Zip 会在运行时提示输入——本工具不采用该模式。
+        doc: cmdline/switches/password.htm
+      - id: encryptNames
+        label: 加密文件名
+        type: enum
+        style: literal
+        switchBase: "-m"
+        group: 安全
+        default: "off"
+        help: 只有 7z 格式支持加密文件名；zip 不支持。
+        doc: cmdline/switches/method.htm
+        values:
+          - { value: "off", label: 不加密文件名（默认）, isDefault: true, args: [] }
+          - { value: "on",  label: 加密文件名（需同时设置密码）, args: ["-mhe"] }
+      - id: volumeSize
+        label: 分卷大小
+        type: text
+        style: repeated
+        prefix: "-v"
+        repeatable: true
+        group: 高级
+        advanced: true
+        placeholder: 例如 100m / 2g
+        help: 单位可为 b/k/m/g；只写数字表示字节。可填多个值。
+        doc: cmdline/switches/volume.htm
+      - id: recurse
+        label: 子目录搜索
+        type: enum
+        style: literal
+        switchBase: "-r"
+        group: 高级
+        default: "off"
+        doc: cmdline/switches/recurse.htm
+        values:
+          - { value: "off",     label: 不递归（默认）, isDefault: true, args: ["-r-"] }
+          - { value: "on",      label: 递归所有子目录, args: ["-r"] }
+          - { value: "wildcard", label: 仅对通配符递归, args: ["-r0"] }
+      - id: exclude
+        label: 排除的文件
+        type: multiselect
+        style: repeated
+        prefix: "-x!"
+        repeatable: true
+        group: 高级
+        advanced: true
+        placeholder: 例如 *.tmp / node_modules
+        help: 每项生成一个 -x! 开关，可填通配符。
+        doc: cmdline/switches/exclude.htm
+      - id: includeOnly
+        label: 只包含
+        type: multiselect
+        style: repeated
+        prefix: "-i!"
+        repeatable: true
+        group: 高级
+        advanced: true
+        doc: cmdline/switches/include.htm
+      - id: sfx
+        label: 创建自解压包
+        type: bool
+        style: flag
+        prefix: "-sfx"
+        group: 高级
+        advanced: true
+        default: false
+        help: 默认使用 7zCon.sfx 模块，该文件需与 7z.exe 同目录。
+        doc: cmdline/switches/sfx.htm
+      - id: deleteAfter
+        label: 归档后删除源文件
+        type: bool
+        style: flag
+        prefix: "-sdel"
+        group: 高级
+        advanced: true
+        default: false
+        doc: cmdline/switches/sdel.htm
+      - id: logLevel
+        label: 日志详细度
+        type: enum
+        style: attached
+        prefix: "-bb"
+        group: 高级
+        advanced: true
+        default: "0"
+        doc: cmdline/switches/bb.htm
+        values:
+          - { value: "0", label: 0 - 默认 }
+          - { value: "1", label: 1 - 显示已处理的文件名 }
+          - { value: "2", label: 2 - 更详细 }
+          - { value: "3", label: 3 - 调试 }
+      - id: workingDir
+        label: 工作目录
+        type: directory
+        style: attached
+        prefix: "-w"
+        group: 高级
+        advanced: true
+        doc: cmdline/switches/working_dir.htm
+    output:
+      mode: progress
+      showCommandLine: true
+      progress: { pattern: "(\\d+)%", unit: percent, group: 1 }
+    examples:
+      - { title: 把 subdir 整个打包（归档内保留 subdir\ 前缀）, args: ["a", "archive1.zip", "subdir\\"] }
+      - { title: 只存内容不带父目录名, args: ["a", "archive2.zip", ".\\subdir\\"] }
+      - { title: 递归收集所有 txt, args: ["a", "Files.7z", "*.txt", "-r"] }
+      - { title: 不压缩只存储（jpg 已压缩，再压无意义）, args: ["a", "archive.zip", "*.jpg", "-mx0"] }
+
+  # =============================================================== x — 解压
+  - id: extract
+    title: 解压（保留目录结构）
+    description: 把压缩包解压到指定目录，保留内部路径（7z x）
+    command: x
+    danger: overwrite
+    workingDirectory: outputDir
+    sources:
+      - title: x (eXtract with full paths) command
+        url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
+        retrieved: "2026-09-27"
+        appliesTo: "26.03"
+        note: cmdline/commands/extract_full.htm
+    fields:
+      - id: archive
+        label: 压缩包
+        type: file
+        style: positional
+        required: true
+        save: true
+        accept: [.7z, .zip, .rar, .tar, .gz, .bz2, .xz, .iso, .cab, .wim, .msi]
+        doc: cmdline/commands/extract_full.htm
+      - id: outputDir
+        label: 解压到
+        type: directory
+        style: attached
+        prefix: "-o"
+        required: true
+        save: true
+        help: 路径中可用 * 代表压缩包名。此开关只能与解压命令一起使用。
+        doc: cmdline/switches/output_dir.htm
+      - id: overwrite
+        label: 已存在文件时
+        type: enum
+        style: literal
+        switchBase: "-ao"
+        required: true
+        default: "a"
+        doc: cmdline/switches/overwrite.htm
+        values:
+          - { value: "a", label: 全部覆盖（-aoa）, isDefault: true, args: ["-aoa"] }
+          - { value: "s", label: 全部跳过（-aos）, args: ["-aos"] }
+          - { value: "u", label: 自动改名后解压（-aou）, args: ["-aou"] }
+          - { value: "t", label: 自动改名已存在文件（-aot）, args: ["-aot"] }
+      - id: password
+        label: 密码
+        type: password
+        style: attached
+        prefix: "-p"
+        doc: cmdline/switches/password.htm
+      - id: includeOnly
+        label: 只解压匹配项
+        type: multiselect
+        style: repeated
+        prefix: "-i!"
+        repeatable: true
+        group: 筛选
+        doc: cmdline/switches/include.htm
+      - id: exclude
+        label: 排除
+        type: multiselect
+        style: repeated
+        prefix: "-x!"
+        repeatable: true
+        group: 筛选
+        doc: cmdline/switches/exclude.htm
+      - id: recurse
+        label: 子目录搜索
+        type: enum
+        style: literal
+        switchBase: "-r"
+        group: 筛选
+        default: "off"
+        doc: cmdline/switches/recurse.htm
+        values:
+          - { value: "off",      label: 不递归（默认）, isDefault: true, args: ["-r-"] }
+          - { value: "on",       label: 递归, args: ["-r"] }
+          - { value: "wildcard", label: 仅通配符, args: ["-r0"] }
+      - id: assumeYes
+        label: 抑制所有询问
+        type: bool
+        style: flag
+        prefix: "-y"
+        group: 高级
+        advanced: true
+        default: false
+        doc: cmdline/switches/yes.htm
+      - id: ntfsStreams
+        label: 还原 NTFS 附加数据流
+        type: bool
+        style: flag
+        prefix: "-sns"
+        group: 高级
+        advanced: true
+        default: false
+        doc: cmdline/switches/sns.htm
+      - id: ntSecurity
+        label: 还原 NT 安全属性
+        type: bool
+        style: flag
+        prefix: "-sni"
+        group: 高级
+        advanced: true
+        default: false
+        doc: cmdline/switches/sni.htm
+      - id: logLevel
+        label: 日志详细度
+        type: enum
+        style: attached
+        prefix: "-bb"
+        group: 高级
+        advanced: true
+        default: "0"
+        doc: cmdline/switches/bb.htm
+        values:
+          - { value: "0", label: 0 - 默认 }
+          - { value: "1", label: 1 - 文件名 }
+          - { value: "2", label: 2 - 详细 }
+          - { value: "3", label: 3 - 调试 }
+    output:
+      mode: progress
+      showCommandLine: true
+      openOnFinish: explorer
+      progress: { pattern: "(\\d+)%", unit: percent, group: 1 }
+    examples:
+      - { title: 解压到当前目录, args: ["x", "archive.zip"] }
+      - { title: 只解压所有 cpp 文件到 c:\soft, args: ["x", "archive.zip", "-oc:\\soft", "*.cpp", "-r"] }
+
+  # =============================================================== e — 平铺解压
+  - id: extract-flat
+    title: 解压（不保留目录结构）
+    description: 把压缩包内所有文件解压到同一个目录（7z e）
+    command: e
+    danger: overwrite
+    workingDirectory: outputDir
+    sources:
+      - title: e (Extract) command
+        url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
+        retrieved: "2026-09-27"
+        appliesTo: "26.03"
+        note: cmdline/commands/extract.htm
+    fields:
+      - id: archive
+        label: 压缩包
+        type: file
+        style: positional
+        required: true
+        save: true
+        doc: cmdline/commands/extract.htm
+      - id: outputDir
+        label: 解压到
+        type: directory
+        style: attached
+        prefix: "-o"
+        required: true
+        save: true
+        help: 该命令会把所有文件平铺到同一个目录，同名文件会互相覆盖，谨慎使用。
+        doc: cmdline/switches/output_dir.htm
+      - id: overwrite
+        label: 已存在文件时
+        type: enum
+        style: literal
+        switchBase: "-ao"
+        required: true
+        default: "s"
+        doc: cmdline/switches/overwrite.htm
+        values:
+          - { value: "a", label: 全部覆盖（-aoa）, args: ["-aoa"] }
+          - { value: "s", label: 全部跳过（-aos，推荐）, isDefault: true, args: ["-aos"] }
+          - { value: "u", label: 自动改名（-aou）, args: ["-aou"] }
+      - id: password
+        label: 密码
+        type: password
+        style: attached
+        prefix: "-p"
+        doc: cmdline/switches/password.htm
+      - id: includeOnly
+        label: 只解压匹配项
+        type: multiselect
+        style: repeated
+        prefix: "-i!"
+        repeatable: true
+        group: 筛选
+        doc: cmdline/switches/include.htm
+      - id: assumeYes
+        label: 抑制所有询问
+        type: bool
+        style: flag
+        prefix: "-y"
+        group: 高级
+        advanced: true
+        default: false
+        doc: cmdline/switches/yes.htm
+    output:
+      mode: progress
+      showCommandLine: true
+      progress: { pattern: "(\\d+)%", unit: percent, group: 1 }
+
+  # =============================================================== l — 列表
+  - id: list
+    title: 查看内容
+    description: 列出压缩包内的文件（7z l）
+    command: l
+    sources:
+      - title: l (List contents of archive) command
+        url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
+        retrieved: "2026-09-27"
+        appliesTo: "26.03"
+        note: cmdline/commands/list.htm
+    fields:
+      - id: archive
+        label: 压缩包
+        type: file
+        style: positional
+        required: true
+        save: true
+        doc: cmdline/commands/list.htm
+      - id: filter
+        label: 只看匹配项
+        type: text
+        style: positional
+        placeholder: 例如 *.doc
+        help: 可带通配符；配合下面的"子目录搜索"决定是否递归。
+        doc: cmdline/syntax.htm
+      - id: technical
+        label: 显示技术信息
+        type: bool
+        style: flag
+        prefix: "-slt"
+        default: false
+        help: 输出改为逐字段的键值对形式，更适合程序解析。
+        doc: cmdline/switches/list_tech.htm
+      - id: password
+        label: 密码
+        type: password
+        style: attached
+        prefix: "-p"
+        doc: cmdline/switches/password.htm
+      - id: recurse
+        label: 子目录搜索
+        type: enum
+        style: literal
+        switchBase: "-r"
+        group: 高级
+        advanced: true
+        default: "off"
+        doc: cmdline/switches/recurse.htm
+        values:
+          - { value: "off", label: 不递归（默认）, isDefault: true, args: ["-r-"] }
+          - { value: "on",  label: 递归, args: ["-r"] }
+      - id: type
+        label: 指定归档类型
+        type: enum
+        style: attached
+        prefix: "-t"
+        group: 高级
+        advanced: true
+        doc: cmdline/switches/type.htm
+        values:
+          - { value: "",  label: 自动识别（默认） }
+          - { value: "7z", label: 7z }
+          - { value: "zip", label: zip }
+          - { value: "tar", label: tar }
+    output:
+      mode: capture
+      showCommandLine: true
+
+  # =============================================================== t — 测试
+  - id: test
+    title: 测试完整性
+    description: 校验压缩包是否损坏（7z t）
+    command: t
+    sources:
+      - title: t (Test integrity of archive) command
+        url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
+        retrieved: "2026-09-27"
+        appliesTo: "26.03"
+        note: cmdline/commands/test.htm
+    fields:
+      - id: archive
+        label: 压缩包
+        type: file
+        style: positional
+        required: true
+        save: true
+        doc: cmdline/commands/test.htm
+      - id: password
+        label: 密码
+        type: password
+        style: attached
+        prefix: "-p"
+        doc: cmdline/switches/password.htm
+      - id: filter
+        label: 只测试匹配项
+        type: text
+        style: positional
+        placeholder: 例如 *.doc
+        doc: cmdline/syntax.htm
+      - id: logLevel
+        label: 日志详细度
+        type: enum
+        style: attached
+        prefix: "-bb"
+        group: 高级
+        advanced: true
+        default: "1"
+        doc: cmdline/switches/bb.htm
+        values:
+          - { value: "0", label: 0 - 默认 }
+          - { value: "1", label: 1 - 文件名 }
+          - { value: "2", label: 2 - 详细 }
+    output:
+      mode: progress
+      showCommandLine: true
+      progress: { pattern: "(\\d+)%", unit: percent, group: 1 }
+
+  # =============================================================== h — 哈希
+  - id: hash
+    title: 计算哈希
+    description: 计算文件的校验值（7z h）
+    command: h
+    sources:
+      - title: h (Hash) command
+        url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
+        retrieved: "2026-09-27"
+        appliesTo: "26.03"
+        note: cmdline/commands/hash.htm
+    fields:
+      - id: files
+        label: 文件
+        type: paths
+        style: positional
+        required: true
+        repeatable: true
+        help: 用 * 可匹配当前目录所有文件；默认会连同子目录一起处理。
+        doc: cmdline/commands/hash.htm
+      - id: method
+        label: 哈希算法
+        type: enum
+        style: attached
+        prefix: "-scrc"
+        default: "sha256"
+        doc: cmdline/commands/hash.htm
+        values:
+          - { value: crc32,   label: CRC32（默认） }
+          - { value: crc64,   label: CRC64 }
+          - { value: md5,     label: MD5 }
+          - { value: sha1,    label: SHA1 }
+          - { value: sha256,  label: SHA256 }
+          - { value: sha384,  label: SHA384 }
+          - { value: sha512,  label: SHA512 }
+          - { value: sha3-256, label: SHA3-256 }
+          - { value: xxh64,   label: XXH64 }
+          - { value: blake2sp, label: BLAKE2sp }
+      - id: fieldsToShow
+        label: 显示字段
+        type: enum
+        style: literal
+        switchBase: "-slf"
+        default: "all"
+        help: 配合"禁用表头"可只输出哈希值本身，便于复制到校验文件里。
+        doc: cmdline/commands/hash.htm
+        values:
+          - { value: all, label: 哈希 + 大小 + 文件名（默认）, isDefault: true, args: [] }
+          - { value: h,   label: 只有哈希, args: ["-slfh"] }
+          - { value: hs,  label: 哈希 + 大小, args: ["-slfhs"] }
+          - { value: hn,  label: 哈希 + 文件名, args: ["-slfhn"] }
+          - { value: n,   label: 只有文件名, args: ["-slfn"] }
+      - id: noHeaders
+        label: 禁用表头
+        type: bool
+        style: flag
+        prefix: "-ba"
+        default: false
+        doc: cmdline/switches/bb.htm
+      - id: includeOnly
+        label: 只包含
+        type: multiselect
+        style: repeated
+        prefix: "-i!"
+        repeatable: true
+        group: 高级
+        advanced: true
+        doc: cmdline/switches/include.htm
+    output:
+      mode: capture
+      showCommandLine: true
+    examples:
+      - { title: 计算单个文件的 CRC32, args: ["h", "a.txt"] }
+      - { title: 计算 ISO 的 SHA256, args: ["h", "-scrcsha256", "a.iso"] }
+      - { title: 只输出 SHA256 值本身, args: ["h", "-scrcsha256", "-slfh", "-ba", "a.iso"] }
+
+  # =============================================================== d — 删除
+  - id: delete
+    title: 从压缩包删除文件
+    description: 删除压缩包内的指定文件（7z d）。此操作不可撤销。
+    command: d
+    danger: destructive
+    confirmText: 将从压缩包中永久删除匹配的文件，且无法撤销。
+    sources:
+      - title: d (Delete) command
+        url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
+        retrieved: "2026-09-27"
+        appliesTo: "26.03"
+        note: cmdline/commands/delete.htm
+    fields:
+      - id: archive
+        label: 压缩包
+        type: file
+        style: positional
+        required: true
+        save: true
+        doc: cmdline/commands/delete.htm
+      - id: filter
+        label: 要删除的匹配项
+        type: text
+        style: positional
+        required: true
+        help: 删除操作不预先备份，建议先用"查看内容"确认匹配结果。
+        doc: cmdline/commands/delete.htm
+      - id: recurse
+        label: 子目录搜索
+        type: enum
+        style: literal
+        switchBase: "-r"
+        default: "on"
+        doc: cmdline/switches/recurse.htm
+        values:
+          - { value: "off", label: 不递归, args: ["-r-"] }
+          - { value: "on",  label: 递归（默认）, isDefault: true, args: ["-r"] }
+      - id: password
+        label: 密码
+        type: password
+        style: attached
+        prefix: "-p"
+        doc: cmdline/switches/password.htm
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - { title: 删除所有 .bak 文件, args: ["d", "archive.zip", "*.bak", "-r"] }
+
+  # =============================================================== rn — 重命名
+  - id: rename
+    title: 重命名压缩包内文件
+    description: 修改压缩包内部的文件名（7z rn）
+    command: rn
+    sources:
+      - title: rn (Rename) command
+        url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
+        retrieved: "2026-09-27"
+        appliesTo: "26.03"
+        note: cmdline/commands/rename.htm
+    fields:
+      - id: archive
+        label: 压缩包
+        type: file
+        style: positional
+        required: true
+        save: true
+        doc: cmdline/commands/rename.htm
+      - id: renamePairs
+        label: 重命名映射
+        type: textarea
+        style: positional
+        positionalMode: perLine
+        required: true
+        placeholder: |
+          old.txt new.txt
+          2.txt folder\2new.txt
+        help: 每行一对"原文件名 目标文件名"，可写多行。目标名可带目录前缀。
+        doc: cmdline/commands/rename.htm
+      - id: password
+        label: 密码
+        type: password
+        style: attached
+        prefix: "-p"
+        doc: cmdline/switches/password.htm
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - { title: 重命名并移动到子目录, args: ["rn", "a.7z", "old.txt", "new.txt", "2.txt", "folder\\2new.txt"] }
+
+  # =============================================================== u — 更新
+  - id: update
+    title: 更新压缩包
+    description: 更新归档中较旧的文件，并加入尚不存在的文件（7z u）
+    command: u
+    danger: overwrite
+    sources:
+      - title: u (Update) command
+        url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
+        retrieved: "2026-09-27"
+        appliesTo: "26.03"
+        note: cmdline/commands/update.htm
+    fields:
+      - id: archive
+        label: 压缩包
+        type: file
+        style: positional
+        required: true
+        save: true
+        doc: cmdline/commands/update.htm
+      - id: inputs
+        label: 要更新的文件
+        type: paths
+        style: positional
+        required: true
+        repeatable: true
+        doc: cmdline/commands/update.htm
+      - id: type
+        label: 归档格式
+        type: enum
+        style: attached
+        prefix: "-t"
+        doc: cmdline/switches/type.htm
+        values:
+          - { value: "",    label: 自动识别（默认） }
+          - { value: "7z",  label: 7z }
+          - { value: zip,   label: zip }
+          - { value: tar,   label: tar }
+      - id: level
+        label: 压缩级别
+        type: enum
+        style: attached
+        prefix: "-mx"
+        switchBase: "-m"
+        default: "5"
+        doc: cmdline/switches/method.htm
+        values:
+          - { value: "0", label: 0 - 仅存储 }
+          - { value: "5", label: 5 - 默认 }
+          - { value: "9", label: 9 - 极限 }
+      - id: password
+        label: 密码
+        type: password
+        style: attached
+        prefix: "-p"
+        doc: cmdline/switches/password.htm
+      - id: recurse
+        label: 子目录搜索
+        type: enum
+        style: literal
+        switchBase: "-r"
+        group: 高级
+        advanced: true
+        default: "off"
+        doc: cmdline/switches/recurse.htm
+        values:
+          - { value: "off", label: 不递归（默认）, isDefault: true, args: ["-r-"] }
+          - { value: "on",  label: 递归, args: ["-r"] }
+      - id: logLevel
+        label: 日志详细度
+        type: enum
+        style: attached
+        prefix: "-bb"
+        group: 高级
+        advanced: true
+        default: "0"
+        doc: cmdline/switches/bb.htm
+        values:
+          - { value: "0", label: 0 - 默认 }
+          - { value: "1", label: 1 - 文件名 }
+          - { value: "2", label: 2 - 详细 }
+    output:
+      mode: progress
+      showCommandLine: true
+      progress: { pattern: "(\\d+)%", unit: percent, group: 1 }
+    examples:
+      - { title: 更新归档中的 doc 文件, args: ["u", "archive.zip", "*.doc"] }
+
+  # =============================================================== b — 基准测试
+  - id: benchmark
+    title: CPU 性能测试
+    description: 用 LZMA 压缩/解压测试 CPU 速度与内存（7z b）
+    command: b
+    sources:
+      - title: b (Benchmark) command
+        url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
+        retrieved: "2026-09-27"
+        appliesTo: "26.03"
+        note: cmdline/commands/bench.htm
+    fields:
+      - id: iterations
+        label: 迭代次数
+        type: number
+        style: positional
+        placeholder: 留空使用默认次数
+        doc: cmdline/commands/bench.htm
+      - id: threads
+        label: 线程数
+        type: number
+        style: attached
+        prefix: "-mmt"
+        separator: "="
+        switchBase: "-mmt"
+        group: 高级
+        advanced: true
+        doc: cmdline/commands/bench.htm
+      - id: dictSize
+        label: 字典大小（2 的幂）
+        type: number
+        style: attached
+        prefix: "-md"
+        switchBase: "-md"
+        group: 高级
+        advanced: true
+        placeholder: 例如 26 表示 2^26 = 64 MB
+        doc: cmdline/commands/bench.htm
+      - id: timeLimit
+        label: 每项时间上限（秒）
+        type: number
+        style: attached
+        prefix: "-mtime"
+        separator: "="
+        switchBase: "-mtime"
+        group: 高级
+        advanced: true
+        doc: cmdline/commands/bench.htm
+    output:
+      mode: progress
+      showCommandLine: true
+      progress: { pattern: "(\\d+)%", unit: percent, group: 1 }
+    examples:
+      - { title: 单线程 + 64MB 字典, args: ["b", "-mmt1", "-md26"] }
+
+  # =============================================================== i — 信息
+  - id: info
+    title: 查看支持的格式
+    description: 显示 7-Zip 支持的归档格式、编解码器与版本信息（7z i）
+    command: i
+    sources:
+      - title: Command Line Commands（快速参考表）
+        url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
+        retrieved: "2026-09-27"
+        appliesTo: "26.03"
+        note: cmdline/commands/index.htm —— i 命令在 CHM 里没有独立页面
+    fields: []
+    output:
+      mode: capture
+      showCommandLine: true

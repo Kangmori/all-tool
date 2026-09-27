@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="WinUiSmoke.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="WinUI 3 smoke test">
+    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8">
+        <TextBlock Text="WinUI 3 + .NET 10 环境就绪" FontSize="20" />
+        <TextBlock x:Name="InfoText" Opacity="0.7" />
+    </StackPanel>
+</Window>

@@ -1,0 +1,351 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://swpj.invalid/schemas/manifest-v1.schema.json",
+  "title": "命令行工具包清单 manifest v1",
+  "description": "描述一个命令行工具如何被可视化调用：如何找到它、如何把界面字段变成 argv、如何解释输出。所有字段都不得凭空发明，必须有官方文档依据。",
+  "type": "object",
+  "required": ["spec", "id", "name", "manifestVersion", "locate", "actions"],
+  "additionalProperties": false,
+  "properties": {
+    "spec": {
+      "const": 1,
+      "description": "规范版本。宿主据此判断自己能否加载该工具包。"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+      "description": "工具包唯一标识，必须与所在目录名一致（CI 校验）。"
+    },
+    "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "manifestVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "工具包自身版本，与目标软件版本无关。"
+    },
+    "appVersion": {
+      "type": "string",
+      "description": "本工具包适配的软件版本，例如 26.03。"
+    },
+    "description": { "type": "string", "maxLength": 500 },
+    "homepage": { "type": "string" },
+    "license": {
+      "type": "string",
+      "description": "目标软件自身的许可，用于在界面里提示用户（不是工具包的许可）。"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "sources": {
+      "type": "array",
+      "description": "参数知识的来源清单。整个工具包级别的来源。",
+      "items": { "$ref": "#/$defs/source" }
+    },
+    "locate": { "$ref": "#/$defs/locate" },
+    "runtime": { "$ref": "#/$defs/runtime" },
+    "exitCodes": {
+      "type": "array",
+      "description": "退出码语义。用于把裸数字翻译成人能看懂的结果。",
+      "items": { "$ref": "#/$defs/exitCode" }
+    },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/action" }
+    }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "required": ["title", "retrieved"],
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "url": {
+          "type": "string",
+          "description": "文档地址，可以是 https:// 或本地 file:/// 指向的帮助文件。"
+        },
+        "retrieved": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "取得该文档的日期（ISO）。文档会变，日期是溯源的一部分。"
+        },
+        "appliesTo": { "type": "string" },
+        "note": { "type": "string" }
+      }
+    },
+    "locate": {
+      "type": "object",
+      "required": ["executable"],
+      "additionalProperties": false,
+      "properties": {
+        "executable": {
+          "type": "string",
+          "description": "主可执行文件名，不含路径，例如 7z。"
+        },
+        "alternativeNames": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "同族可执行名，按优先级排列，例如 7za / 7zz。"
+        },
+        "searchPaths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "在 PATH 之外额外查找的目录，支持 %ENV% 变量。"
+        },
+        "versionArgs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "用于取版本的参数，例如 [\"i\"]。空数组表示直接运行程序本身。"
+        },
+        "versionPattern": {
+          "type": "string",
+          "description": "从版本输出中提取版本号的正则，第一个捕获组即版本。"
+        },
+        "minVersion": { "type": "string" },
+        "notFoundHint": {
+          "type": "string",
+          "description": "找不到可执行文件时展示给用户的安装建议。"
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "encoding": {
+          "enum": ["auto", "utf-8", "gbk", "oem", "utf-16le"],
+          "description": "子进程输出的编码。Windows 中文环境下通常是 gbk/oem，建议 auto。"
+        },
+        "useShell": {
+          "type": "boolean",
+          "default": false,
+          "description": "是否经由 shell 执行。默认 false（直接 CreateProcess，参数以数组传递，不做字符串拼接）。"
+        },
+        "requiresAdmin": { "type": "boolean" },
+        "workingDirectory": {
+          "enum": ["inherit", "outputDir", "userSelected"]
+        },
+        "timeoutSeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "0 表示不限制。"
+        },
+        "preventConcurrentRuns": { "type": "boolean" },
+        "env": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "exitCode": {
+      "type": "object",
+      "required": ["code", "meaning", "severity"],
+      "additionalProperties": false,
+      "properties": {
+        "code": { "type": "integer" },
+        "meaning": { "type": "string" },
+        "severity": { "enum": ["ok", "warning", "error"] }
+      }
+    },
+    "action": {
+      "type": "object",
+      "required": ["id", "title", "command", "sources"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$",
+          "description": "动作标识，在工具包内唯一。"
+        },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "command": {
+          "type": "string",
+          "description": "要传给程序的首个非开关参数，例如 7z 的 x。"
+        },
+        "commandArgs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "紧跟在 command 之后的固定参数。"
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/source" },
+          "description": "该动作的参数依据。至少一条。"
+        },
+        "danger": {
+          "enum": ["none", "overwrite", "destructive"],
+          "description": "destructive 表示会不可逆地破坏用户数据，宿主必须二次确认。"
+        },
+        "confirmText": { "type": "string" },
+        "workingDirectory": {
+          "enum": ["inherit", "outputDir", "userSelected"],
+          "description": "覆盖工具包级的 workingDirectory。7z 的 x/e 默认解压到当前目录，必须覆盖。"
+        },
+        "fields": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/field" }
+        },
+        "fixedArgs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "无条件追加的字面参数。用于用户永远不该改的设置。"
+        },
+        "output": { "$ref": "#/$defs/output" },
+        "examples": {
+          "type": "array",
+          "description": "来自官方文档的示例，兼作快速填充预设与冒烟测试夹具。",
+          "items": { "$ref": "#/$defs/example" }
+        }
+      }
+    },
+    "field": {
+      "type": "object",
+      "required": ["id", "label", "type", "style"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-zA-Z0-9]{0,63}$",
+          "description": "字段标识，在动作内唯一。"
+        },
+        "label": { "type": "string" },
+        "help": { "type": "string" },
+        "doc": {
+          "type": "string",
+          "description": "该字段对应的文档位置，例如 cmdline/switches/output_dir.htm。CI 会统计覆盖率。"
+        },
+        "type": {
+          "enum": [
+            "text", "textarea", "number", "bool", "enum", "multiselect",
+            "file", "files", "directory", "directories", "paths", "password"
+          ]
+        },
+        "style": {
+          "enum": ["positional", "attached", "separate", "flag", "literal", "repeated"],
+          "description": "该字段如何变成 argv。positional=独立位置参数；attached=前缀紧贴值；separate=前缀与值分两个 token；flag=布尔开关；literal=把所选值的 args 原样展开；repeated=每个选中项各生成一个 token。"
+        },
+        "prefix": {
+          "type": "string",
+          "description": "开关前缀，含前导减号，例如 -o。"
+        },
+        "switchBase": {
+          "type": "string",
+          "description": "该字段对应文档中的哪个开关（用于 CI 白名单校验）。literal/带后缀的字段必须显式声明，例如 -r 的 -r- / -r0 变体写 switchBase: \"-r\"。"
+        },
+        "separator": {
+          "enum": ["", " ", "="],
+          "default": ""
+        },
+        "positionalMode": {
+          "enum": ["literal", "perLine"],
+          "default": "literal",
+          "description": "仅 positional 有效。perLine 表示按行拆分成多个 argv token（用于 rn 这类成对参数）。"
+        },
+        "values": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/fieldValue" },
+          "description": "enum / multiselect 的选项；literal 风格下每个选项的 args 就是原样输出的 token。"
+        },
+        "default": {},
+        "required": { "type": "boolean" },
+        "placeholder": { "type": "string" },
+        "group": {
+          "type": "string",
+          "description": "界面分组，例如 基础 / 压缩 / 高级。"
+        },
+        "advanced": {
+          "type": "boolean",
+          "description": "默认折叠在高级区。"
+        },
+        "repeatable": {
+          "type": "boolean",
+          "description": "允许用户添加多个值（对应文档中 multiple xxx switches are supported）。"
+        },
+        "save": {
+          "type": "boolean",
+          "description": "记住上次使用的值（例如输出目录）。"
+        },
+        "accept": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "文件选择器的扩展名过滤，例如 .7z。"
+        },
+        "visibleWhen": {
+          "type": "string",
+          "description": "简单条件表达式，例如 type == '7z'。v1 只支持 == / != / && / || 与字段名。"
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "style": { "const": "literal" } }, "required": ["style"] },
+          "then": { "required": ["values"] }
+        },
+        {
+          "if": {
+            "properties": { "style": { "enum": ["attached", "separate", "flag", "repeated"] } },
+            "required": ["style"]
+          },
+          "then": { "required": ["prefix"] }
+        }
+      ]
+    },
+    "fieldValue": {
+      "type": "object",
+      "required": ["value", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "value": { "type": "string" },
+        "label": { "type": "string" },
+        "help": { "type": "string" },
+        "args": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "literal 风格下原样输出的 token；空数组表示该选项不产生任何参数。"
+        },
+        "isDefault": { "type": "boolean" }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "enum": ["stream", "capture", "progress"] },
+        "showCommandLine": {
+          "type": "boolean",
+          "description": "执行前展示将要运行的完整命令行。默认应开启，便于核对与排错。"
+        },
+        "progress": { "$ref": "#/$defs/progress" },
+        "openOnFinish": { "enum": ["none", "explorer"] },
+        "resultNote": { "type": "string" }
+      }
+    },
+    "progress": {
+      "type": "object",
+      "required": ["pattern"],
+      "additionalProperties": false,
+      "properties": {
+        "pattern": { "type": "string" },
+        "unit": { "enum": ["percent", "bytes", "count", "unknown"] },
+        "group": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "example": {
+      "type": "object",
+      "required": ["title", "args"],
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string" },
+        "args": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "完整 argv（不含可执行文件名）。"
+        },
+        "expectExitCode": { "type": "integer" }
+      }
+    }
+  }
+}

@@ -1,0 +1,583 @@
+{
+  "generatedBy": "scripts/extract-7zip-matrix.ps1",
+  "source": "7-zip.chm (7-Zip 26.03), section: Command Line Version",
+  "retrieved": "2026-09-27",
+  "commands": {
+    "a": {
+      "title": "Add",
+      "sourcePage": "cmdline/commands/add.htm",
+      "switchesFrom": "switches-section",
+      "switches": [
+        "-bb",
+        "-i",
+        "-m",
+        "-p",
+        "-r",
+        "-sdel",
+        "-sfx",
+        "-si",
+        "-sni",
+        "-sns",
+        "-so",
+        "-spf",
+        "-spm",
+        "-ssw",
+        "-stl",
+        "-stx",
+        "-t",
+        "-u",
+        "-v",
+        "-w",
+        "-x"
+      ],
+      "mentioned": [
+        "-r",
+        "-bb",
+        "-i",
+        "-m",
+        "-p",
+        "-sdel",
+        "-sfx",
+        "-si",
+        "-sni",
+        "-sns",
+        "-so",
+        "-spf",
+        "-spm",
+        "-ssw",
+        "-stl",
+        "-stx",
+        "-t",
+        "-u",
+        "-v",
+        "-w",
+        "-x"
+      ]
+    },
+    "b": {
+      "title": "Benchmark",
+      "sourcePage": "cmdline/commands/bench.htm",
+      "switchesFrom": "syntax",
+      "switches": [
+        "-mmt",
+        "-md",
+        "-mm",
+        "-mtime"
+      ],
+      "mentioned": [
+        "-mmt",
+        "-md",
+        "-mm",
+        "-mtime",
+        "-mmt1",
+        "-md26",
+        "-mtic"
+      ]
+    },
+    "d": {
+      "title": "Delete",
+      "sourcePage": "cmdline/commands/delete.htm",
+      "switchesFrom": "switches-section",
+      "switches": [
+        "-bb",
+        "-i",
+        "-m",
+        "-p",
+        "-r",
+        "-sns",
+        "-u",
+        "-w",
+        "-x"
+      ],
+      "mentioned": [
+        "-r",
+        "-bb",
+        "-i",
+        "-m",
+        "-p",
+        "-sns",
+        "-u",
+        "-w",
+        "-x"
+      ]
+    },
+    "e": {
+      "title": "Extract",
+      "sourcePage": "cmdline/commands/extract.htm",
+      "switchesFrom": "switches-section",
+      "switches": [
+        "-ai",
+        "-an",
+        "-ao",
+        "-ax",
+        "-bb",
+        "-i",
+        "-m",
+        "-o",
+        "-p",
+        "-r",
+        "-si",
+        "-sni",
+        "-sns",
+        "-so",
+        "-spf",
+        "-spm",
+        "-stx",
+        "-t",
+        "-x",
+        "-y",
+        "-scrc"
+      ],
+      "mentioned": [
+        "-o",
+        "-y",
+        "-oc",
+        "-r",
+        "-ai",
+        "-an",
+        "-ao",
+        "-ax",
+        "-bb",
+        "-i",
+        "-m",
+        "-p",
+        "-si",
+        "-sni",
+        "-sns",
+        "-so",
+        "-spf",
+        "-spm",
+        "-stx",
+        "-t",
+        "-x",
+        "-scrc"
+      ]
+    },
+    "x": {
+      "title": "eXtract with full paths",
+      "sourcePage": "cmdline/commands/extract_full.htm",
+      "switchesFrom": "switches-section",
+      "switches": [
+        "-ai",
+        "-an",
+        "-ao",
+        "-ax",
+        "-bb",
+        "-i",
+        "-m",
+        "-o",
+        "-p",
+        "-r",
+        "-si",
+        "-sni",
+        "-sns",
+        "-so",
+        "-spf",
+        "-spm",
+        "-stx",
+        "-t",
+        "-x",
+        "-y",
+        "-scrc"
+      ],
+      "mentioned": [
+        "-oc",
+        "-r",
+        "-ai",
+        "-an",
+        "-ao",
+        "-ax",
+        "-bb",
+        "-i",
+        "-m",
+        "-o",
+        "-p",
+        "-si",
+        "-sni",
+        "-sns",
+        "-so",
+        "-spf",
+        "-spm",
+        "-stx",
+        "-t",
+        "-x",
+        "-y",
+        "-scrc"
+      ]
+    },
+    "h": {
+      "title": "Hash",
+      "sourcePage": "cmdline/commands/hash.htm",
+      "switchesFrom": "switches-section",
+      "switches": [
+        "-i",
+        "-m",
+        "-r",
+        "-scrc",
+        "-si",
+        "-sns",
+        "-ssw",
+        "-x"
+      ],
+      "mentioned": [
+        "-scrc",
+        "-slf",
+        "-scrcsha256",
+        "-slfh",
+        "-ba",
+        "-i",
+        "-m",
+        "-r",
+        "-si",
+        "-sns",
+        "-ssw",
+        "-x"
+      ]
+    },
+    "l": {
+      "title": "List",
+      "sourcePage": "cmdline/commands/list.htm",
+      "switchesFrom": "switches-section",
+      "switches": [
+        "-ai",
+        "-an",
+        "-ax",
+        "-i",
+        "-slt",
+        "-sns",
+        "-p",
+        "-r",
+        "-stx",
+        "-t",
+        "-x"
+      ],
+      "mentioned": [
+        "-ai",
+        "-an",
+        "-ax",
+        "-i",
+        "-slt",
+        "-sns",
+        "-p",
+        "-r",
+        "-stx",
+        "-t",
+        "-x"
+      ]
+    },
+    "rn": {
+      "title": "Rename",
+      "sourcePage": "cmdline/commands/rename.htm",
+      "switchesFrom": "switches-section",
+      "switches": [
+        "-i",
+        "-m",
+        "-p",
+        "-r",
+        "-stl",
+        "-u",
+        "-w",
+        "-x"
+      ],
+      "mentioned": [
+        "-i",
+        "-m",
+        "-p",
+        "-r",
+        "-stl",
+        "-u",
+        "-w",
+        "-x"
+      ]
+    },
+    "t": {
+      "title": "Test",
+      "sourcePage": "cmdline/commands/test.htm",
+      "switchesFrom": "switches-section",
+      "switches": [
+        "-ai",
+        "-an",
+        "-ax",
+        "-bb",
+        "-i",
+        "-p",
+        "-r",
+        "-sns",
+        "-stx",
+        "-t",
+        "-x",
+        "-scrc"
+      ],
+      "mentioned": [
+        "-r",
+        "-ai",
+        "-an",
+        "-ax",
+        "-bb",
+        "-i",
+        "-p",
+        "-sns",
+        "-stx",
+        "-t",
+        "-x",
+        "-scrc"
+      ]
+    },
+    "u": {
+      "title": "Update",
+      "sourcePage": "cmdline/commands/update.htm",
+      "switchesFrom": "switches-section",
+      "switches": [
+        "-bb",
+        "-i",
+        "-m",
+        "-p",
+        "-r",
+        "-sfx",
+        "-si",
+        "-so",
+        "-sni",
+        "-sns",
+        "-ssw",
+        "-spf",
+        "-spm",
+        "-stl",
+        "-stx",
+        "-t",
+        "-u",
+        "-w",
+        "-x"
+      ],
+      "mentioned": [
+        "-bb",
+        "-i",
+        "-m",
+        "-p",
+        "-r",
+        "-sfx",
+        "-si",
+        "-so",
+        "-sni",
+        "-sns",
+        "-ssw",
+        "-spf",
+        "-spm",
+        "-stl",
+        "-stx",
+        "-t",
+        "-u",
+        "-w",
+        "-x"
+      ]
+    },
+    "i": {
+      "title": "Show information about supported formats",
+      "sourcePage": "cmdline/commands/index.htm",
+      "switchesFrom": "none",
+      "switches": [],
+      "mentioned": []
+    }
+  },
+  "switchToCommands": {
+    "-ai": [
+      "e",
+      "x",
+      "l",
+      "t"
+    ],
+    "-an": [
+      "e",
+      "x",
+      "l",
+      "t"
+    ],
+    "-ao": [
+      "e",
+      "x"
+    ],
+    "-ax": [
+      "e",
+      "x",
+      "l",
+      "t"
+    ],
+    "-bb": [
+      "a",
+      "d",
+      "e",
+      "x",
+      "t",
+      "u"
+    ],
+    "-i": [
+      "a",
+      "d",
+      "e",
+      "x",
+      "h",
+      "l",
+      "rn",
+      "t",
+      "u"
+    ],
+    "-m": [
+      "a",
+      "d",
+      "e",
+      "x",
+      "h",
+      "rn",
+      "u"
+    ],
+    "-md": [
+      "b"
+    ],
+    "-mm": [
+      "b"
+    ],
+    "-mmt": [
+      "b"
+    ],
+    "-mtime": [
+      "b"
+    ],
+    "-o": [
+      "e",
+      "x"
+    ],
+    "-p": [
+      "a",
+      "d",
+      "e",
+      "x",
+      "l",
+      "rn",
+      "t",
+      "u"
+    ],
+    "-r": [
+      "a",
+      "d",
+      "e",
+      "x",
+      "h",
+      "l",
+      "rn",
+      "t",
+      "u"
+    ],
+    "-scrc": [
+      "e",
+      "x",
+      "h",
+      "t"
+    ],
+    "-sdel": [
+      "a"
+    ],
+    "-sfx": [
+      "a",
+      "u"
+    ],
+    "-si": [
+      "a",
+      "e",
+      "x",
+      "h",
+      "u"
+    ],
+    "-slt": [
+      "l"
+    ],
+    "-sni": [
+      "a",
+      "e",
+      "x",
+      "u"
+    ],
+    "-sns": [
+      "a",
+      "d",
+      "e",
+      "x",
+      "h",
+      "l",
+      "t",
+      "u"
+    ],
+    "-so": [
+      "a",
+      "e",
+      "x",
+      "u"
+    ],
+    "-spf": [
+      "a",
+      "e",
+      "x",
+      "u"
+    ],
+    "-spm": [
+      "a",
+      "e",
+      "x",
+      "u"
+    ],
+    "-ssw": [
+      "a",
+      "h",
+      "u"
+    ],
+    "-stl": [
+      "a",
+      "rn",
+      "u"
+    ],
+    "-stx": [
+      "a",
+      "e",
+      "x",
+      "l",
+      "t",
+      "u"
+    ],
+    "-t": [
+      "a",
+      "e",
+      "x",
+      "l",
+      "t",
+      "u"
+    ],
+    "-u": [
+      "a",
+      "d",
+      "rn",
+      "u"
+    ],
+    "-v": [
+      "a"
+    ],
+    "-w": [
+      "a",
+      "d",
+      "rn",
+      "u"
+    ],
+    "-x": [
+      "a",
+      "d",
+      "e",
+      "x",
+      "h",
+      "l",
+      "rn",
+      "t",
+      "u"
+    ],
+    "-y": [
+      "e",
+      "x"
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+# 统一换行符，避免 Windows 上 autocrlf 造成的无意义 diff 噪音
+* text=auto eol=lf
+
+# PowerShell / 批处理保持 CRLF（Windows 上的传统习惯，避免个别工具抱怨）
+*.ps1 text eol=crlf
+*.psm1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 二进制
+*.png binary
+*.ico binary
+*.chm binary
