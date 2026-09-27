@@ -87,6 +87,14 @@ public sealed class ProcessRunner
 
         if (!string.IsNullOrEmpty(request.WorkingDirectory))
         {
+            // 刻意自动创建：像「解压到还不存在的目录」是很常见的合理意图
+            // （7z 自己也会用 -o 建目录），而 CreateProcess 在目录不存在时会直接报
+            // "目录名称无效" 而启动失败。若目录名打错，用户会在输出与文件系统里立刻看到。
+            if (!Directory.Exists(request.WorkingDirectory))
+            {
+                Directory.CreateDirectory(request.WorkingDirectory);
+            }
+
             startInfo.WorkingDirectory = request.WorkingDirectory;
         }
 

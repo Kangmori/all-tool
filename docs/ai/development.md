@@ -221,6 +221,10 @@ uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py
 | P12 | VS 工作负载 id 看起来像 UWP | 历史改名，id 未变 | 认 id `Microsoft.VisualStudio.Workload.Universal` |
 | P13 | 脚本拿到了"另一个同名文件"的内容，逻辑却看不出错 | **PowerShell 变量名大小写不敏感**：局部变量 `$stateFile` 会覆盖参数 `$StateFile` | 局部变量加前缀区分（`$vsStateFile`）；关键路径用 Write-Host 打印出来，出错时一眼可见 |
 | P14 | 错误被静默吞掉，只看到下游的空值判断走了 else 分支 | 脚本开头设了 `$ErrorActionPreference = 'SilentlyContinue'` | 探测脚本需要容错，但当"期望有值却为空"时要把实际路径/来源打印出来，否则排查成本极高 |
+| P15 | 子进程的进度条不动、界面像是卡住 | **7z 之类的程序在被重定向输出时不画进度**，只在真控制台里画（实测 40 MB 输入仅 354 字节输出、无 `%`） | 界面先显示"不确定"进度，解析到真实百分比再切成确定进度；彻底解决要上 ConPTY（伪终端），见 N5 |
+| P16 | 启动进程报 `目录名称无效`（Win32Exception） | `ProcessStartInfo.WorkingDirectory` 指向一个**还不存在**的目录时，CreateProcess 直接失败 | `ProcessRunner` 会先创建该目录——"解压到还不存在的目录"是常见合理意图。见 `ProcessRunner.RunAsync` 的注释 |
+| P17 | 截图里混进了桌面上别的窗口（浏览器、聊天工具） | 全屏截取，或 `SetForegroundWindow` 被前台限制挡下导致目标窗口仍在底层 | 用 `PrintWindow(..., PW_RENDERFULLCONTENT)` 让窗口画自己（`scripts/capture-app-window.ps1`）；并约定 `spike/*.png` 不入库 |
+| P18 | 测试偶发失败（同一段代码时过时不过） | 测试里用了 `System.Progress<T>`，它把回调投递到同步上下文/线程池，断言时可能还没落地 | 测试用同步收集器（`SyncProgress<T>`）；`Progress<T>` 只留给有 DispatcherQueue 的界面层 |
 
 ---
 

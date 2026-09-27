@@ -11,19 +11,7 @@ namespace Swpj.Core.Tests;
 /// </summary>
 public class RealManifestTests
 {
-    private static readonly string RepoRoot = FindRepoRoot();
-
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "AGENTS.md")))
-        {
-            dir = dir.Parent;
-        }
-
-        return dir?.FullName ?? throw new InvalidOperationException(
-            "向上找不到仓库根目录（以 AGENTS.md 为标志）。测试必须从仓库内运行。");
-    }
+    private static readonly string RepoRoot = TestRepo.Root;
 
     private static ToolManifest Load7Zip() =>
         ManifestLoader.LoadFromFile(Path.Combine(RepoRoot, "plugins", "7zip", "manifest.yaml"));

@@ -155,6 +155,37 @@ public class ProcessRunnerTests
     }
 
     [Fact]
+    public async Task 工作目录不存在时会被自动创建()
+    {
+        var runner = new ProcessRunner();
+        var target = Path.Combine(Path.GetTempPath(), "swpj-wd-" + Guid.NewGuid().ToString("N"), "inner");
+
+        Assert.False(Directory.Exists(target));
+
+        try
+        {
+            var result = await runner.RunAsync(new ProcessRunRequest
+            {
+                Executable = Path.Combine(Environment.SystemDirectory, "cmd.exe"),
+                Arguments = ["/c", "cd"],
+                OutputEncoding = EncodingResolver.DefaultForConsoleApps(),
+                WorkingDirectory = target,
+            });
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.True(Directory.Exists(target), "工作目录应当被自动创建，否则进程根本起不来");
+        }
+        finally
+        {
+            var root = Directory.GetParent(target)?.FullName;
+            if (root is not null && Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task 启动不存在的程序会抛异常而不是静默失败()
     {
         var runner = new ProcessRunner();
@@ -167,24 +198,22 @@ public class ProcessRunnerTests
     }
 
     [Fact]
-    public async Task 进度回调能实时收到输出行()
+    public async Task 进度回调能收到输出行()
     {
         var runner = new ProcessRunner();
-        var received = new List<string>();
-        var progress = new Progress<ProcessOutputLine>(line => received.Add(line.Text));
+
+        // 用同步收集器而不是 System.Progress<T>：后者在 xunit 的同步上下文下投递时机不确定，
+        // 会造成偶发失败（这个用例曾经时过时不过）。界面里用 Progress<T> 是另一回事——
+        // 那里有 DispatcherQueue 在泵消息。
+        var progress = new SyncProgress<ProcessOutputLine>();
 
         var result = await runner.RunAsync(Request("/c", "echo one & echo two"), progress);
 
         Assert.Equal(0, result.ExitCode);
 
-        // Progress<T> 是投递到同步上下文的，给它一点时间落地。
-        for (var i = 0; i < 20 && received.Count < 2; i++)
-        {
-            await Task.Delay(50);
-        }
-
         // 注意用 Trim：cmd 的 `echo one & echo two` 会把 `&` 前的空格也算进输出（"one "）。
-        Assert.Contains(received, text => text.Trim() == "one");
-        Assert.Contains(received, text => text.Trim() == "two");
+        Assert.Contains(progress.Items, line => line.Text.Trim() == "one");
+        Assert.Contains(progress.Items, line => line.Text.Trim() == "two");
+        Assert.All(progress.Items, line => Assert.Equal(OutputStream.StandardOutput, line.Stream));
     }
 }
