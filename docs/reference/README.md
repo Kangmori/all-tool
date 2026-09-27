@@ -18,6 +18,15 @@ docs/reference/
     index.json                28 个命令及其一句话说明
     <command>.txt             每个命令的详细帮助
   scoop-wiki/                 scoop 官方 wiki 全站（36 个页面，克隆自 Scoop.wiki.git）
+  uv-help/                    本机 uv 0.11.15 的帮助输出（49 个命令）
+    _meta.json                抓取时的版本、可执行文件路径、日期、抓取失败的命令
+    index.json                49 个命令 / 子命令及其一句话说明
+    <command>.txt             每个命令的简洁帮助（`uv <cmd> --help` 的输出）
+    pip-install.txt 等        二级命令把空格换成 '-'（`uv pip install --help`）
+    _uv.txt                   `uv --help` 的输出（含全局开关）
+  uv-docs/                    uv 官方 CLI 参考（https://docs.astral.sh/uv/reference/cli/）
+    cli-reference.html        原始 HTML（1 165 371 字节，mintlify/mdBook 风格的整页）
+    cli-reference.md          pandoc 转出的 Markdown（832 826 字节，含整页侧栏导航）
   7zip-md/                    7-zip.chm 反编译+转换后的 Markdown
     syntax.md                 命令行语法总览
     commands/*.md             11 个命令
@@ -68,6 +77,39 @@ Get-ChildItem docs\reference\7zip-chm\cmdline -Recurse -Filter *.htm | ForEach-O
 # 3. 提取命令 × 开关矩阵
 pwsh -File scripts/extract-7zip-matrix.ps1
 ```
+
+### uv
+
+两类来源都要抓：官方 CLI 参考（长文档，字段的 `doc` 指它的锚点）+ 本机二进制自带帮助
+（与安装版本严格对应，含每个开关的默认值）。
+
+```powershell
+# 1. 官方 CLI 参考。**必须用 Invoke-WebRequest**：本机 web_fetch 因 fake-ip DNS 不可用（P2）
+$out = 'docs/reference/uv-docs'
+New-Item -ItemType Directory -Force -Path $out | Out-Null
+Invoke-WebRequest 'https://docs.astral.sh/uv/reference/cli/' -UseBasicParsing -OutFile "$out\cli-reference.html"
+# 实测：HTTP 200，1 165 368 字节，689 ms
+
+# 2. 转 Markdown（需要 pandoc）
+pandoc -f html -t gfm --wrap=none "$out\cli-reference.html" -o "$out\cli-reference.md"
+
+# 3. 本机帮助快照（49 个命令）
+pwsh -File scripts/fetch-uv-help.ps1
+```
+
+**注意 `uv help <cmd>` 与 `uv <cmd> --help` 内容不同**，不是同一条帮助：
+前者是 docs 站上的长文档（`uv help sync` 首行 `Update the project's environment.`，带句号），
+后者是二进制内置的简洁帮助（`uv sync --help` 首行 `Update the project's environment`）。
+`fetch-uv-help.ps1` 抓的是**后者**，工具包的参数依据也以后者为准
+（离线、与安装版本严格对应）。理由与差异见 `plugins/uv/NOTES.md` §1.2。
+
+**另一个坑**：`cli-reference.md` 是整页转换的产物，头部上百行都是站点的侧栏导航。
+真正的命令节从 `## <a href="#uv-...">` 这种标题开始（例如 `uv sync` 在第 3393 行）。
+用锚点定位，别整篇读。
+
+**第三个坑**：`uv --help` 与 `uv help` 列出的命令表**不完全一致**——
+0.11.15 上前者是 21 个、后者是 22 个（多了 `generate-shell-completion`）。
+判断"有哪些命令"时两个都看一下。
 
 ### 为什么需要矩阵
 

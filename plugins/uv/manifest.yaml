@@ -1,0 +1,1579 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# uv（Astral 的 Python 包与环境管理器）工具包 —— 第三个样板，用来检验 playbook 在第二个作者手里是否够用。
+#
+# 参数知识来源（两类，均可离线复核）：
+#   1) 官方 CLI 参考文档 https://docs.astral.sh/uv/reference/cli/
+#      抓取与转换方式见 docs/reference/README.md，落盘为
+#      docs/reference/uv-docs/cli-reference.html / cli-reference.md
+#      该页每个命令都有独立锚点（#uv-sync、#uv-pip-install …），字段的 doc 直接指锚点。
+#   2) 本机 uv 0.11.15 的帮助快照 docs/reference/uv-help/<命令>.txt（由 scripts/fetch-uv-help.ps1 抓取）
+#
+# 覆盖原则：只覆盖真实常用项，未做的命令与开关在 NOTES.md 里逐条记录。
+# 本文件里出现的每个命令与开关，都能在上面两类来源里指出出处。
+
+spec: 1
+id: uv
+name: uv
+manifestVersion: 0.1.0
+appVersion: "0.11.15"
+description: Astral 的极速 Python 包管理器与环境管理器。管理项目依赖、虚拟环境、Python 版本与全局命令行工具。
+homepage: https://docs.astral.sh/uv/
+license: MIT OR Apache-2.0（uv 自身双许可）
+tags: [python, 包管理, 虚拟环境, 依赖]
+
+sources:
+  - title: uv CLI 参考（官方文档，覆盖全部命令与开关）
+    url: https://docs.astral.sh/uv/reference/cli/
+    retrieved: "2026-09-27"
+    appliesTo: "0.11.15"
+    note: 离线快照 docs/reference/uv-docs/cli-reference.html（HTML）与 cli-reference.md（pandoc 转出的 Markdown）。抓取方式见 docs/reference/README.md。字段的 doc 字段指向该页的锚点，例如 #uv-sync。
+  - title: 本机 uv 0.11.15 的内置帮助快照（每个命令一个文件）
+    url: file:///D:/AI/swpj/docs/reference/uv-help/
+    retrieved: "2026-09-27"
+    appliesTo: "0.11.15"
+    note: 由 scripts/fetch-uv-help.ps1 抓取，49 个命令的帮助 + index.json + _meta.json。它是"与已安装版本严格对应"的来源，且比官方长文档更紧凑（含每个开关的默认值）。各动作的 sources 里按文件名引用具体哪一个。
+
+locate:
+  executable: uv.exe
+  alternativeNames: [uv, uvx]
+  searchPaths:
+    - "%USERPROFILE%\\.local\\bin"
+    - "%USERPROFILE%\\scoop\\shims"
+    - "%LOCALAPPDATA%\\Microsoft\\WinGet\\Links"
+  versionArgs: ["--version"]
+  # 实测（2026-09-27，uv 0.11.15）：`uv --version` 首行非空，输出为
+  #   uv 0.11.15 (3cffe97c2 2026-05-18 x86_64-pc-windows-msvc)
+  # 捕获组 = 0.11.15。仍显式写 (?m) 以兼容宿主的多行匹配语义（见 docs/spec/manifest-v1.md §3）。
+  #
+  # 正则写成 `uvx?` 是为了兼容 alternativeNames 里的 uvx：
+  # winget 同目录下装了两个 exe（uv.exe 与 uvx.exe），若 uv.exe 不在搜索目录里而回退到 uvx.exe，
+  # `uvx --version` 打印的是 "uvx 0.11.15 (...)"。**实测**：写成 ^uv\s 时对 uvx 的输出匹配失败，
+  # 于是宿主会取不到版本号。uvx 随 uv 一起安装（同一目录、同一版本号），所以这个回退是合理的。
+  versionPattern: "(?m)^uvx?\\s+([0-9]+\\.[0-9]+\\.[0-9]+)"
+  minVersion: "0.8.0"
+  notFoundHint: 可用 winget install astral-sh.uv、scoop install uv，或从 https://docs.astral.sh/uv/getting-started/installation/ 安装。
+
+runtime:
+  # 实测：uv 是 Rust 写的，stdout/stderr 均为 UTF-8，与 scoop 的 GBK 相反。
+  # 证据（字节序列）见 NOTES.md §5。因此这里必须显式写 utf-8 而不是 auto。
+  encoding: utf-8
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  # 不开伪控制台：uv 用 --no-progress 之外的普通进度输出（实测重定向后进度信息仍在 stderr 里），
+  # 且开 ConPTY 会让 uv 认为自己在真终端里从而强制彩色与 ANSI 重绘。NOTES.md §6 有说明。
+  usePseudoConsole: false
+
+# 退出码：**官方文档里没有退出码章节**（已实测确认：reference/ 与 reference/cli/ 均无 "exit code" 字样）。
+# 下面三条来自 2026-09-27 的真机实测，见 NOTES.md §4。
+exitCodes:
+  - { code: 0, meaning: 成功,                                                    severity: ok }
+  - { code: 1, meaning: 运行期错误（网络失败、解析失败、包不存在等）,            severity: error }
+  - { code: 2, meaning: 命令行用法错误或项目上下文缺失（参数不认识、找不到 pyproject.toml）, severity: error }
+
+actions:
+
+  # =============================================================== uv run
+  - id: run
+    title: 运行命令或脚本
+    description: 在项目环境里运行命令（uv run）。会按需同步环境，可能下载并安装依赖。
+    command: run
+    danger: overwrite
+    confirmText: uv run 会按 pyproject.toml / uv.lock 同步项目环境，可能下载并安装依赖、改写虚拟环境。仅在你信任该项目时执行。
+    sources:
+      - title: uv CLI 参考 —— uv run
+        url: https://docs.astral.sh/uv/reference/cli/#uv-run
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/run.txt
+    fields:
+      # 字段声明顺序 = argv 顺序，对 uv run 尤其关键：uv 把第一个非开关参数当作"要运行的程序"，
+      # 之后的参数全部原样转交给它。所以 uv 自己的开关必须声明在 command 之前。
+      - id: with
+        label: 临时附加的包
+        type: text
+        style: separate
+        prefix: "--with"
+        repeatable: true
+        placeholder: 例如 requests
+        help: 在运行环境里额外装上这些包（可多行，每行一个）。此开关必须写在要运行的命令之前。
+        doc: "#uv-run（--with，帮助快照 run.txt 第 37 行）"
+      - id: python
+        label: Python 解释器
+        type: text
+        style: separate
+        prefix: "--python"
+        group: 高级
+        advanced: true
+        placeholder: 例如 3.12 或路径
+        doc: "#uv-run（--python / -p，帮助快照 run.txt 第 184 行）"
+      - id: noProject
+        label: 不查找项目
+        type: bool
+        style: flag
+        prefix: "--no-project"
+        group: 高级
+        advanced: true
+        default: false
+        help: 完全不查找 pyproject.toml，在临时环境里跑。适合"只想用某个工具跑一条命令"。
+        doc: "#uv-run（--no-project，帮助快照 run.txt 第 61 行）"
+      - id: noSync
+        label: 不同步环境
+        type: bool
+        style: flag
+        prefix: "--no-sync"
+        group: 高级
+        advanced: true
+        default: false
+        doc: "#uv-run（--no-sync，帮助快照 run.txt 第 47 行）"
+      - id: locked
+        label: 锁定模式（不允许改 uv.lock）
+        type: bool
+        style: flag
+        prefix: "--locked"
+        group: 高级
+        advanced: true
+        default: false
+        doc: "#uv-run（--locked，帮助快照 run.txt 第 49 行）"
+      - id: module
+        label: 按模块运行（-m）
+        type: bool
+        style: flag
+        prefix: "--module"
+        group: 高级
+        advanced: true
+        default: false
+        help: 勾选后，下面的"命令"被当作 Python 模块名，等价于 python -m <模块>。
+        doc: "#uv-run（--module / -m，帮助快照 run.txt 第 24 行）"
+      - id: command
+        label: 要运行的命令
+        type: text
+        style: positional
+        required: true
+        placeholder: 例如 pytest
+        help: uv 把第一个非开关参数当作要运行的程序名，其后的参数原样转交给它。
+        doc: "#uv-run（Usage: uv run [OPTIONS] [COMMAND]，帮助快照 run.txt 第 3 行）"
+      - id: commandArgs
+        label: 命令参数
+        type: textarea
+        style: positional
+        positionalMode: perLine
+        help: 一行一个参数，原样追加在命令之后，交给被运行的程序。
+        doc: "帮助快照 run.txt 第 3 行（[COMMAND] 之后的参数透传）"
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - { title: 查看 uv 在这个项目里能看到的 Python 版本, args: ["run", "--no-project", "--python", "3.14", "python", "--version"] }
+      - { title: 不查找项目地运行一条命令, args: ["run", "--no-project", "python", "-c", "print(1)"] }
+
+  # =============================================================== uv init
+  - id: init
+    title: 新建项目
+    description: 创建一个新的 Python 项目骨架（uv init），会写入 pyproject.toml 等文件。
+    command: init
+    danger: overwrite
+    confirmText: 会在目标目录里创建项目文件（pyproject.toml、README.md、.python-version 等），同名文件可能被改写。
+    sources:
+      - title: uv CLI 参考 —— uv init
+        url: https://docs.astral.sh/uv/reference/cli/#uv-init
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/init.txt
+    fields:
+      - id: path
+        label: 项目目录
+        type: directory
+        style: positional
+        required: true
+        save: true
+        placeholder: 留空或填 . 表示当前目录
+        doc: "#uv-init（[PATH]，帮助快照 init.txt 第 6 行）"
+      - id: name
+        label: 项目名
+        type: text
+        style: separate
+        prefix: "--name"
+        placeholder: 默认取目录名
+        doc: "#uv-init（--name，帮助快照 init.txt 第 9 行）"
+      - id: lib
+        label: 作为库（可被打包发布）
+        type: bool
+        style: flag
+        prefix: "--lib"
+        default: false
+        doc: "#uv-init（--lib，帮助快照 init.txt 第 14 行）"
+      - id: bare
+        label: 只生成 pyproject.toml
+        type: bool
+        style: flag
+        prefix: "--bare"
+        group: 高级
+        advanced: true
+        default: false
+        doc: "#uv-init（--bare，帮助快照 init.txt 第 10 行）"
+      - id: vcs
+        label: 版本控制
+        type: enum
+        style: separate
+        prefix: "--vcs"
+        group: 高级
+        advanced: true
+        default: ""
+        doc: "#uv-init（--vcs，帮助快照 init.txt 第 18 行）"
+        values:
+          - { value: "", label: 默认（git，若在 git 仓库外则自动判断） }
+          - { value: git, label: git }
+          - { value: none, label: 不初始化 }
+      - id: python
+        label: Python 版本
+        type: text
+        style: separate
+        prefix: "--python"
+        advanced: true
+        placeholder: 例如 3.12
+        doc: "#uv-init（--python / -p，帮助快照 init.txt 第 30 行）"
+    output:
+      mode: stream
+      showCommandLine: true
+
+  # =============================================================== uv add
+  - id: add
+    title: 添加依赖
+    description: 把依赖加入项目并更新锁文件与环境（uv add）
+    command: add
+    danger: overwrite
+    confirmText: 会改写 pyproject.toml 与 uv.lock，并同步虚拟环境（可能下载安装依赖）。
+    sources:
+      - title: uv CLI 参考 —— uv add
+        url: https://docs.astral.sh/uv/reference/cli/#uv-add
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/add.txt
+    fields:
+      - id: packages
+        label: 包
+        type: text
+        style: positional
+        required: true
+        repeatable: true
+        placeholder: "例如 requests 或 ruff==0.5.0"
+        help: 可填多行，每行一个 PEP 508 需求（含版本约束）。
+        doc: "#uv-add（[PACKAGES]...，帮助快照 add.txt 第 6 行）"
+      - id: dev
+        label: 加入开发依赖组
+        type: bool
+        style: flag
+        prefix: "--dev"
+        default: false
+        doc: "#uv-add（--dev，帮助快照 add.txt 第 15 行）"
+      - id: optional
+        label: 作为可选依赖（extra）
+        type: text
+        style: separate
+        prefix: "--optional"
+        placeholder: extra 名
+        doc: "#uv-add（--optional，帮助快照 add.txt 第 17 行）"
+      - id: group
+        label: 指定的依赖组
+        type: text
+        style: separate
+        prefix: "--group"
+        advanced: true
+        placeholder: 比如 dev / docs
+        doc: "#uv-add（--group，帮助快照 add.txt 第 19 行）"
+      - id: editable
+        label: 以可编辑方式安装
+        type: bool
+        style: flag
+        prefix: "--editable"
+        group: 高级
+        advanced: true
+        default: false
+        doc: "#uv-add（--editable，帮助快照 add.txt 第 21 行）"
+      - id: noSync
+        label: 不自动同步环境
+        type: bool
+        style: flag
+        prefix: "--no-sync"
+        group: 高级
+        advanced: true
+        default: false
+        help: 只改 pyproject.toml 与 uv.lock，不装包。
+        doc: "#uv-add（--no-sync，帮助快照 add.txt 第 38 行）"
+      - id: python
+        label: Python 解释器
+        type: text
+        style: separate
+        prefix: "--python"
+        group: 高级
+        advanced: true
+        doc: "#uv-add（--python / -p，帮助快照 add.txt 第 167 行）"
+    output:
+      mode: stream
+      showCommandLine: true
+
+  # =============================================================== uv remove
+  - id: remove
+    title: 移除依赖
+    description: 从项目里移除依赖（uv remove）
+    command: remove
+    danger: overwrite
+    confirmText: 会改写 pyproject.toml 与 uv.lock，并同步虚拟环境（卸载对应包）。
+    sources:
+      - title: uv CLI 参考 —— uv remove
+        url: https://docs.astral.sh/uv/reference/cli/#uv-remove
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/remove.txt
+    fields:
+      - id: packages
+        label: 要移除的包
+        type: text
+        style: positional
+        required: true
+        repeatable: true
+        placeholder: 每行一个包名
+        doc: "#uv-remove（<PACKAGES>...，帮助快照 remove.txt 第 5 行）"
+      - id: dev
+        label: 从开发依赖组移除
+        type: bool
+        style: flag
+        prefix: "--dev"
+        default: false
+        doc: "#uv-remove（--dev，帮助快照 remove.txt 第 9 行）"
+      - id: group
+        label: 指定的依赖组
+        type: text
+        style: separate
+        prefix: "--group"
+        advanced: true
+        doc: "#uv-remove（--group，帮助快照 remove.txt 第 13 行）"
+      - id: noSync
+        label: 不自动同步环境
+        type: bool
+        style: flag
+        prefix: "--no-sync"
+        group: 高级
+        advanced: true
+        default: false
+        doc: "#uv-remove（--no-sync，帮助快照 remove.txt 第 14 行）"
+    output:
+      mode: stream
+      showCommandLine: true
+
+  # =============================================================== uv sync
+  - id: sync
+    title: 同步环境
+    description: 按 pyproject.toml 与 uv.lock 把虚拟环境同步到位（uv sync）。会下载安装依赖。
+    command: sync
+    danger: overwrite
+    confirmText: 会写入 .venv（安装/卸载包，默认还会移除多余包），并可能更新 uv.lock。
+    sources:
+      - title: uv CLI 参考 —— uv sync
+        url: https://docs.astral.sh/uv/reference/cli/#uv-sync
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/sync.txt
+    fields:
+      - id: extra
+        label: 启用的 extra
+        type: text
+        style: separate
+        prefix: "--extra"
+        repeatable: true
+        placeholder: 每行一个 extra 名
+        doc: "#uv-sync（--extra，帮助快照 sync.txt 第 6 行）"
+      - id: allExtras
+        label: 启用全部 extra
+        type: bool
+        style: flag
+        prefix: "--all-extras"
+        default: false
+        doc: "#uv-sync（--all-extras，帮助快照 sync.txt 第 10 行）"
+      - id: noDev
+        label: 不要开发依赖
+        type: bool
+        style: flag
+        prefix: "--no-dev"
+        default: false
+        doc: "#uv-sync（--no-dev，帮助快照 sync.txt 第 14 行）"
+      - id: inexact
+        label: 不移除多余包
+        type: bool
+        style: flag
+        prefix: "--inexact"
+        group: 高级
+        advanced: true
+        default: false
+        doc: "#uv-sync（--inexact，帮助快照 sync.txt 第 31 行）"
+      - id: locked
+        label: 锁定模式（不允许改 uv.lock）
+        type: bool
+        style: flag
+        prefix: "--locked"
+        group: 高级
+        advanced: true
+        default: false
+        doc: "#uv-sync（--locked，帮助快照 sync.txt 第 43 行）"
+      - id: dryRun
+        label: 试运行（不实际改动）
+        type: bool
+        style: flag
+        prefix: "--dry-run"
+        group: 高级
+        advanced: true
+        default: false
+        doc: "#uv-sync（--dry-run，帮助快照 sync.txt 第 47 行）"
+      - id: check
+        label: 只检查是否已同步
+        type: bool
+        style: flag
+        prefix: "--check"
+        group: 高级
+        advanced: true
+        default: false
+        help: 不安装任何东西；环境与项目不一致时以非零退出码报告。
+        doc: "#uv-sync（--check，帮助快照 sync.txt 第 71 行）"
+      - id: python
+        label: Python 解释器
+        type: text
+        style: separate
+        prefix: "--python"
+        group: 高级
+        advanced: true
+        doc: "#uv-sync（--python / -p，帮助快照 sync.txt 第 178 行）"
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - { title: 只检查环境是否与项目一致（不安装任何东西）, args: ["sync", "--check"] }
+
+  # =============================================================== uv lock
+  - id: lock
+    title: 更新锁文件
+    description: 重新解析依赖并写入 uv.lock（uv lock）。会联网解析版本。
+    command: lock
+    danger: overwrite
+    confirmText: 会改写 uv.lock。
+    sources:
+      - title: uv CLI 参考 —— uv lock
+        url: https://docs.astral.sh/uv/reference/cli/#uv-lock
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/lock.txt
+    fields:
+      - id: check
+        label: 只检查锁文件是否最新
+        type: bool
+        style: flag
+        prefix: "--check"
+        default: false
+        help: 不写文件；不一致时以非零退出码报告。适合放进 CI。
+        doc: "#uv-lock（--check，帮助快照 lock.txt 第 6 行）"
+      - id: dryRun
+        label: 试运行（不写锁文件）
+        type: bool
+        style: flag
+        prefix: "--dry-run"
+        advanced: true
+        default: false
+        doc: "#uv-lock（--dry-run，帮助快照 lock.txt 第 9 行）"
+      - id: upgrade
+        label: 允许升级
+        type: bool
+        style: flag
+        prefix: "--upgrade"
+        advanced: true
+        default: false
+        help: 忽略已有输出文件里钉住的版本，重新选版本。
+        doc: "#uv-lock（--upgrade / -U，帮助快照 lock.txt 第 39 行）"
+      - id: script
+        label: 针对某个脚本
+        type: file
+        style: separate
+        prefix: "--script"
+        advanced: true
+        accept: [.py]
+        doc: "#uv-lock（--script，帮助快照 lock.txt 第 10 行）"
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - { title: 检查锁文件是否最新（只读，不改文件）, args: ["lock", "--check"] }
+      - { title: 试运行：看看会改什么, args: ["lock", "--dry-run"] }
+
+  # =============================================================== uv export
+  - id: export
+    title: 导出锁文件
+    description: 把 uv.lock 导出成 requirements.txt / pylock.toml / CycloneDX（uv export）
+    command: export
+    danger: overwrite
+    confirmText: 若填了输出文件，会覆盖该文件。
+    sources:
+      - title: uv CLI 参考 —— uv export
+        url: https://docs.astral.sh/uv/reference/cli/#uv-export
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/export.txt
+    fields:
+      - id: format
+        label: 导出格式
+        type: enum
+        style: separate
+        prefix: "--format"
+        default: ""
+        doc: "#uv-export（--format，帮助快照 export.txt 第 6 行）"
+        values:
+          - { value: "", label: 默认（requirements.txt） }
+          - { value: requirements.txt, label: requirements.txt }
+          - { value: pylock.toml, label: pylock.toml }
+          - { value: cyclonedx1.5, label: CycloneDX 1.5（SBOM） }
+      - id: outputFile
+        label: 输出文件
+        type: file
+        style: separate
+        prefix: "--output-file"
+        save: true
+        help: 不填则打印到标准输出。
+        doc: "#uv-export（--output-file / -o，帮助快照 export.txt 第 44 行）"
+      - id: noHashes
+        label: 不带哈希
+        type: bool
+        style: flag
+        prefix: "--no-hashes"
+        default: false
+        doc: "#uv-export（--no-hashes，帮助快照 export.txt 第 42 行）"
+      - id: noDev
+        label: 不要开发依赖
+        type: bool
+        style: flag
+        prefix: "--no-dev"
+        default: false
+        doc: "#uv-export（--no-dev，帮助快照 export.txt 第 21 行）"
+      - id: noHeader
+        label: 不带文件头注释
+        type: bool
+        style: flag
+        prefix: "--no-header"
+        advanced: true
+        default: false
+        doc: "#uv-export（--no-header，帮助快照 export.txt 第 37 行）"
+      - id: noAnnotate
+        label: 不带来源注释
+        type: bool
+        style: flag
+        prefix: "--no-annotate"
+        advanced: true
+        default: false
+        doc: "#uv-export（--no-annotate，帮助快照 export.txt 第 35 行）"
+      - id: locked
+        label: 锁定模式（不允许改 uv.lock）
+        type: bool
+        style: flag
+        prefix: "--locked"
+        advanced: true
+        default: false
+        doc: "#uv-export（--locked，帮助快照 export.txt 第 54 行）"
+    output:
+      mode: capture
+      showCommandLine: true
+    examples:
+      - { title: 导出成 requirements.txt（打印到标准输出）, args: ["export", "--format", "requirements.txt"] }
+
+  # =============================================================== uv tree
+  - id: tree
+    title: 查看依赖树
+    description: 显示项目的依赖树（uv tree）。需要当前目录（或其父目录）有 pyproject.toml。
+    command: tree
+    sources:
+      - title: uv CLI 参考 —— uv tree
+        url: https://docs.astral.sh/uv/reference/cli/#uv-tree
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/tree.txt
+    fields:
+      - id: depth
+        label: 显示深度
+        type: number
+        style: separate
+        prefix: "--depth"
+        default: 255
+        help: 默认 255（即不限深度）。
+        doc: "#uv-tree（--depth / -d，帮助快照 tree.txt 第 8 行）"
+      - id: outdated
+        label: 显示每个包的最新可用版本
+        type: bool
+        style: flag
+        prefix: "--outdated"
+        default: false
+        help: 需要联网查询索引。
+        doc: "#uv-tree（--outdated，帮助快照 tree.txt 第 22 行）"
+      - id: showSizes
+        label: 显示 wheel 体积
+        type: bool
+        style: flag
+        prefix: "--show-sizes"
+        default: false
+        doc: "#uv-tree（--show-sizes，帮助快照 tree.txt 第 24 行）"
+      - id: noDedupe
+        label: 不合并重复依赖
+        type: bool
+        style: flag
+        prefix: "--no-dedupe"
+        advanced: true
+        default: false
+        doc: "#uv-tree（--no-dedupe，帮助快照 tree.txt 第 14 行）"
+      - id: universal
+        label: 平台无关的依赖树
+        type: bool
+        style: flag
+        prefix: "--universal"
+        advanced: true
+        default: false
+        doc: "#uv-tree（--universal，帮助快照 tree.txt 第 6 行）"
+      - id: locked
+        label: 锁定模式（不允许改 uv.lock）
+        type: bool
+        style: flag
+        prefix: "--locked"
+        advanced: true
+        default: false
+        doc: "#uv-tree（--locked，帮助快照 tree.txt 第 40 行）"
+    output:
+      mode: capture
+      showCommandLine: true
+    examples:
+      - { title: 只看两层（需在含 pyproject.toml 的目录里）, args: ["tree", "--depth", "2"] }
+
+  # =============================================================== uv venv
+  - id: venv
+    title: 创建虚拟环境
+    description: 在指定路径创建虚拟环境（uv venv），默认写 .venv。
+    command: venv
+    danger: overwrite
+    confirmText: 会在目标路径创建/覆盖虚拟环境目录（勾选"清空已有目录"时会先删除同名目录内容）。
+    sources:
+      - title: uv CLI 参考 —— uv venv
+        url: https://docs.astral.sh/uv/reference/cli/#uv-venv
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/venv.txt
+    fields:
+      - id: path
+        label: 环境目录
+        type: directory
+        style: positional
+        required: true
+        save: true
+        placeholder: 例如 .venv
+        doc: "#uv-venv（[PATH]，帮助快照 venv.txt 第 6 行）"
+      - id: python
+        label: Python 解释器
+        type: text
+        style: separate
+        prefix: "--python"
+        placeholder: 例如 3.12
+        doc: "#uv-venv（--python / -p，帮助快照 venv.txt 第 41 行）"
+      - id: seed
+        label: 一并安装 pip/setuptools/wheel
+        type: bool
+        style: flag
+        prefix: "--seed"
+        default: false
+        doc: "#uv-venv（--seed，帮助快照 venv.txt 第 11 行）"
+      - id: clear
+        label: 清空已有目录
+        type: bool
+        style: flag
+        prefix: "--clear"
+        advanced: true
+        default: false
+        help: 会删除目标路径上已存在的文件或目录。
+        doc: "#uv-venv（--clear / -c，帮助快照 venv.txt 第 14 行）"
+      - id: allowExisting
+        label: 保留已有文件
+        type: bool
+        style: flag
+        prefix: "--allow-existing"
+        advanced: true
+        default: false
+        doc: "#uv-venv（--allow-existing，帮助快照 venv.txt 第 16 行）"
+      - id: systemSitePackages
+        label: 可访问系统 site-packages
+        type: bool
+        style: flag
+        prefix: "--system-site-packages"
+        advanced: true
+        default: false
+        doc: "#uv-venv（--system-site-packages，帮助快照 venv.txt 第 20 行）"
+      - id: noProject
+        label: 不查找项目
+        type: bool
+        style: flag
+        prefix: "--no-project"
+        advanced: true
+        default: false
+        doc: "#uv-venv（--no-project，帮助快照 venv.txt 第 9 行）"
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - { title: 在当前目录创建 .venv（写文件，安全起见未实跑）, args: ["venv", ".venv"] }
+
+  # =============================================================== uv pip（子命令）
+  - id: pip-list
+    title: pip 兼容 —— 列出已装包
+    description: 列出环境里已安装的包（uv pip list）
+    command: pip
+    commandArgs: ["list"]
+    sources:
+      - title: uv CLI 参考 —— uv pip list
+        url: https://docs.astral.sh/uv/reference/cli/#uv-pip-list
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/pip-list.txt
+    fields:
+      - id: format
+        label: 输出格式
+        type: enum
+        style: separate
+        prefix: "--format"
+        default: "columns"
+        doc: "#uv-pip-list（--format，帮助快照 pip-list.txt 第 9 行）"
+        values:
+          - { value: columns, label: 表格（默认）, isDefault: true }
+          - { value: freeze, label: freeze 格式 }
+          - { value: json, label: JSON }
+      - id: outdated
+        label: 只列出可升级的包
+        type: bool
+        style: flag
+        prefix: "--outdated"
+        default: false
+        help: 需要联网查询索引。
+        doc: "#uv-pip-list（--outdated，帮助快照 pip-list.txt 第 11 行）"
+      - id: editable
+        label: 只列出可编辑安装的项目
+        type: bool
+        style: flag
+        prefix: "--editable"
+        advanced: true
+        default: false
+        doc: "#uv-pip-list（--editable / -e，帮助快照 pip-list.txt 第 6 行）"
+      - id: system
+        label: 使用系统 Python 环境
+        type: bool
+        style: flag
+        prefix: "--system"
+        advanced: true
+        default: false
+        help: 不加时 uv 会自己选一个有 Python 的环境；本机实测会选中 scoop 装的那个 Python 3.14.7。
+        doc: "#uv-pip-list（--system，帮助快照 pip-list.txt 第 14 行）"
+      - id: python
+        label: Python 解释器
+        type: text
+        style: separate
+        prefix: "--python"
+        advanced: true
+        doc: "#uv-pip-list（--python / -p，帮助快照 pip-list.txt 第 49 行）"
+    output:
+      mode: capture
+      showCommandLine: true
+    examples:
+      - { title: 列出当前环境的包, args: ["pip", "list"] }
+      - { title: 以 JSON 输出, args: ["pip", "list", "--format", "json"] }
+
+  - id: pip-freeze
+    title: pip 兼容 —— 按 requirements 格式列出
+    description: 以 requirements 格式列出已安装的包（uv pip freeze）
+    command: pip
+    commandArgs: ["freeze"]
+    sources:
+      - title: uv CLI 参考 —— uv pip freeze
+        url: https://docs.astral.sh/uv/reference/cli/#uv-pip-freeze
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/pip-freeze.txt
+    fields:
+      - id: excludeEditable
+        label: 排除可编辑安装的包
+        type: bool
+        style: flag
+        prefix: "--exclude-editable"
+        default: false
+        doc: "#uv-pip-freeze（--exclude-editable，帮助快照 pip-freeze.txt 第 6 行）"
+      - id: strict
+        label: 校验环境一致性
+        type: bool
+        style: flag
+        prefix: "--strict"
+        default: false
+        doc: "#uv-pip-freeze（--strict，帮助快照 pip-freeze.txt 第 8 行）"
+      - id: system
+        label: 使用系统 Python 环境
+        type: bool
+        style: flag
+        prefix: "--system"
+        advanced: true
+        default: false
+        doc: "#uv-pip-freeze（--system，帮助快照 pip-freeze.txt 第 12 行）"
+      - id: python
+        label: Python 解释器
+        type: text
+        style: separate
+        prefix: "--python"
+        advanced: true
+        doc: "#uv-pip-freeze（--python / -p，帮助快照 pip-freeze.txt 第 17 行）"
+    output:
+      mode: capture
+      showCommandLine: true
+    examples:
+      - { title: 按 requirements 格式列出, args: ["pip", "freeze"] }
+
+  - id: pip-install
+    title: pip 兼容 —— 安装包
+    description: 把包装进某个环境（uv pip install）。uv pip 系列不读 pyproject.toml。
+    command: pip
+    commandArgs: ["install"]
+    danger: overwrite
+    confirmText: 会真实下载并安装/替换环境里的包。
+    sources:
+      - title: uv CLI 参考 —— uv pip install
+        url: https://docs.astral.sh/uv/reference/cli/#uv-pip-install
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/pip-install.txt
+    fields:
+      - id: packages
+        label: 包
+        type: text
+        style: positional
+        repeatable: true
+        placeholder: 每行一个包名，可带版本约束
+        doc: "#uv-pip-install（[PACKAGE]...，帮助快照 pip-install.txt 第 6 行）"
+      - id: requirements
+        label: 从 requirements 文件安装
+        type: file
+        style: separate
+        prefix: "--requirements"
+        repeatable: true
+        accept: [.txt, .in]
+        doc: "#uv-pip-install（--requirements / -r，帮助快照 pip-install.txt 第 9 行）"
+      - id: editable
+        label: 以可编辑方式安装本地路径
+        type: text
+        style: separate
+        prefix: "--editable"
+        placeholder: 本地目录或 . 路径
+        doc: "#uv-pip-install（--editable / -e，帮助快照 pip-install.txt 第 11 行）"
+      - id: target
+        label: 安装到指定目录
+        type: directory
+        style: separate
+        prefix: "--target"
+        advanced: true
+        help: 不装进虚拟或系统环境，而是直接放到该目录顶层。
+        doc: "#uv-pip-install（--target / -t，帮助快照 pip-install.txt 第 45 行）"
+      - id: noDeps
+        label: 不安装依赖
+        type: bool
+        style: flag
+        prefix: "--no-deps"
+        advanced: true
+        default: false
+        doc: "#uv-pip-install（--no-deps，帮助快照 pip-install.txt 第 31 行）"
+      - id: system
+        label: 装进系统 Python 环境
+        type: bool
+        style: flag
+        prefix: "--system"
+        advanced: true
+        default: false
+        help: 会改动系统 Python，谨慎使用。
+        doc: "#uv-pip-install（--system，帮助快照 pip-install.txt 第 38 行）"
+      - id: python
+        label: Python 解释器
+        type: text
+        style: separate
+        prefix: "--python"
+        advanced: true
+        doc: "#uv-pip-install（--python / -p，帮助快照 pip-install.txt 第 76 行起）"
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - { title: 从 requirements 文件安装（需联网与写环境，未实跑）, args: ["pip", "install", "--requirements", "requirements.txt"] }
+
+  - id: pip-uninstall
+    title: pip 兼容 —— 卸载包
+    description: 从环境里卸载包（uv pip uninstall）
+    command: pip
+    commandArgs: ["uninstall"]
+    danger: destructive
+    confirmText: 会从目标环境里真实删除这些包及其文件，无法撤销。
+    sources:
+      - title: uv CLI 参考 —— uv pip uninstall
+        url: https://docs.astral.sh/uv/reference/cli/#uv-pip-uninstall
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/pip-uninstall.txt
+    fields:
+      - id: packages
+        label: 要卸载的包
+        type: text
+        style: positional
+        repeatable: true
+        placeholder: 每行一个包名
+        doc: "#uv-pip-uninstall（[PACKAGE]...，帮助快照 pip-uninstall.txt 第 6 行）"
+      - id: requirements
+        label: 从 requirements 文件卸载
+        type: file
+        style: separate
+        prefix: "--requirements"
+        repeatable: true
+        accept: [.txt]
+        doc: "#uv-pip-uninstall（--requirements / -r，帮助快照 pip-uninstall.txt 第 9 行）"
+      - id: dryRun
+        label: 试运行（不真的卸载）
+        type: bool
+        style: flag
+        prefix: "--dry-run"
+        default: false
+        help: 只打印将要执行的动作。
+        doc: "#uv-pip-uninstall（--dry-run，帮助快照 pip-uninstall.txt 第 25 行）"
+      - id: system
+        label: 卸载系统 Python 环境里的包
+        type: bool
+        style: flag
+        prefix: "--system"
+        advanced: true
+        default: false
+        doc: "#uv-pip-uninstall（--system，帮助快照 pip-uninstall.txt 第 14 行）"
+      - id: python
+        label: Python 解释器
+        type: text
+        style: separate
+        prefix: "--python"
+        advanced: true
+        doc: "#uv-pip-uninstall（--python / -p，帮助快照 pip-uninstall.txt 第 29 行）"
+    output:
+      mode: stream
+      showCommandLine: true
+
+  # =============================================================== uv python
+  - id: python-list
+    title: 列出 Python
+    description: 列出可用的与已安装的 Python 版本（uv python list）
+    command: python
+    commandArgs: ["list"]
+    sources:
+      - title: uv CLI 参考 —— uv python list
+        url: https://docs.astral.sh/uv/reference/cli/#uv-python-list
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/python-list.txt
+    fields:
+      - id: request
+        label: 版本过滤
+        type: text
+        style: positional
+        placeholder: 例如 3.12
+        help: 只列出匹配该请求的 Python。
+        doc: "#uv-python-list（[REQUEST]，帮助快照 python-list.txt 第 6 行）"
+      - id: onlyInstalled
+        label: 只看已安装的
+        type: bool
+        style: flag
+        prefix: "--only-installed"
+        default: false
+        doc: "#uv-python-list（--only-installed，帮助快照 python-list.txt 第 15 行）"
+      - id: allVersions
+        label: 包含旧的补丁版本
+        type: bool
+        style: flag
+        prefix: "--all-versions"
+        advanced: true
+        default: false
+        doc: "#uv-python-list（--all-versions，帮助快照 python-list.txt 第 9 行）"
+      - id: showUrls
+        label: 显示下载地址
+        type: bool
+        style: flag
+        prefix: "--show-urls"
+        advanced: true
+        default: false
+        doc: "#uv-python-list（--show-urls，帮助快照 python-list.txt 第 19 行）"
+      - id: outputFormat
+        label: 输出格式
+        type: enum
+        style: separate
+        prefix: "--output-format"
+        advanced: true
+        default: "text"
+        doc: "#uv-python-list（--output-format，帮助快照 python-list.txt 第 21 行）"
+        values:
+          - { value: text, label: 文本（默认）, isDefault: true }
+          - { value: json, label: JSON }
+    output:
+      mode: capture
+      showCommandLine: true
+    examples:
+      - { title: 只列出已安装的 Python, args: ["python", "list", "--only-installed"] }
+
+  - id: python-install
+    title: 安装 Python
+    description: 下载并安装由 uv 管理的 Python 版本（uv python install）
+    command: python
+    commandArgs: ["install"]
+    danger: overwrite
+    confirmText: 会从网络下载 Python 发行包并解压安装到本机（默认还会注册到 Windows 注册表与 shims 目录）。
+    sources:
+      - title: uv CLI 参考 —— uv python install
+        url: https://docs.astral.sh/uv/reference/cli/#uv-python-install
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/python-install.txt
+    fields:
+      - id: targets
+        label: 要安装的版本
+        type: text
+        style: positional
+        repeatable: true
+        placeholder: 每行一个，例如 3.12
+        help: 留空时按项目里的 .python-version / pyproject.toml 决定。
+        doc: "#uv-python-install（[TARGETS]...，帮助快照 python-install.txt 第 6 行）"
+      - id: reinstall
+        label: 重新安装
+        type: bool
+        style: flag
+        prefix: "--reinstall"
+        default: false
+        doc: "#uv-python-install（--reinstall / -r，帮助快照 python-install.txt 第 21 行）"
+      - id: default
+        label: 设为默认 Python
+        type: bool
+        style: flag
+        prefix: "--default"
+        default: false
+        doc: "#uv-python-install（--default，帮助快照 python-install.txt 第 27 行）"
+      - id: installDir
+        label: 安装目录
+        type: directory
+        style: separate
+        prefix: "--install-dir"
+        advanced: true
+        doc: "#uv-python-install（--install-dir / -i，帮助快照 python-install.txt 第 9 行）"
+      - id: noRegistry
+        label: 不注册到 Windows 注册表
+        type: bool
+        style: flag
+        prefix: "--no-registry"
+        advanced: true
+        default: false
+        doc: "#uv-python-install（--no-registry，帮助快照 python-install.txt 第 13 行）"
+    output:
+      mode: stream
+      showCommandLine: true
+
+  - id: python-pin
+    title: 固定 Python 版本
+    description: 把项目钉到某个 Python 版本（uv python pin），会写 .python-version
+    command: python
+    commandArgs: ["pin"]
+    danger: overwrite
+    confirmText: 会创建或改写 .python-version（或全局的 Python 版本钉定文件）。
+    sources:
+      - title: uv CLI 参考 —— uv python pin
+        url: https://docs.astral.sh/uv/reference/cli/#uv-python-pin
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/python-pin.txt
+    fields:
+      - id: request
+        label: 版本请求
+        type: text
+        style: positional
+        placeholder: 例如 3.12
+        doc: "#uv-python-pin（[REQUEST]，帮助快照 python-pin.txt 第 6 行）"
+      - id: pinGlobal
+        label: 改全局钉定
+        type: bool
+        style: flag
+        prefix: "--global"
+        default: false
+        doc: "#uv-python-pin（--global，帮助快照 python-pin.txt 第 14 行）"
+      - id: resolved
+        label: 写入解析后的解释器路径
+        type: bool
+        style: flag
+        prefix: "--resolved"
+        advanced: true
+        default: false
+        doc: "#uv-python-pin（--resolved，帮助快照 python-pin.txt 第 9 行）"
+      - id: rm
+        label: 移除版本钉定
+        type: bool
+        style: flag
+        prefix: "--rm"
+        advanced: true
+        default: false
+        doc: "#uv-python-pin（--rm，帮助快照 python-pin.txt 第 16 行）"
+    output:
+      mode: stream
+      showCommandLine: true
+
+  # =============================================================== uv tool
+  - id: tool-list
+    title: 列出已安装的工具
+    description: 列出 uv tool 装过的全局命令行工具（uv tool list）
+    command: tool
+    commandArgs: ["list"]
+    sources:
+      - title: uv CLI 参考 —— uv tool list
+        url: https://docs.astral.sh/uv/reference/cli/#uv-tool-list
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/tool-list.txt
+    fields:
+      - id: showVersionSpecifiers
+        label: 显示版本约束
+        type: bool
+        style: flag
+        prefix: "--show-version-specifiers"
+        default: false
+        doc: "#uv-tool-list（--show-version-specifiers，帮助快照 tool-list.txt 第 8 行）"
+      - id: showPaths
+        label: 显示环境与可执行文件路径
+        type: bool
+        style: flag
+        prefix: "--show-paths"
+        default: false
+        doc: "#uv-tool-list（--show-paths，帮助快照 tool-list.txt 第 6 行）"
+      - id: showPython
+        label: 显示所用 Python 版本
+        type: bool
+        style: flag
+        prefix: "--show-python"
+        advanced: true
+        default: false
+        doc: "#uv-tool-list（--show-python，帮助快照 tool-list.txt 第 13 行）"
+      - id: outdated
+        label: 只列出可升级的工具
+        type: bool
+        style: flag
+        prefix: "--outdated"
+        advanced: true
+        default: false
+        help: 需要联网。
+        doc: "#uv-tool-list（--outdated，帮助快照 tool-list.txt 第 14 行）"
+    output:
+      mode: capture
+      showCommandLine: true
+    examples:
+      - { title: 列出已装工具, args: ["tool", "list"] }
+      - { title: 连路径一起看, args: ["tool", "list", "--show-paths"] }
+
+  - id: tool-install
+    title: 安装全局工具
+    description: 把一个 Python 包提供的命令行工具装成全局可用（uv tool install）
+    command: tool
+    commandArgs: ["install"]
+    danger: overwrite
+    confirmText: 会下载并安装该包到 uv 的工具目录，并在 shims/bin 里放置可执行入口（同名工具会被替换）。
+    sources:
+      - title: uv CLI 参考 —— uv tool install
+        url: https://docs.astral.sh/uv/reference/cli/#uv-tool-install
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/tool-install.txt
+    fields:
+      - id: package
+        label: 包名
+        type: text
+        style: positional
+        required: true
+        placeholder: 例如 ruff
+        doc: "#uv-tool-install（<PACKAGE>，帮助快照 tool-install.txt 第 6 行）"
+      - id: with
+        label: 附加依赖
+        type: text
+        style: separate
+        prefix: "--with"
+        repeatable: true
+        placeholder: 每行一个
+        doc: "#uv-tool-install（--with / -w，帮助快照 tool-install.txt 第 9 行）"
+      - id: force
+        label: 强制安装
+        type: bool
+        style: flag
+        prefix: "--force"
+        default: false
+        doc: "#uv-tool-install（--force，帮助快照 tool-install.txt 第 29 行）"
+      - id: python
+        label: Python 解释器
+        type: text
+        style: separate
+        prefix: "--python"
+        advanced: true
+        doc: "#uv-tool-install（--python / -p，帮助快照 tool-install.txt 第 71 行起）"
+      - id: editable
+        label: 以可编辑方式安装本地包
+        type: bool
+        style: flag
+        prefix: "--editable"
+        advanced: true
+        default: false
+        doc: "#uv-tool-install（--editable / -e，帮助快照 tool-install.txt 第 13 行）"
+    output:
+      mode: stream
+      showCommandLine: true
+
+  - id: tool-run
+    title: 临时运行工具
+    description: 不安装地运行某个 Python 包提供的命令（uv tool run，即 uvx）
+    command: tool
+    commandArgs: ["run"]
+    danger: overwrite
+    confirmText: 会按需下载并缓存该包及其依赖（缓存写在 uv 的 cache 目录里）。
+    sources:
+      - title: uv CLI 参考 —— uv tool run
+        url: https://docs.astral.sh/uv/reference/cli/#uv-tool-run
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/tool-run.txt。本机 locate.alternativeNames 里的 uvx 就是它的别名。
+    fields:
+      - id: fromPackage
+        label: 提供命令的包
+        type: text
+        style: separate
+        prefix: "--from"
+        placeholder: 例如 ruff
+        help: 命令名与包名不同时用它指定包。
+        doc: "#uv-tool-run（--from，帮助快照 tool-run.txt 第 6 行）"
+      - id: with
+        label: 附加依赖
+        type: text
+        style: separate
+        prefix: "--with"
+        repeatable: true
+        placeholder: 每行一个
+        doc: "#uv-tool-run（--with / -w，帮助快照 tool-run.txt 第 8 行）"
+      - id: isolated
+        label: 隔离运行
+        type: bool
+        style: flag
+        prefix: "--isolated"
+        advanced: true
+        default: false
+        help: 忽略已安装的同名工具，用独立环境跑。
+        doc: "#uv-tool-run（--isolated，帮助快照 tool-run.txt 第 21 行）"
+      - id: python
+        label: Python 解释器
+        type: text
+        style: separate
+        prefix: "--python"
+        advanced: true
+        doc: "#uv-tool-run（--python / -p，帮助快照 tool-run.txt 第 61 行起）"
+      - id: command
+        label: 命令
+        type: text
+        style: positional
+        required: true
+        placeholder: 例如 ruff
+        help: 与 uv run 一样，第一个非开关参数是命令名，其后参数原样转交。
+        doc: "#uv-tool-run（[COMMAND]，帮助快照 tool-run.txt 第 3 行）"
+      - id: commandArgs
+        label: 命令参数
+        type: textarea
+        style: positional
+        positionalMode: perLine
+        help: 一行一个参数。
+        doc: "帮助快照 tool-run.txt 第 3 行（[COMMAND] 之后的参数透传）"
+    output:
+      mode: stream
+      showCommandLine: true
+
+  # =============================================================== uv cache
+  - id: cache-dir
+    title: 查看缓存目录
+    description: 打印 uv 的缓存目录（uv cache dir）
+    command: cache
+    commandArgs: ["dir"]
+    sources:
+      - title: uv CLI 参考 —— uv cache dir
+        url: https://docs.astral.sh/uv/reference/cli/#uv-cache-dir
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/cache-dir.txt
+    fields: []
+    output:
+      mode: capture
+      showCommandLine: true
+      openOnFinish: explorer
+    examples:
+      - { title: 打印缓存目录, args: ["cache", "dir"] }
+
+  - id: cache-clean
+    title: 清理缓存
+    description: 清空 uv 的缓存，或只清指定包的缓存（uv cache clean）
+    command: cache
+    commandArgs: ["clean"]
+    danger: destructive
+    confirmText: 会删除 uv 缓存目录里的内容（不填包名时是全部）。删除后下次运行需要重新下载，但不会破坏已装好的项目环境。
+    sources:
+      - title: uv CLI 参考 —— uv cache clean
+        url: https://docs.astral.sh/uv/reference/cli/#uv-cache-clean
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/cache-clean.txt
+    fields:
+      - id: packages
+        label: 只清理这些包
+        type: text
+        style: positional
+        repeatable: true
+        placeholder: 留空表示清空整个缓存
+        doc: "#uv-cache-clean（[PACKAGE]...，帮助快照 cache-clean.txt 第 6 行）"
+      - id: force
+        label: 强制清理（忽略占用检查）
+        type: bool
+        style: flag
+        prefix: "--force"
+        default: false
+        doc: "#uv-cache-clean（--force，帮助快照 cache-clean.txt 第 9 行）"
+    output:
+      mode: stream
+      showCommandLine: true
+
+  # =============================================================== uv build
+  - id: build
+    title: 构建发行包
+    description: 把项目构建成 sdist 与 wheel（uv build），产物写到 dist/
+    command: build
+    danger: overwrite
+    confirmText: 会在输出目录写入（勾选"清空输出目录"时先删除）构建产物，并可能创建 .gitignore。
+    sources:
+      - title: uv CLI 参考 —— uv build
+        url: https://docs.astral.sh/uv/reference/cli/#uv-build
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/build.txt
+    fields:
+      - id: src
+        label: 源码目录或 sdist
+        type: directory
+        style: positional
+        placeholder: 默认当前目录
+        doc: "#uv-build（[SRC]，帮助快照 build.txt 第 6 行）"
+      - id: outDir
+        label: 输出目录
+        type: directory
+        style: separate
+        prefix: "--out-dir"
+        save: true
+        placeholder: 默认 dist
+        doc: "#uv-build（--out-dir / -o，帮助快照 build.txt 第 14 行）"
+      - id: wheel
+        label: 只构建 wheel
+        type: bool
+        style: flag
+        prefix: "--wheel"
+        default: false
+        doc: "#uv-build（--wheel，帮助快照 build.txt 第 19 行）"
+      - id: sdist
+        label: 只构建 sdist
+        type: bool
+        style: flag
+        prefix: "--sdist"
+        default: false
+        doc: "#uv-build（--sdist，帮助快照 build.txt 第 17 行）"
+      - id: clear
+        label: 先清空输出目录
+        type: bool
+        style: flag
+        prefix: "--clear"
+        advanced: true
+        default: false
+        help: 会删除输出目录里的旧产物。
+        doc: "#uv-build（--clear，帮助快照 build.txt 第 24 行）"
+      - id: noBuildLogs
+        label: 隐藏构建后端日志
+        type: bool
+        style: flag
+        prefix: "--no-build-logs"
+        advanced: true
+        default: false
+        doc: "#uv-build（--no-build-logs，帮助快照 build.txt 第 20 行）"
+      - id: python
+        label: Python 解释器
+        type: text
+        style: separate
+        prefix: "--python"
+        advanced: true
+        doc: "#uv-build（--python / -p，帮助快照 build.txt 第 37 行）"
+    output:
+      mode: stream
+      showCommandLine: true
+      openOnFinish: explorer
+
+  # =============================================================== uv version
+  - id: version-show
+    title: 查看项目版本
+    description: 读取当前项目的版本号（uv version）。读的是 pyproject.toml，不是 uv 自己的版本。
+    command: version
+    sources:
+      - title: uv CLI 参考 —— uv version
+        url: https://docs.astral.sh/uv/reference/cli/#uv-version
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/version.txt
+    fields:
+      - id: short
+        label: 只输出版本号本身
+        type: bool
+        style: flag
+        prefix: "--short"
+        default: false
+        doc: "#uv-version（--short，帮助快照 version.txt 第 13 行）"
+      - id: outputFormat
+        label: 输出格式
+        type: enum
+        style: separate
+        prefix: "--output-format"
+        advanced: true
+        default: "text"
+        doc: "#uv-version（--output-format，帮助快照 version.txt 第 14 行）"
+        values:
+          - { value: text, label: 文本（默认）, isDefault: true }
+          - { value: json, label: JSON }
+    output:
+      mode: capture
+      showCommandLine: true
+      resultNote: 该命令读取当前项目的 pyproject.toml；在含中文项目名的项目里会以退出码 2 和错误信息结束。
+
+  - id: version-set
+    title: 修改项目版本
+    description: 设定或递增当前项目的版本号（uv version <值> / --bump），会改写 pyproject.toml
+    command: version
+    danger: overwrite
+    confirmText: 会改写 pyproject.toml 里的 version 字段（并可能重新锁定项目）。
+    sources:
+      - title: uv CLI 参考 —— uv version
+        url: https://docs.astral.sh/uv/reference/cli/#uv-version
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/version.txt
+    fields:
+      - id: value
+        label: 新版本号
+        type: text
+        style: positional
+        placeholder: 例如 1.2.0（留空则配合下面的递增方式）
+        doc: "#uv-version（[VALUE]，帮助快照 version.txt 第 6 行）"
+      - id: bump
+        label: 按语义化规则递增
+        type: enum
+        style: separate
+        prefix: "--bump"
+        default: ""
+        doc: "#uv-version（--bump，帮助快照 version.txt 第 9 行）"
+        values:
+          - { value: "", label: 不递增（直接用上面的版本号） }
+          - { value: major, label: 主版本 major }
+          - { value: minor, label: 次版本 minor }
+          - { value: patch, label: 补丁 patch }
+          - { value: stable, label: 转稳定版 stable }
+          - { value: alpha, label: 预发布 alpha }
+          - { value: beta, label: 预发布 beta }
+          - { value: rc, label: 预发布 rc }
+          - { value: post, label: 后置版本 post }
+          - { value: dev, label: 开发版 dev }
+      - id: dryRun
+        label: 试运行（不写入）
+        type: bool
+        style: flag
+        prefix: "--dry-run"
+        advanced: true
+        default: false
+        doc: "#uv-version（--dry-run，帮助快照 version.txt 第 12 行）"
+      - id: noSync
+        label: 不自动同步环境
+        type: bool
+        style: flag
+        prefix: "--no-sync"
+        advanced: true
+        default: false
+        doc: "#uv-version（--no-sync，帮助快照 version.txt 第 16 行）"
+    output:
+      mode: stream
+      showCommandLine: true
+
+  # =============================================================== uv self
+  - id: self-version
+    title: 查看 uv 自身版本
+    description: 显示 uv 自己的版本（uv self version）。要查 uv 版本时用这个，不要用 uv version。
+    command: self
+    commandArgs: ["version"]
+    sources:
+      - title: uv CLI 参考 —— uv self version
+        url: https://docs.astral.sh/uv/reference/cli/#uv-self-version
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/self-version.txt
+    fields:
+      - id: short
+        label: 只输出版本号本身
+        type: bool
+        style: flag
+        prefix: "--short"
+        default: false
+        doc: "#uv-self-version（--short，帮助快照 self-version.txt 第 6 行）"
+      - id: outputFormat
+        label: 输出格式
+        type: enum
+        style: separate
+        prefix: "--output-format"
+        advanced: true
+        default: "text"
+        doc: "#uv-self-version（--output-format，帮助快照 self-version.txt 第 7 行）"
+        values:
+          - { value: text, label: 文本（默认）, isDefault: true }
+          - { value: json, label: JSON }
+    output:
+      mode: capture
+      showCommandLine: true
+    examples:
+      - { title: 只输出版本号, args: ["self", "version", "--short"] }
+      - { title: 完整信息, args: ["self", "version"] }
+
+  # =============================================================== uv help
+  - id: help
+    title: 查看帮助
+    description: 显示 uv 或某个命令的文档（uv help [命令...]）
+    command: help
+    sources:
+      - title: uv CLI 参考 —— uv help
+        url: https://docs.astral.sh/uv/reference/cli/#uv-help
+        retrieved: "2026-09-27"
+        appliesTo: "0.11.15"
+        note: 帮助快照 docs/reference/uv-help/help.txt 与 _uv.txt
+    fields:
+      - id: command
+        label: 命令
+        type: text
+        style: positional
+        repeatable: true
+        placeholder: 例如 sync，或 pip install（多行表示多级命令）
+        help: 可留空查看总览；填多行可查二级命令，例如第一行 pip、第二行 install。
+        doc: "#uv-help（[COMMAND]...，帮助快照 help.txt）"
+    output:
+      mode: capture
+      showCommandLine: true
+    examples:
+      - { title: 总览, args: ["help"] }
+      - { title: 查看 sync 的文档, args: ["help", "sync"] }
+      - { title: 查看二级命令, args: ["help", "pip", "install"] }
