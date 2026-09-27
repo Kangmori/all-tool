@@ -305,6 +305,13 @@
       "doneAt": "2026-09-27",
       "evidence": "根因是「子进程的标准句柄继承自父进程、ConPTY 并不覆盖它们」，修法是加 STARTF_USESTDHANDLES 并显式把三个标准句柄置空。结果：5 条 ConPtyTests 全部由 Skip 转为通过（含用 32 MB 输入验证 7z 确实报出百分比）；清单加 usePseudoConsole: true 后，界面冒烟实测 48 MB 样本解压时进度条走到 100，且输出区不再有 ANSI 转义序列",
       "note": "定位过程与 8 项被排除的假设记在 docs/ai/development.md 的 P19；构建产物路径那个坑记为 P20"
+    },
+    {
+      "id": "N6",
+      "task": "让 repeatable 对 text / textarea 生效（落地 D9）",
+      "doneAt": "2026-09-27",
+      "evidence": "宿主改成 text/textarea + repeatable 时渲染多行框、每行一项；规范与 schema 同步写明该语义。界面实测：给 7z 的「分卷大小」（text + repeatable）填三行，命令行预览生成 `-v10k -v15k -v2m`。过程中还查出一个通用坑：**WinUI 的 TextBox 用 \\r 表示换行**，只按 \\n 拆分会把多值退化成一个参数——已修四处并有专门单测（P21）",
+      "note": "这同时修掉了 7z 的一个潜在缺陷：分卷大小文档明确支持多值，此前界面只能填一个"
     }
   ],
 
@@ -354,25 +361,17 @@
     { "id": "D6", "question": "历史记录 / 收藏命令属于工具包还是宿主", "impact": "倾向宿主统一实现", "status": "倾向宿主" },
     { "id": "D7", "question": "plugins 目录在'可分发形态'下放哪里", "impact": "目前 src/Swpj.App/RepoPaths.cs 是靠向上找 AGENTS.md 定位仓库根（开发期做法）。做成可分发时需改成：程序目录旁 / %APPDATA% / 可配置路径", "status": "未决（不影响自用开发）" },
     { "id": "D8", "question": "scoop 失败时也返回退出码 0，宿主如何判定成败", "impact": "子智能体实测发现：scoop 的 bin/scoop.ps1 不传播 $LASTEXITCODE，除'顶层命令名不认识'外失败路径也返回 0。需要靠输出文本或其它信号判断，这会影响通用设计（是否要引入 output.successPattern / failurePattern）", "status": "待拍板" },
-    { "id": "D9", "question": "字段的 repeatable: true 该不该对 text / textarea 也生效", "impact": "写 scoop 工具包时实测：表单构建器只让 multiselect / files / paths / directories 产出多值（每行一项），text / textarea 即使写了 repeatable 也只能填一个值，于是'自由多值'字段只能借用 multiselect 类型（7zip 的 exclude/includeOnly 也是这么写的）。要么宿主补上对 text 的 repeatable 支持，要么规范说明'自由多值请用 multiselect'", "status": "待拍板" }
+    { "id": "D9", "question": "字段的 repeatable: true 该不该对 text / textarea 也生效", "impact": "写 scoop 工具包时实测：表单构建器只让 multiselect / files / paths / directories 产出多值（每行一项），text / textarea 即使写了 repeatable 也只能填一个值，于是'自由多值'字段只能借用 multiselect 类型", "status": "已解决（2026-09-27）——宿主改成：text/textarea 且 repeatable 时渲染多行框、每行一项；规范同步写明该语义。实测：给 7z 的「分卷大小」填三行，命令行生成 -v10k -v15k -v2m" }
   ],
 
   "nextActions": [
-    {
-      "id": "N6",
-      "task": "把 D9 落到宿主：让 repeatable 对 text / textarea 生效（每行一项）",
-      "why": "现在规范里的 repeatable 对 text 名不副实，作者只能借用 multiselect 表达'自由多值'（scoop 的 14 个字段、7zip 的 exclude/includeOnly 都是这么绕的）。宿主补上即可，成本很低",
-      "how": "改 MainWindow.CreateField 的 default 分支：field.Repeatable 为真且 type 是 text/textarea 时，用多行输入框 + 按行取值；同步在 docs/spec/manifest-v1.md 里写明'text 类型 + repeatable = 每行一项'",
-      "doneWhen": "改完后 ui-smoke 仍通过；且规范里对 repeatable 的描述与宿主行为一致",
-      "priority": 1
-    },
     {
       "id": "N7",
       "task": "新增第三个工具包（uv）",
       "why": "继续用 playbook 产出，检验它在第二个作者手里是否还够用；uv 已装、命令面清晰、且是'子命令树'型工具的代表",
       "how": "照 docs/ai/playbook-tool-package.md 走；注意 uv 的输出是 UTF-8（与 scoop 的 GBK 相反），正好检验 encoding 字段的必要性",
       "doneWhen": "validate 全绿 + examples 真机冒烟通过 + NOTES.md 记录实测 + project-state 更新",
-      "priority": 2
+      "priority": 1
     },
     {
       "id": "N8",
@@ -380,7 +379,7 @@
       "why": "取消按钮只做了代码接线与执行引擎单测（取消时杀整树、迅速返回都已验证），但还没在界面上真点过一次",
       "how": "扩展 scripts/ui-smoke.ps1：选一个耗时动作（如 7z 压缩 48 MB），点执行后再点取消，断言输出里出现'已被用户取消'且界面恢复可用",
       "doneWhen": "ui-smoke 里多一条取消路径的断言并通过",
-      "priority": 3
+      "priority": 2
     }
   ],
 

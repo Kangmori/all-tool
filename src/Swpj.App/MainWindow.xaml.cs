@@ -337,7 +337,7 @@ public sealed partial class MainWindow : Window
 
                 stack.Children.Add(buttons);
                 getter = () => box.Text
-                    .Split('\n')
+                    .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)   // WinUI 的 TextBox 用 \r 换行
                     .Select(line => line.Trim())
                     .Where(line => line.Length > 0)
                     .ToList();
@@ -346,12 +346,19 @@ public sealed partial class MainWindow : Window
 
             default:
             {
+                // repeatable 的 text / textarea：一个值一行，产出多个参数。
+                // 之前只有 multiselect / files / paths / directories 支持多值，于是"自由多值"字段
+                // 只能借用 multiselect 类型（见待决事项 D9）。补上这一条之后，
+                // 7z 的「分卷大小」这类字段才真的能填多个值——文档里 -v 本来就支持多值。
+                var multiline = field.Type == "textarea" || field.Repeatable;
+
                 var box = new TextBox
                 {
-                    PlaceholderText = field.Placeholder ?? string.Empty,
-                    AcceptsReturn = field.Type == "textarea",
+                    PlaceholderText = field.Placeholder ?? (field.Repeatable ? "每行一项" : string.Empty),
+                    AcceptsReturn = multiline,
                     TextWrapping = TextWrapping.Wrap,
                     HorizontalAlignment = HorizontalAlignment.Stretch,
+                    Height = field.Repeatable && field.Type != "textarea" ? 76 : double.NaN,
                 };
 
                 if (field.Default is not null)
@@ -390,7 +397,13 @@ public sealed partial class MainWindow : Window
                     stack.Children.Add(box);
                 }
 
-                getter = () => string.IsNullOrWhiteSpace(box.Text) ? null : box.Text.Trim();
+                getter = field.Repeatable
+                    ? () => box.Text
+                        .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)   // WinUI 的 TextBox 用 \r 换行
+                        .Select(line => line.Trim())
+                        .Where(line => line.Length > 0)
+                        .ToList()
+                    : () => string.IsNullOrWhiteSpace(box.Text) ? null : box.Text.Trim();
                 break;
             }
         }
@@ -401,7 +414,7 @@ public sealed partial class MainWindow : Window
     private static void AppendLines(TextBox box, IEnumerable<string> lines)
     {
         var existing = box.Text
-            .Split('\n')
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)   // WinUI 的 TextBox 用 \r 换行
             .Select(line => line.Trim())
             .Where(line => line.Length > 0)
             .ToList();

@@ -75,6 +75,10 @@ plugins/<id>/
 - `switchBase`：声明"这个字段对应文档中的哪个开关"，用于 CI 白名单校验。`literal` 风格与带后缀修饰的写法**必须**显式声明，例如 `-r-`/`-r0` 要写 `switchBase: "-r"`。
 - `group` / `advanced`：界面分组与默认折叠。
 - `save`：记住上次输入（输出目录、压缩包路径这类反复用到的值）。
+- `repeatable`：该字段可以产出多个参数，**每个值一个 token**。对 `multiselect` / `files` / `paths` /
+  `directories` 是天然的；对 `text` / `textarea` 表示**一个值一行**（界面给多行输入框）。
+  例：7z 的 `-v`（分卷大小）文档明确支持多值，所以 `volumeSize` 是 `text` + `repeatable: true`，
+  填三行就生成 `-v10k -v15k -v2m`。
 - `visibleWhen`：极简条件显示（v1 只支持字段名 + `==` / `!=` / `&&` / `||`），例如"加密文件名"只在格式为 7z 时有意义。
 
 ## 5. 输出与结果

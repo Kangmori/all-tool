@@ -268,7 +268,7 @@
         },
         "repeatable": {
           "type": "boolean",
-          "description": "允许用户添加多个值（对应文档中 multiple xxx switches are supported）。"
+          "description": "该字段可以产出多个参数（每个值一个 token）。对 multiselect/files/paths/directories 是天然的；对 text/textarea 表示一个值一行。"
         },
         "save": {
           "type": "boolean",

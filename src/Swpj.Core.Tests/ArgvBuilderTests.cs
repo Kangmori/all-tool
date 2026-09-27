@@ -249,6 +249,23 @@ public class ArgvBuilderTests
     }
 
     [Fact]
+    public void positional_perLine_也能处理只用回车换行的文本()
+    {
+        // 重要：WinUI 的 TextBox 用 \r（而不是 \r\n）表示换行。
+        // 只按 \n 拆分的话，界面上填的多个值会退化成一个参数——这是实测踩到的。
+        var action = Action(
+            new ManifestField
+            {
+                Id = "pairs", Label = "映射", Type = "textarea", Style = FieldStyle.Positional,
+                PositionalMode = PositionalMode.PerLine,
+            });
+
+        var argv = ArgvBuilder.Build(action, Values(("pairs", "old.txt new.txt\r2.txt folder\\2new.txt")));
+
+        Assert.Equal(["cmd", "old.txt", "new.txt", "2.txt", "folder\\2new.txt"], argv);
+    }
+
+    [Fact]
     public void positional_perLine_支持用双引号包住含空格的路径()
     {
         var action = Action(

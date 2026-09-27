@@ -117,9 +117,12 @@ public static class ArgvBuilder
 
         // perLine：按行拆成 token（用于 rn 这类成对参数）。
         // 每行内部再按空白拆分，支持用双引号包住含空格的整段。
+        //
+        // 注意这里同时认 \r 与 \n：**WinUI 的 TextBox 用 \r 表示换行**（不是 \r\n），
+        // 只认 \n 的话整段会被当成一行，多个值就退化成一个参数（踩过）。
         if (field.PositionalMode == PositionalMode.PerLine && raw is string text)
         {
-            foreach (var line in text.Split('\n'))
+            foreach (var line in text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
             {
                 foreach (var token in SplitTokens(line))
                 {
