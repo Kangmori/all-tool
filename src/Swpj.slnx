@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Swpj.Core.Tests/Swpj.Core.Tests.csproj" />
+  <Project Path="Swpj.Core/Swpj.Core.csproj" />
+</Solution>

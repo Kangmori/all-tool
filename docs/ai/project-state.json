@@ -62,7 +62,11 @@
     { "path": "scripts/extract-7zip-matrix.ps1", "role": "从 7z CHM 提取命令×开关矩阵", "verified": true },
     { "path": "docs/reference/", "role": "官方文档快照 + 提取事实 + 生成方法", "verified": true },
     { "path": "spike/winui3-smoke/", "role": "WinUI 3 环境冒烟项目（Phase 1 后可删）", "verified": true },
-    { "path": "src/", "role": "宿主程序源码（空，未开始）", "verified": false }
+    { "path": "src/Swpj.slnx", "role": "宿主解决方案（新格式 .slnx）", "verified": true },
+    { "path": "src/Swpj.Core/Manifest/", "role": "清单模型、加载器、结构校验（ManifestLoader/ManifestValidation/ManifestModel）", "verified": true },
+    { "path": "src/Swpj.Core/Execution/ArgvBuilder.cs", "role": "字段值 → argv 的展开器（纯函数，最关键组件）", "verified": true },
+    { "path": "src/Swpj.Core.Tests/", "role": "26 个单元与集成测试（含用真实 7zip 清单做的集成测试）", "verified": true },
+    { "path": ".github/workflows/ci.yml", "role": "CI：Linux 跑清单校验，Windows 跑编译与测试", "verified": false }
   ],
 
   "verifiedChecks": [
@@ -116,6 +120,21 @@
       "command": "Invoke-WebRequest <官方文档 URL> -UseBasicParsing",
       "result": "7 个 URL 中 6 个返回 200；dev.7-zip.org TLS 握手失败",
       "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "argvbuilder-tests",
+      "claim": "ArgvBuilder 严格实现规范里的全部展开规则（含空值不输出、literal 的 args 展开、perLine 拆词）",
+      "command": "dotnet test src\\Swpj.slnx",
+      "result": "26 个测试全部通过；编译 0 警告 0 错误",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "real-manifest-drives-argv",
+      "claim": "真实的 7zip 清单经 ManifestLoader + ArgvBuilder 能生成预期 argv",
+      "command": "dotnet test src\\Swpj.slnx（RealManifestTests）",
+      "result": "extract 得到 [x, <archive>, -o<dir>, -aoa, -r-, -bb0]；add 得到 [a, <archive>, <inputs...>, -t7z, -mx5, -r-, -bb0]",
+      "implication": "规范确实能驱动出可执行命令，不是纸上设计",
+      "verifiedAt": "2026-09-27"
     }
   ],
 
@@ -160,7 +179,9 @@
       "id": "N2",
       "task": "搭 GitHub Actions：校验 + 构建",
       "why": "把校验变成推送时的自动门禁；并顺带验证 windows-latest 上的构建",
-      "how": "workflow 跑 uv 校验 + dotnet build spike 项目；只在 push main 与打 tag 时触发（私有仓库 Windows runner 按 2 倍计费）",
+      "how": "Linux 跑清单校验（私有仓库 Windows runner 按 2 倍计费，能省则省），Windows 跑 dotnet build/test src/Swpj.slnx；只在 push main、打 tag、发 PR 时触发",
+      "status": "workflow 已写入 .github/workflows/ci.yml，等待首次推送后的 Actions 结果确认（尚未看到绿灯）",
+      "remaining": "WinUI 应用项目暂未纳入 CI；等 src/Swpj.App 建好并本地验证能编译后再加进去",
       "doneWhen": "一次推送能在 Actions 里看到绿灯",
       "priority": 2
     },
@@ -169,6 +190,8 @@
       "task": "实现宿主壳的空心版本（垂直切片）",
       "why": "打通 ManifestLoader → ArgvBuilder → ProcessRunner → 输出展示这条链路，才能证明规范真的能驱动界面",
       "how": "先写 ArgvBuilder 与其单元测试（最易错、最该被测）；再最小 WinUI 界面跑通 7z 解压",
+      "status": "进行中。已完成：清单模型 / ManifestLoader / ManifestValidation / ArgvBuilder，26 个测试全绿（含用真实 7zip 清单做的集成测试）",
+      "remaining": "ProcessRunner（流式读输出、编码解码、Job Object 杀进程树、取消）、ToolLocator（PATH/searchPaths 发现 + versionPattern 取版本）、动态表单界面（WinUI 3）",
       "doneWhen": "能在界面上选一个 7z 文件与输出目录，点击解压，看到实时进度，并且能取消",
       "priority": 3
     },
