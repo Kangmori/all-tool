@@ -72,7 +72,7 @@
     { "path": "src/Swpj.Core/Discovery/ToolLocator.cs", "role": "在 PATH/searchPaths 找可执行文件、取版本、与 minVersion 比对", "verified": true },
     { "path": "src/Swpj.Core.Tests/", "role": "69 个单元与集成测试（真实 7zip 清单集成测试、真启动子进程的执行引擎测试、真跑 7z 的端到端测试）", "verified": true },
     { "path": "src/Swpj.App/", "role": "WinUI 3 宿主界面：清单驱动的动态表单、命令行预览、实时输出、取消、危险动作二次确认", "verified": true },
-    { "path": "scripts/ui-smoke.ps1", "role": "界面冒烟：UIA 填表 → 真的点执行 → 校验输出与产物（把'人点一遍'变成可复现脚本）", "verified": true },
+    { "path": "scripts/ui-smoke.ps1", "role": "界面冒烟：UIA 填表 → 真的点执行 → 校验输出、进度条与产物；另有场景二验证「取消」路径", "verified": true },
     { "path": "scripts/capture-app-window.ps1", "role": "只截应用窗口的截图工具（PrintWindow，不受遮挡影响；截图不入库）", "verified": true },
     { "path": "scripts/check-doc-drift.ps1", "role": "文档漂移检测：比对上游版本与文档快照哈希", "verified": true },
     { "path": "docs/ai/drift-watch.json", "role": "漂移检测的观测点清单（每个工具用什么方式问上游）", "verified": true },
@@ -312,6 +312,13 @@
       "doneAt": "2026-09-27",
       "evidence": "宿主改成 text/textarea + repeatable 时渲染多行框、每行一项；规范与 schema 同步写明该语义。界面实测：给 7z 的「分卷大小」（text + repeatable）填三行，命令行预览生成 `-v10k -v15k -v2m`。过程中还查出一个通用坑：**WinUI 的 TextBox 用 \\r 表示换行**，只按 \\n 拆分会把多值退化成一个参数——已修四处并有专门单测（P21）",
       "note": "这同时修掉了 7z 的一个潜在缺陷：分卷大小文档明确支持多值，此前界面只能填一个"
+    },
+    {
+      "id": "N8",
+      "task": "界面验收「取消」",
+      "doneAt": "2026-09-27",
+      "evidence": "scripts/ui-smoke.ps1 增加场景二：选 7z「添加到压缩包」、填 48 MB 输入、点执行、2 秒后点取消。实测输出从 0% 走到 66% 后报告『已被用户取消（退出码 1，耗时 7.3 秒）』，且「执行」按钮恢复可用。至此目标里那句『有实时进度、能取消』在真实界面上完整验证",
+      "note": "顺带修掉一个观感问题：取消后伪控制台还会吐出缓冲区内容，跑到结论行之后——现在收到结论就不再追加输出"
     }
   ],
 
@@ -372,14 +379,6 @@
       "how": "照 docs/ai/playbook-tool-package.md 走；注意 uv 的输出是 UTF-8（与 scoop 的 GBK 相反），正好检验 encoding 字段的必要性",
       "doneWhen": "validate 全绿 + examples 真机冒烟通过 + NOTES.md 记录实测 + project-state 更新",
       "priority": 1
-    },
-    {
-      "id": "N8",
-      "task": "界面验收「取消」",
-      "why": "取消按钮只做了代码接线与执行引擎单测（取消时杀整树、迅速返回都已验证），但还没在界面上真点过一次",
-      "how": "扩展 scripts/ui-smoke.ps1：选一个耗时动作（如 7z 压缩 48 MB），点执行后再点取消，断言输出里出现'已被用户取消'且界面恢复可用",
-      "doneWhen": "ui-smoke 里多一条取消路径的断言并通过",
-      "priority": 2
     }
   ],
 

@@ -166,7 +166,73 @@ public static class SwpjUiWin32 {
     if (-not $noEscapes) { throw "输出区里出现了原始 ANSI 转义序列，界面应当先清理再显示" }
     if ($maxProgress -le 0) { throw "进度条始终为 0：ConPTY 可能没生效（见 docs/ai/development.md 里 usePseudoConsole 的说明）" }
 
-    Write-Host "`n界面冒烟通过：填表 → 执行 → 进度条走动 → 输出无转义序列 → 产物正确" -ForegroundColor Green
+    Write-Host "`n界面冒烟通过（场景一）：填表 → 执行 → 进度条走动 → 输出无转义序列 → 产物正确" -ForegroundColor Green
+
+    # ==================================================================
+    # 场景二：取消。目标里写的是"有实时进度、能取消"，取消这条必须在界面上真点一次。
+    # 选 7z 的「添加到压缩包」（动作 0），用 48 MB 输入让它跑几秒，中途点取消。
+    # ==================================================================
+    Write-Host "`n================ 场景二：取消 ================" -ForegroundColor Cyan
+
+    if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
+    Start-Sleep -Milliseconds 800
+
+    $cancelArchive = Join-Path $work 'cancelled.7z'
+    $env:SWPJ_SELECT_ACTION = '0'
+    $process = Start-Process -FilePath $Exe -PassThru
+    Remove-Item Env:\SWPJ_SELECT_ACTION -ErrorAction SilentlyContinue
+    $window = Get-AppWindow
+    [void][SwpjUiWin32]::ShowWindow($window.Current.NativeWindowHandle, 9)
+    [void][SwpjUiWin32]::SetWindowPos($window.Current.NativeWindowHandle, [IntPtr]::Zero, 0, 0, 1440, 900, 0x40)
+    Start-Sleep -Milliseconds 1200
+
+    # 「添加到压缩包」的表单：0=压缩包，1=要压缩的文件/文件夹（每行一项）
+    $edits = $window.FindAll($scope::Descendants, $editCondition)
+    $edits[0].GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($cancelArchive)
+    $edits[1].GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($big)
+    Start-Sleep -Milliseconds 600
+
+    $buttons = $window.FindAll($scope::Descendants, $buttonCondition)
+    $runButton = $null; $cancelButton = $null
+    foreach ($b in $buttons) {
+        if ($b.Current.Name -eq '执行') { $runButton = $b }
+        if ($b.Current.Name -eq '取消') { $cancelButton = $b }
+    }
+    if (-not $runButton -or -not $cancelButton) { throw "找不到执行/取消按钮" }
+
+    $runButton.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Write-Host "已点击「执行」，等 2 秒后点「取消」…"
+    Start-Sleep -Seconds 2
+
+    if (-not $cancelButton.Current.IsEnabled) { throw "执行中「取消」按钮应当是可用状态" }
+    $cancelButton.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Write-Host "已点击「取消」"
+
+    $cancelDeadline = (Get-Date).AddSeconds(30)
+    $cancelOutput = ''
+    while ((Get-Date) -lt $cancelDeadline) {
+        Start-Sleep -Milliseconds 500
+        $editsNow = $window.FindAll($scope::Descendants, $editCondition)
+        if ($editsNow.Count -gt 0) {
+            try { $cancelOutput = $editsNow[$editsNow.Count - 1].GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value } catch { }
+        }
+        if ($cancelOutput -match '取消') { break }
+    }
+
+    Write-Host "`n---- 取消后的输出区 ----"
+    Write-Host $cancelOutput
+    Write-Host "------------------------"
+
+    $reportedCancel = $cancelOutput -match '已被用户取消'
+    $runUsable = $runButton.Current.IsEnabled
+    Write-Host "输出里是否报告「已被用户取消」：$reportedCancel"
+    Write-Host "取消后「执行」按钮是否恢复可用：$runUsable"
+
+    if (-not $reportedCancel) { throw "点了取消，但界面没有报告「已被用户取消」" }
+    if (-not $runUsable) { throw "取消之后「执行」按钮仍是禁用状态，界面没恢复可用" }
+
+    Write-Host "`n界面冒烟通过（场景二）：执行 → 取消 → 报告已取消 → 界面恢复可用" -ForegroundColor Green
+    Write-Host "`n界面冒烟全部通过：两个场景都符合预期" -ForegroundColor Green
 }
 finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }

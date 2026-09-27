@@ -600,8 +600,18 @@ public sealed partial class MainWindow : Window
         StatusText.Text = "执行中…";
 
         var parser = new ProgressParser(_action.Output?.Progress);
+
+        // 结束标志：取消/退出之后，伪控制台可能还会把它缓冲区里的内容吐出来，
+        // 那些行会跑到"结论行"后面，看起来像结论错了。收到结论后就别再追加了。
+        var finished = false;
+
         var progress = new Progress<ProcessOutputLine>(line =>
         {
+            if (finished)
+            {
+                return;
+            }
+
             AppendOutput(line.Text);
 
             if (parser.TryParse(line.Text, out var value) && value is >= 0 and <= 100)
@@ -642,6 +652,8 @@ public sealed partial class MainWindow : Window
         var verdict = result.Canceled || result.TimedOut
             ? ExitCodeInterpreter.FromInterruption(result.Canceled, result.TimedOut)
             : ExitCodeInterpreter.Interpret(result.ExitCode, _manifest.ExitCodes);
+
+        finished = true;
 
         ProgressIndicator.IsIndeterminate = false;
 
