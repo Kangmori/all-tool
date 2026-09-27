@@ -1,0 +1,51 @@
+name: 文档漂移检测
+
+# 慢节奏开发下最大的风险不是写错，而是"三个月后工具包悄悄过期了却没人发现"。
+# 这个工作流每周去问一次上游："你的版本和文档变了吗？"，有变化就开 issue 提醒。
+on:
+  schedule:
+    # 每周一 02:00 UTC（北京时间上午 10 点）
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift:
+    name: 检查上游版本与官方文档
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 跑检测（有漂移时脚本返回退出码 2）
+        id: drift
+        continue-on-error: true
+        shell: pwsh
+        run: ./scripts/check-doc-drift.ps1 -ReportFile drift-report.md
+
+      - name: 把报告贴进作业摘要，方便直接在 Actions 页面看
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path drift-report.md) {
+            Get-Content drift-report.md -Raw | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          }
+
+      - name: 有漂移就开 issue（已存在未关闭的则追加评论）
+        if: steps.drift.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create drift --description "上游版本或官方文档发生变化" --color FBCA04 --force >/dev/null 2>&1 || true
+          existing=$(gh issue list --label drift --state open --limit 1 --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            echo "已有未关闭的漂移 issue #$existing，追加评论"
+            gh issue comment "$existing" --body-file drift-report.md
+          else
+            gh issue create \
+              --title "上游版本/官方文档已变化，需要复核工具包" \
+              --body-file drift-report.md \
+              --label drift
+          fi

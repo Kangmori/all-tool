@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "purpose": "文档漂移检测的观测点清单。scripts/check-doc-drift.ps1 按这里的内容去问上游『你变了吗』，并在 CI 每周跑一次。",
+  "notes": [
+    "版本探测优先用 git ls-remote --tags：不限流、无需解析 HTML，且直接给出权威版本号。",
+    "不要用 api.github.com：实测在本机（经代理的共享出口 IP）会 403 rate limit exceeded。",
+    "7-Zip 的文档只随 CHM 分发，没有等价的在线文档，所以它只做版本探测——版本一变就说明该重新导出 CHM 并复核清单。",
+    "scoop 的 wiki 可以用 raw.githubusercontent.com/wiki/<owner>/<repo>/<page>.md 抓取；实测与我们 clone 下来的快照逐字节一致（归一化换行后哈希相同）。"
+  ],
+  "tools": [
+    {
+      "plugin": "7zip",
+      "displayName": "7-Zip",
+      "versionProbe": {
+        "kind": "http",
+        "url": "https://www.7-zip.org/download.html",
+        "pattern": "7-Zip\\s+([0-9]+\\.[0-9]+)",
+        "note": "官网下载页的标题里带有当前版本号"
+      },
+      "docs": []
+    },
+    {
+      "plugin": "scoop",
+      "displayName": "Scoop",
+      "versionProbe": {
+        "kind": "gitTags",
+        "url": "https://github.com/ScoopInstaller/Scoop.git",
+        "note": "取最高版本号的 tag；实测 v0.5.1 / v0.5.2 / v0.5.3"
+      },
+      "docs": [
+        {
+          "url": "https://raw.githubusercontent.com/wiki/ScoopInstaller/Scoop/Commands.md",
+          "snapshot": "docs/reference/scoop-wiki/Commands.md",
+          "note": "命令清单；变了说明 scoop help 的表面可能变了"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/wiki/ScoopInstaller/Scoop/Buckets.md",
+          "snapshot": "docs/reference/scoop-wiki/Buckets.md"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/wiki/ScoopInstaller/Scoop/Global-Installs.md",
+          "snapshot": "docs/reference/scoop-wiki/Global-Installs.md",
+          "note": "全局安装与提权语义"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/wiki/ScoopInstaller/Scoop/Persistent-data.md",
+          "snapshot": "docs/reference/scoop-wiki/Persistent-data.md"
+        }
+      ]
+    }
+  ]
+}

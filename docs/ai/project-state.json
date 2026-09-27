@@ -72,7 +72,10 @@
     { "path": "src/Swpj.App/", "role": "WinUI 3 宿主界面：清单驱动的动态表单、命令行预览、实时输出、取消、危险动作二次确认", "verified": true },
     { "path": "scripts/ui-smoke.ps1", "role": "界面冒烟：UIA 填表 → 真的点执行 → 校验输出与产物（把'人点一遍'变成可复现脚本）", "verified": true },
     { "path": "scripts/capture-app-window.ps1", "role": "只截应用窗口的截图工具（PrintWindow，不受遮挡影响；截图不入库）", "verified": true },
-    { "path": ".github/workflows/ci.yml", "role": "CI：Linux 跑清单校验，Windows 跑编译与测试", "verified": true }
+    { "path": "scripts/check-doc-drift.ps1", "role": "文档漂移检测：比对上游版本与文档快照哈希", "verified": true },
+    { "path": "docs/ai/drift-watch.json", "role": "漂移检测的观测点清单（每个工具用什么方式问上游）", "verified": true },
+    { "path": ".github/workflows/ci.yml", "role": "CI：Linux 跑清单校验，Windows 跑编译与测试", "verified": true },
+    { "path": ".github/workflows/doc-drift.yml", "role": "每周检查上游版本与官方文档，有漂移就开 issue", "verified": true }
   ],
 
   "verifiedChecks": [
@@ -186,6 +189,14 @@
       "command": "连续三次 dotnet test src\\Swpj.slnx",
       "result": "三次均 69/69 通过（此前 Progress<T> 造成的偶发失败已改为同步收集器）",
       "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "doc-drift-check-works",
+      "claim": "文档漂移检测能真的发现漂移（而不是永远报'没问题'）",
+      "command": "pwsh -File scripts\\check-doc-drift.ps1",
+      "result": "7-Zip 版本一致（26.03 = 上游 26.03）；Scoop 版本一致（0.5.3 = 最高 tag）；4 个 wiki 快照与上游归一化哈希逐字节相同；退出码 0",
+      "notes": "过程中修掉一个危险行为：读不到 appVersion 时原先静默跳过并仍报告'没有漂移'，现在把'检测器自己失败'也算漂移并返回退出码 2",
+      "verifiedAt": "2026-09-27"
     }
   ],
 
@@ -203,6 +214,12 @@
       "doneAt": "2026-09-27",
       "evidence": "scripts/ui-smoke.ps1 通过：界面填表 → 点执行 → 真实 7z 解压 → 输出与产物均符合预期",
       "remaining": "取消按钮只做了代码接线与执行引擎单测，尚未在界面上手动点一遍；进度条走动取决于 N5"
+    },
+    {
+      "id": "N4",
+      "task": "文档漂移检测",
+      "doneAt": "2026-09-27",
+      "evidence": "scripts/check-doc-drift.ps1 实测：7-Zip 与 Scoop 的版本都与上游一致，4 个 wiki 快照与上游归一化哈希逐字节相同；.github/workflows/doc-drift.yml 每周一自动跑，有漂移就开 issue"
     }
   ],
 
@@ -252,14 +269,6 @@
       "how": "P/Invoke CreatePseudoConsole + UpdateProcThreadAttribute(PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE) + CreateProcess(EXTENDED_STARTUPINFO_PRESENT)，从伪控制台管道读输出。注意 .NET 的 Process 类不支持 ConPTY，需要自己调 CreateProcess",
       "doneWhen": "7z 解压一个较大压缩包时，界面进度条随百分比推进；且 EndToEndTests 里那条'断言解析不到百分比'的断言被改成'能解析到百分比'",
       "priority": 1
-    },
-    {
-      "id": "N4",
-      "task": "文档漂移检测",
-      "why": "慢节奏开发的最大风险是工具包随官方文档更新而腐坏",
-      "how": "Actions 定时抓取已收录工具的官方文档页并 diff，有变化就自动开 issue",
-      "doneWhen": "至少覆盖 7z 与 scoop 的文档源",
-      "priority": 4
     }
   ],
 

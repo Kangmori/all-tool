@@ -43,8 +43,16 @@ pwsh -File scripts/check-env.ps1
 pwsh -File scripts/fetch-scoop-help.ps1          # scoop 的结构化帮助（28 个命令）
 pwsh -File scripts/extract-7zip-matrix.ps1       # 从 7z CHM 提取"命令 x 可用开关"矩阵
 
+# 问上游"你的版本和文档变了吗"（CI 每周也会跑，见 .github/workflows/doc-drift.yml）
+pwsh -File scripts/check-doc-drift.ps1
+
+# 界面验收：UIA 自动填表并真的点「执行」，校验输出与产物
+pwsh -File scripts/ui-smoke.ps1
+pwsh -File scripts/capture-app-window.ps1 -ActionIndex 1   # 只截应用窗口
+
 # 编译 WinUI 3（不需要打开 Visual Studio）
-& dotnet build spike\winui3-smoke\WinUiSmoke.csproj -c Debug
+& dotnet build src\Swpj.slnx
+& dotnet build src\Swpj.App\Swpj.App.csproj
 ```
 
 ## 4. 环境三条要点（细节见 development.md §4）
@@ -65,4 +73,7 @@ pwsh -File scripts/extract-7zip-matrix.ps1       # 从 7z CHM 提取"命令 x �
 
 ## 6. 当前进度（一句话）
 
-规范 v1 已定稿并有 1 个工具包（7-Zip，11 命令 / 64 字段 / 出处 100% / 冒烟通过）。**宿主程序（WinUI 3）尚未开始编写**。下一步动作见 `project-state.json` 的 `nextActions`。
+规范 v1 已定稿；**宿主程序（WinUI 3）已能工作并经界面冒烟验证**（UIA 填表 → 点执行 → 真实 7z 解压 → 输出与产物均正确）；
+工具包已有 **7-Zip**（11 动作 / 64 字段 / 冒烟通过）与 **Scoop**（40 动作 / 80 字段 / 校验通过，待复核入库）；
+CI 与每周文档漂移检测都已接入。**下一步动作以 `docs/ai/project-state.json` 的 `nextActions` 为准**
+（当前第一项是 N5：上 ConPTY 伪终端，好让"只在真控制台里画进度"的程序也能显示进度）。
