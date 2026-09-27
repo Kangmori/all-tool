@@ -47,7 +47,7 @@ project-state   │
 | ManifestLoader | 读 YAML、用 JSON Schema 校验、报错定位到字段 | 校验失败必须拒绝加载并显示原因，不能静默降级 |
 | ToolLocator | 找可执行文件、取版本、与 `minVersion` 比对 | 找不到时展示 `notFoundHint` |
 | ArgvBuilder | 字段 → token 序列 | 纯函数、可单测；**这是最该先写测试的组件** |
-| ProcessRunner | 创建进程、流式读输出、Job Object 杀进程树 | 取消必须杀掉整棵树（scoop 会调 aria2 再调 7z） |
+| ProcessRunner | 创建进程、流式读输出、取消时杀进程树 | 默认走管道，用 `Kill(entireProcessTree: true)`。另有一条 ConPTY 路径（`ConPtyProcessRunner`）实现了更彻底的 Job Object 语义（挂起创建 → 入 job → 恢复运行，保证后代都在 job 里），但**它的输出通道不通、整条路径未启用**，见 P19 |
 | OutputInterpreter | 编码解码、进度解析、退出码翻译 | 中文环境下编码是主要坑，见 §8 |
 | PluginStore | 扫描 `plugins/` 与用户目录、安装/卸载工具包 | 见规范 §2 的布局约定 |
 
@@ -225,6 +225,7 @@ uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py
 | P16 | 启动进程报 `目录名称无效`（Win32Exception） | `ProcessStartInfo.WorkingDirectory` 指向一个**还不存在**的目录时，CreateProcess 直接失败 | `ProcessRunner` 会先创建该目录——"解压到还不存在的目录"是常见合理意图。见 `ProcessRunner.RunAsync` 的注释 |
 | P17 | 截图里混进了桌面上别的窗口（浏览器、聊天工具） | 全屏截取，或 `SetForegroundWindow` 被前台限制挡下导致目标窗口仍在底层 | 用 `PrintWindow(..., PW_RENDERFULLCONTENT)` 让窗口画自己（`scripts/capture-app-window.ps1`）；并约定 `spike/*.png` 不入库 |
 | P18 | 测试偶发失败（同一段代码时过时不过） | 测试里用了 `System.Progress<T>`，它把回调投递到同步上下文/线程池，断言时可能还没落地 | 测试用同步收集器（`SyncProgress<T>`）；`Progress<T>` 只留给有 DispatcherQueue 的界面层 |
+| P19 | **ConPTY（伪控制台）路径拿不到任何子进程输出** | 症状：管道里只有转义序列（清屏、设置标题），**所有**程序都没有内容——原生 `whoami` / `findstr` / `7z` 和 `cmd` / `powershell` 全一样；让子进程把自己的状态写进文件，自述 `[Console]::IsOutputRedirected=True`，即它的标准输出没接到伪控制台上。**已逐一实测排除的假设**：① `STARTUPINFOEX` 尺寸（实测 104/112，正确）② `bInheritHandles` 取 true / false ③ 给 `CreatePipe` 设可继承的 `SECURITY_ATTRIBUTES` ④ PTY 侧句柄的关闭时机（立刻关 / 留到最后关）⑤ `ResizePseudoConsole` 触发渲染（只让转义序列变多、耗时从 3s 涨到 21s）⑥ 渲染时机（给 2 秒余量、200 行输出照样没有）⑦ 读循环吞异常（已改成显式上报，仍无输出）⑧ 结构体字段错位（`lpAttributeList` 位置正确、`UpdateProcThreadAttribute` 返回成功） | 现状：**实现保留但完全不启用**（没有任何清单或界面设置 `usePseudoConsole`）；`ConPtyTests` 里 5 条依赖运行子进程的用例标为 `Skip` 并写明"打通输出后它们就是验收标准"。可继续查的方向：对照 Windows Terminal 的 `CreateProcess` 参数（它同样是 GUI 进程、无控制台却能正常工作）；或显式给子进程 `STARTF_USESTDHANDLES` 指向控制台句柄 |
 
 ---
 

@@ -24,6 +24,16 @@ public sealed record ProcessRunRequest
 
     /// <summary>最多保留多少行输出（防止超长输出把内存吃掉）。</summary>
     public int MaxCapturedLines { get; init; } = 5000;
+
+    /// <summary>
+    /// 是否给子进程分配一个伪控制台（ConPTY）。
+    ///
+    /// 默认 false。需要它的场景很具体：**只在真控制台里画进度的程序**（7z 就是），
+    /// 一旦被重定向就什么进度都不输出。代价是输出里会出现 ANSI 转义序列（用 AnsiText.Strip 清理），
+    /// 且子进程会认为自己在一台真终端里（有的程序会因此改变行为，例如强制彩色输出）。
+    /// 所以这是**按工具包选择**的开关，不是默认行为。
+    /// </summary>
+    public bool UsePseudoConsole { get; init; }
 }
 
 /// <summary>输出的一行，标明来源流。</summary>
@@ -49,25 +59,42 @@ public sealed record ProcessRunResult
     public bool Truncated => TotalLineCount > Lines.Count;
 }
 
-/// <summary>
-/// 进程执行引擎。
-///
-/// 两个刻意的设计：
-///   1. **不用 <c>BeginOutputReadLine</c>**。它按行事件推送，对 7z 这种用 <c>\r</c> 原地刷进度的程序
-///      行为不可控。这里自己按 <c>\r</c> / <c>\n</c> 切行，进度才抓得住。
-///   2. **取消时杀整棵进程树**（<c>Kill(entireProcessTree: true)</c>）。scoop 会调 aria2 再调 7z，
-///      只杀直接子进程会留下孤儿。
-///      已知局限：这是"杀的那一刻"递归杀，被杀之后又新建的子进程管不到。彻底解决要用 Job Object，
-///      见 docs/ai/development.md 的组件说明。
-/// </summary>
-public sealed class ProcessRunner
+/// <summary>执行引擎的统一入口。有了接口，将来换成 ConPTY 或别的实现时调用方不用改。</summary>
+public interface IProcessRunner
 {
-    public async Task<ProcessRunResult> RunAsync(
+    Task<ProcessRunResult> RunAsync(
+        ProcessRunRequest request,
+        IProgress<ProcessOutputLine>? progress = null,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// 进程执行引擎（默认走管道；需要在真控制台里跑的程序走 ConPTY）。
+/// </summary>
+public sealed class ProcessRunner : IProcessRunner
+{
+    private readonly ConPtyProcessRunner _conPtyRunner = new();
+
+    public Task<ProcessRunResult> RunAsync(
         ProcessRunRequest request,
         IProgress<ProcessOutputLine>? progress = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        // 两条路径的能力不同，所以由工具包（而非宿主）决定用哪条：
+        //  - 管道：输出干净、可直接当数据解析；但只在真控制台里画进度的程序不会有进度
+        //  - ConPTY：有进度、有颜色；但输出里混着转义序列，且程序会察觉到"有终端"
+        return request.UsePseudoConsole
+            ? _conPtyRunner.RunAsync(request, progress, cancellationToken)
+            : RunWithPipesAsync(request, progress, cancellationToken);
+    }
+
+    private static async Task<ProcessRunResult> RunWithPipesAsync(
+        ProcessRunRequest request,
+        IProgress<ProcessOutputLine>? progress,
+        CancellationToken cancellationToken)
+    {
 
         var startInfo = new ProcessStartInfo
         {

@@ -33,7 +33,9 @@ public sealed class ProgressParser
             return false;
         }
 
-        var match = _pattern.Match(line);
+        // 走 ConPTY 时输出里混着颜色与光标控制序列，先清掉再匹配，
+        // 否则形如 "\x1b[32m 45%\x1b[0m" 的进度行会被转义序列打断。
+        var match = _pattern.Match(AnsiText.Strip(line));
         if (!match.Success || match.Groups.Count <= _group)
         {
             return false;

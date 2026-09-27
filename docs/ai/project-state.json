@@ -56,6 +56,8 @@
     { "path": "docs/adr/0001-宿主技术栈.md", "role": "技术栈决定与放弃的方案", "verified": true },
     { "path": "plugins/7zip/manifest.yaml", "role": "第一个工具包：7-Zip，11 动作 / 64 字段", "verified": true },
     { "path": "plugins/7zip/NOTES.md", "role": "7z 覆盖范围、未做项、坑、冒烟实测结果", "verified": true },
+    { "path": "plugins/scoop/manifest.yaml", "role": "第二个工具包：Scoop，40 动作 / 80 字段（28 个命令全覆盖）", "verified": true },
+    { "path": "plugins/scoop/NOTES.md", "role": "scoop 启动方式与输出编码实测、退出码坑、规范缺口、冒烟实测结果", "verified": true },
     { "path": "scripts/validate-plugins.py", "role": "清单校验器（本地与 CI 共用）", "verified": true },
     { "path": "scripts/check-env.ps1", "role": "环境探测与漂移核对", "verified": true },
     { "path": "scripts/fetch-scoop-help.ps1", "role": "抓 scoop 的结构化帮助（28 命令）", "verified": true },
@@ -75,7 +77,10 @@
     { "path": "scripts/check-doc-drift.ps1", "role": "文档漂移检测：比对上游版本与文档快照哈希", "verified": true },
     { "path": "docs/ai/drift-watch.json", "role": "漂移检测的观测点清单（每个工具用什么方式问上游）", "verified": true },
     { "path": ".github/workflows/ci.yml", "role": "CI：Linux 跑清单校验，Windows 跑编译与测试", "verified": true },
-    { "path": ".github/workflows/doc-drift.yml", "role": "每周检查上游版本与官方文档，有漂移就开 issue", "verified": true }
+    { "path": ".github/workflows/doc-drift.yml", "role": "每周检查上游版本与官方文档，有漂移就开 issue", "verified": true },
+    { "path": "src/Swpj.Core/Execution/WindowsCommandLine.cs", "role": "Windows 命令行的引号规则（走 ConPTY 时必须自己拼命令行，这一处必须正确）", "verified": true },
+    { "path": "src/Swpj.Core/Execution/AnsiText.cs", "role": "剥离 ANSI 转义序列（伪控制台的输出带颜色与控制序列）", "verified": true },
+    { "path": "src/Swpj.Core/Execution/ConPtyProcessRunner.cs", "role": "伪控制台执行器。**整条路径当前不可用**（输出通道不通，见 P19），没有任何地方启用它；其中 Job Object + 挂起创建后入 job 的做法是可复用的", "verified": false }
   ],
 
   "verifiedChecks": [
@@ -197,6 +202,54 @@
       "result": "7-Zip 版本一致（26.03 = 上游 26.03）；Scoop 版本一致（0.5.3 = 最高 tag）；4 个 wiki 快照与上游归一化哈希逐字节相同；退出码 0",
       "notes": "过程中修掉一个危险行为：读不到 appVersion 时原先静默跳过并仍报告'没有漂移'，现在把'检测器自己失败'也算漂移并返回退出码 2",
       "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "scoop-cmd-launch",
+      "claim": "scoop 只能用 scoop.cmd 启动；scoop.ps1 无法被 CreateProcess 执行",
+      "command": "Process.Start(UseShellExecute=false) 分别启动 shims\\scoop.ps1 / scoop.cmd / 无扩展名的 scoop",
+      "result": ".ps1 与 sh 都报 'The specified executable is not a valid application for this OS platform.'；scoop.cmd 成功且参数、退出码都正确（--version / list / prefix 7zip / info 7zip）",
+      "implication": "locate.executable 写 scoop.cmd；alternativeNames 必须留空（列 .ps1 会让宿主选中一个启动不了的文件）。ToolLocator 对带扩展名的名字原样试，正好匹配",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "scoop-exit-codes",
+      "claim": "scoop 的退出码不可靠：除'顶层命令名不认识'外，失败路径也返回 0",
+      "command": "对 8 条失败路径实测退出码（scoop info 不存在的应用 / shim info 不存在的 shim / cache rm / uninstall / alias rm / bucket rm / bucket add / shim rm / depends / hold 缺必填参数）",
+      "result": "全部 exit=0（各自打印 ERROR 或用法）；只有 scoop nosuchcommand 是 exit=1。根因：lib/commands.ps1:38 用 `& $cmd_path` 执行子命令脚本，bin/scoop.ps1 不传播 $LASTEXITCODE",
+      "implication": "宿主判定成败必须看输出文本；scoop 清单的 exitCodes 只能写 0/1 + virustotal 在文档里承诺的 2/4/8/16（那几个码同样到不了调用方）",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "scoop-output-encoding-gbk",
+      "claim": "scoop 的 stdout 与 stderr 在被重定向时按系统 OEM 代码页输出（本机 936 = GBK），不是 UTF-8",
+      "command": "CreateProcess + 重定向 stdio 捕获 `scoop.cmd info 7zip -v` 的 stderr 原始字节（StandardError.BaseStream）",
+      "result": "'系统无法辨识文件' 的字节是 cf b5 cd b3 …（GBK）；按 UTF-8 解码得到 'ϵͳ�޷���ʶ�ļ�'。用固定中文样本复核 stdout 与 stderr 同结论",
+      "implication": "scoop 清单写 runtime.encoding: gbk（宿主 EncodingResolver 已支持，有 936 的断言）。注意：若宿主把子进程输出编码改成 UTF-8，同一份输出会变成 UTF-8 字节，与清单冲突",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "scoop-version-pattern",
+      "claim": "scoop 清单里的 versionPattern 能从真实输出里取到版本号",
+      "command": "CreateProcess 捕获 `scoop.cmd --version` 的真实输出（19 行），用清单里的 (?m) 跨行正则匹配",
+      "result": "success=True，捕获组 = 0.5.3。两种第二行形态都测过：'<hash> chore(release): Bump to version 0.5.3 (resync) (#6436)' 与 'v0.5.3 - Released at 2025-08-11'",
+      "implication": "版本号在第二行，必须 (?m) + 跨行（与 7z 的 P4 同类坑）",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "scoop-smoke",
+      "claim": "scoop 工具包 examples 的命令在真机上行为正确，且清单里的长开关写法都被接受",
+      "command": "用 pyyaml 从 plugins/scoop/manifest.yaml 抽出 22 条 examples，经 CreateProcess(scoop.cmd) 逐条实跑并与 expectExitCode 比对；另跑 13 条探针验证长开关",
+      "result": "examples 22/22 exit=0 与 expectExitCode 一致；13 条探针全部接受长开关（含对照：`install --arch 64bit` 被接受、`install --arch=64bit` 报 Option not recognized，证明必须用 style: separate）",
+      "implication": "只读动作已验证；写操作按安全红线未跑，未跑清单与原因在 plugins/scoop/NOTES.md §9.3",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "scoop-plugin-loads-in-host",
+      "claim": "新增的 scoop 清单能被已实现的宿主真实加载（不是只过 python 校验器）",
+      "command": "dotnet test src\\Swpj.slnx（RealManifestTests 里 ManifestLoader.LoadAll 会遍历 plugins/ 下所有工具包）",
+      "result": "69/69 通过，含 LoadAll 对 7zip 与 scoop 两个清单的反序列化与结构校验",
+      "implication": "清单与 YamlDotNet 模型、ManifestValidation 的规则一致；arg 展开走 ArgvBuilder（已支持 separate）",
+      "verifiedAt": "2026-09-27"
     }
   ],
 
@@ -220,6 +273,13 @@
       "task": "文档漂移检测",
       "doneAt": "2026-09-27",
       "evidence": "scripts/check-doc-drift.ps1 实测：7-Zip 与 Scoop 的版本都与上游一致，4 个 wiki 快照与上游归一化哈希逐字节相同；.github/workflows/doc-drift.yml 每周一自动跑，有漂移就开 issue"
+    },
+    {
+      "id": "N1",
+      "task": "编写 scoop 工具包",
+      "doneAt": "2026-09-27",
+      "evidence": "plugins/scoop/manifest.yaml：40 动作 / 80 字段 / 28 个命令全覆盖 / 字段出处 100%（校验器 2/2 通过）；examples 22/22 真机 exit=0；13 条长开关探针通过；真机实测确定了启动方式（scoop.cmd）、输出编码（GBK）、versionPattern（捕获 0.5.3）与 scoop 退出码不可靠，全部记入 plugins/scoop/NOTES.md",
+      "remaining": "写操作（install/update/uninstall/cleanup/import/hold/reset/shim/alias/config/bucket 增删/cache rm/download/create/home/virustotal）按安全红线未实跑；create 与 shim alter 是交互式，宿主暂无 stdin 交互能力；§8 的 9 条规范缺口待拍板（解释器启动、字段级 requiresAdmin、动作级 exitCodes、userSelected 语义等）"
     }
   ],
 
@@ -239,6 +299,24 @@
       "docsSource": "7-zip.chm (26.03) → Command Line Version 章节；快照见 docs/reference/7zip-md/",
       "switchMatrix": "docs/reference/7zip-switch-matrix.json",
       "knownGaps": "未做 -m 家族的格式专属参数、-si/-so 流、冷门 -s* 开关；-t* / -t# 特殊类型未暴露"
+    },
+    {
+      "id": "scoop",
+      "name": "Scoop",
+      "appVersion": "0.5.3",
+      "manifestVersion": "0.1.0",
+      "path": "plugins/scoop/manifest.yaml",
+      "commands": ["alias", "bucket", "cache", "cat", "checkup", "cleanup", "config", "create", "depends", "download", "export", "help", "hold", "home", "import", "info", "install", "list", "prefix", "reset", "search", "shim", "status", "unhold", "uninstall", "update", "virustotal", "which"],
+      "actions": 40,
+      "fields": 80,
+      "docCoverage": 1.0,
+      "dangerousActions": ["uninstall/cleanup/cache rm/bucket rm/shim rm/alias rm/config rm (destructive)", "install/update/download/import/reset/hold/unhold/config set/shim add/shim alter/create (overwrite)"],
+      "smokeTested": true,
+      "smokeResult": "22/22 条 examples exit=0（只读命令）；另 13 条长开关探针通过；写操作按安全红线未实跑，详见 NOTES.md §9.3",
+      "docsSource": "docs/reference/scoop-help/（本机 scoop 0.5.3 的 28 命令结构化帮助）+ docs/reference/scoop-wiki/（官方 wiki 全站）",
+      "launch": "locate.executable=scoop.cmd（实测：scoop.ps1 无法被 CreateProcess 执行；alternativeNames 故意留空）",
+      "runtimeEncoding": "gbk（实测 stdout/stderr 原始字节为 cp936，非 UTF-8）",
+      "knownGaps": "examples 只覆盖只读动作；无 progress.pattern（写操作没跑过，不能凭空写正则）；create 与 shim alter 是交互式命令；depends 的 -a/--arch 帮助未列故未收录；所有 --global 字段需要管理员权限而本机用户不是管理员；§8 另有 9 条规范缺口"
     }
   ],
 
@@ -250,24 +328,18 @@
     { "id": "D5", "question": "是否引入 requirements（如 -sfx 需要 7zCon.sfx 与主程序同目录）", "impact": "影响工具包的前置校验", "status": "待拍板" },
     { "id": "D6", "question": "历史记录 / 收藏命令属于工具包还是宿主", "impact": "倾向宿主统一实现", "status": "倾向宿主" },
     { "id": "D7", "question": "plugins 目录在'可分发形态'下放哪里", "impact": "目前 src/Swpj.App/RepoPaths.cs 是靠向上找 AGENTS.md 定位仓库根（开发期做法）。做成可分发时需改成：程序目录旁 / %APPDATA% / 可配置路径", "status": "未决（不影响自用开发）" },
-    { "id": "D8", "question": "scoop 失败时也返回退出码 0，宿主如何判定成败", "impact": "子智能体实测发现：scoop 的 bin/scoop.ps1 不传播 $LASTEXITCODE，除'顶层命令名不认识'外失败路径也返回 0。需要靠输出文本或其它信号判断，这会影响通用设计（是否要引入 output.successPattern / failurePattern）", "status": "待拍板" }
+    { "id": "D8", "question": "scoop 失败时也返回退出码 0，宿主如何判定成败", "impact": "子智能体实测发现：scoop 的 bin/scoop.ps1 不传播 $LASTEXITCODE，除'顶层命令名不认识'外失败路径也返回 0。需要靠输出文本或其它信号判断，这会影响通用设计（是否要引入 output.successPattern / failurePattern）", "status": "待拍板" },
+    { "id": "D9", "question": "字段的 repeatable: true 该不该对 text / textarea 也生效", "impact": "写 scoop 工具包时实测：表单构建器只让 multiselect / files / paths / directories 产出多值（每行一项），text / textarea 即使写了 repeatable 也只能填一个值，于是'自由多值'字段只能借用 multiselect 类型（7zip 的 exclude/includeOnly 也是这么写的）。要么宿主补上对 text 的 repeatable 支持，要么规范说明'自由多值请用 multiselect'", "status": "待拍板" }
   ],
 
   "nextActions": [
     {
-      "id": "N1",
-      "task": "编写 scoop 工具包",
-      "why": "第二个样板，用它检验规范能否表达 28 个命令、子命令与需要提权的操作；也是工具包手册的第一次实战演练",
-      "how": "照 docs/ai/playbook-tool-package.md 走；参数依据用 docs/reference/scoop-help/（脚本可重新生成，版本匹配）",
-      "doneWhen": "validate 全绿 + examples 冒烟通过 + NOTES.md 记录实测结果 + project-state.json 的 plugins 段更新",
-      "priority": 1
-    },
-    {
       "id": "N5",
       "task": "给子进程一个伪控制台（ConPTY），让进度条真的能走",
       "why": "实测证据：7z 在被重定向时不输出百分比（40 MB 输入只有 354 字节输出、无 %）。凡是'只在真控制台里画进度'的程序都有这个问题，涉及 7z、部分下载器/编译器",
-      "how": "P/Invoke CreatePseudoConsole + UpdateProcThreadAttribute(PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE) + CreateProcess(EXTENDED_STARTUPINFO_PRESENT)，从伪控制台管道读输出。注意 .NET 的 Process 类不支持 ConPTY，需要自己调 CreateProcess",
-      "doneWhen": "7z 解压一个较大压缩包时，界面进度条随百分比推进；且 EndToEndTests 里那条'断言解析不到百分比'的断言被改成'能解析到百分比'",
+      "status": "受阻。第一版实现已完成（raw CreateProcess、Windows 命令行引号规则、ANSI 剥离、Job Object + 挂起创建后入 job 以保证后代都在 job 里、取消/超时），但**输出通道不通**：所有子进程（含原生 whoami/findstr/7z）在管道里都只有转义序列、没有内容，子进程自述 IsOutputRedirected=True。已实测排除 8 项假设，逐条列在 docs/ai/development.md 的 P19",
+      "how": "下一步方向：对照 Windows Terminal 的 CreateProcess 参数（它同样是 GUI 进程、无控制台却能正常工作）；或显式给子进程 STARTF_USESTDHANDLES 指向控制台句柄。ConPtyTests 里有 5 条 Skip 的用例，它们就是这条任务的验收标准",
+      "doneWhen": "7z 解压一个较大压缩包时，界面进度条随百分比推进；且 5 条被 Skip 的 ConPtyTests 全部转为通过",
       "priority": 1
     }
   ],
