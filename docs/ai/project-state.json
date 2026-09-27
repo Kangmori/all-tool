@@ -65,8 +65,11 @@
     { "path": "src/Swpj.slnx", "role": "宿主解决方案（新格式 .slnx）", "verified": true },
     { "path": "src/Swpj.Core/Manifest/", "role": "清单模型、加载器、结构校验（ManifestLoader/ManifestValidation/ManifestModel）", "verified": true },
     { "path": "src/Swpj.Core/Execution/ArgvBuilder.cs", "role": "字段值 → argv 的展开器（纯函数，最关键组件）", "verified": true },
-    { "path": "src/Swpj.Core.Tests/", "role": "26 个单元与集成测试（含用真实 7zip 清单做的集成测试）", "verified": true },
-    { "path": ".github/workflows/ci.yml", "role": "CI：Linux 跑清单校验，Windows 跑编译与测试", "verified": false }
+    { "path": "src/Swpj.Core/Execution/ProcessRunner.cs", "role": "进程执行引擎：argv 数组启动、\\r/\\n 双行结束符读取、取消杀整树、超时、编码解析", "verified": true },
+    { "path": "src/Swpj.Core/Execution/OutputInterpreter.cs", "role": "进度解析与退出码翻译", "verified": true },
+    { "path": "src/Swpj.Core/Discovery/ToolLocator.cs", "role": "在 PATH/searchPaths 找可执行文件、取版本、与 minVersion 比对", "verified": true },
+    { "path": "src/Swpj.Core.Tests/", "role": "66 个单元与集成测试（含用真实 7zip 清单做的集成测试、真启动子进程的执行引擎测试）", "verified": true },
+    { "path": ".github/workflows/ci.yml", "role": "CI：Linux 跑清单校验，Windows 跑编译与测试", "verified": true }
   ],
 
   "verifiedChecks": [
@@ -135,6 +138,31 @@
       "result": "extract 得到 [x, <archive>, -o<dir>, -aoa, -r-, -bb0]；add 得到 [a, <archive>, <inputs...>, -t7z, -mx5, -r-, -bb0]",
       "implication": "规范确实能驱动出可执行命令，不是纸上设计",
       "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "process-runner-behaviour",
+      "claim": "进程执行引擎能捕获输出与退出码、把 \\r 当行结束符（抓得住原地刷新的进度）、取消与超时都会杀掉子进程并迅速返回、超量输出会截断但仍如实计数",
+      "command": "dotnet test src\\Swpj.slnx（ProcessRunnerTests，真启动 cmd/powershell 子进程）",
+      "result": "全部通过；取消与超时都在 15 秒内返回",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "ci-green",
+      "claim": "GitHub Actions 的校验与编译测试能跑通",
+      "command": "gh run list",
+      "result": "首次运行 success，耗时 54 秒（run 36326883508）",
+      "implication": "N2 完成；此后每次推送都有自动门禁",
+      "verifiedAt": "2026-09-27"
+    }
+  ],
+
+  "completedMilestones": [
+    {
+      "id": "N2",
+      "task": "搭 GitHub Actions：校验 + 构建",
+      "doneAt": "2026-09-27",
+      "evidence": "CI 首次运行成功（54 秒）：Linux 跑清单校验，Windows 跑 dotnet build/test src/Swpj.slnx",
+      "remaining": "WinUI 应用项目尚未纳入 CI；等 src/Swpj.App 建好并本地验证能编译后再加"
     }
   ],
 
@@ -176,24 +204,14 @@
       "priority": 1
     },
     {
-      "id": "N2",
-      "task": "搭 GitHub Actions：校验 + 构建",
-      "why": "把校验变成推送时的自动门禁；并顺带验证 windows-latest 上的构建",
-      "how": "Linux 跑清单校验（私有仓库 Windows runner 按 2 倍计费，能省则省），Windows 跑 dotnet build/test src/Swpj.slnx；只在 push main、打 tag、发 PR 时触发",
-      "status": "workflow 已写入 .github/workflows/ci.yml，等待首次推送后的 Actions 结果确认（尚未看到绿灯）",
-      "remaining": "WinUI 应用项目暂未纳入 CI；等 src/Swpj.App 建好并本地验证能编译后再加进去",
-      "doneWhen": "一次推送能在 Actions 里看到绿灯",
-      "priority": 2
-    },
-    {
       "id": "N3",
       "task": "实现宿主壳的空心版本（垂直切片）",
       "why": "打通 ManifestLoader → ArgvBuilder → ProcessRunner → 输出展示这条链路，才能证明规范真的能驱动界面",
       "how": "先写 ArgvBuilder 与其单元测试（最易错、最该被测）；再最小 WinUI 界面跑通 7z 解压",
-      "status": "进行中。已完成：清单模型 / ManifestLoader / ManifestValidation / ArgvBuilder，26 个测试全绿（含用真实 7zip 清单做的集成测试）",
-      "remaining": "ProcessRunner（流式读输出、编码解码、Job Object 杀进程树、取消）、ToolLocator（PATH/searchPaths 发现 + versionPattern 取版本）、动态表单界面（WinUI 3）",
+      "status": "进行中。核心库已完成：清单模型 / ManifestLoader / ManifestValidation / ArgvBuilder / ProcessRunner / ProgressParser / ExitCodeInterpreter / ToolLocator，66 个测试全绿",
+      "remaining": "只剩界面与装配层：WinUI 3 应用（src/Swpj.App）、按清单字段动态生成表单、把 ProcessRunner 的实时输出接到界面、取消按钮、danger 动作的二次确认",
       "doneWhen": "能在界面上选一个 7z 文件与输出目录，点击解压，看到实时进度，并且能取消",
-      "priority": 3
+      "priority": 1
     },
     {
       "id": "N4",
