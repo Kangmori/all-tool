@@ -48,7 +48,7 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            var pluginsRoot = RepoPaths.PluginsDirectory;
+            var pluginsRoot = RepoPaths.FindPluginsDirectory();
 
             foreach (var (directory, manifest) in ManifestLoader.LoadAll(pluginsRoot))
             {

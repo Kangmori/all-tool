@@ -390,7 +390,7 @@
     { "id": "D4", "question": "fixedArgs（隐藏参数）保留还是删除", "impact": "倾向删除，与硬规则 R6（不隐藏命令）冲突", "status": "倾向删除" },
     { "id": "D5", "question": "是否引入 requirements（如 -sfx 需要 7zCon.sfx 与主程序同目录）", "impact": "影响工具包的前置校验", "status": "待拍板" },
     { "id": "D6", "question": "历史记录 / 收藏命令属于工具包还是宿主", "impact": "倾向宿主统一实现", "status": "倾向宿主" },
-    { "id": "D7", "question": "plugins 目录在'可分发形态'下放哪里", "impact": "目前 src/Swpj.App/RepoPaths.cs 是靠向上找 AGENTS.md 定位仓库根（开发期做法）。做成可分发时需改成：程序目录旁 / %APPDATA% / 可配置路径", "status": "未决（不影响自用开发）" },
+    { "id": "D7", "question": "plugins 目录在'可分发形态'下放哪里", "impact": "已部分推进（2026-09-27）：宿主现在**优先在可执行文件旁找 plugins\\**，找不到才回退到'向上找仓库根'（开发期做法）。这样'把程序目录拷走就能用'已经成立；仍未定的是要不要再支持 %APPDATA% 或可配置路径", "status": "部分推进" },
     { "id": "D8", "question": "scoop 失败时也返回退出码 0，宿主如何判定成败", "impact": "子智能体实测发现：scoop 的 bin/scoop.ps1 不传播 $LASTEXITCODE，除'顶层命令名不认识'外失败路径也返回 0。需要靠输出文本或其它信号判断，这会影响通用设计（是否要引入 output.successPattern / failurePattern）", "status": "待拍板" },
     { "id": "D9", "question": "字段的 repeatable: true 该不该对 text / textarea 也生效", "impact": "写 scoop 工具包时实测：表单构建器只让 multiselect / files / paths / directories 产出多值（每行一项），text / textarea 即使写了 repeatable 也只能填一个值，于是'自由多值'字段只能借用 multiselect 类型", "status": "已解决（2026-09-27）——宿主改成：text/textarea 且 repeatable 时渲染多行框、每行一项；规范同步写明该语义。实测：给 7z 的「分卷大小」填三行，命令行生成 -v10k -v15k -v2m" }
   ],
