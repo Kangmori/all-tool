@@ -70,7 +70,9 @@
     { "path": "src/Swpj.Core/Execution/ProcessRunner.cs", "role": "进程执行引擎：argv 数组启动、\\r/\\n 双行结束符读取、取消杀整树、超时、编码解析", "verified": true },
     { "path": "src/Swpj.Core/Execution/OutputInterpreter.cs", "role": "进度解析与退出码翻译", "verified": true },
     { "path": "src/Swpj.Core/Discovery/ToolLocator.cs", "role": "在 PATH/searchPaths 找可执行文件、取版本、与 minVersion 比对", "verified": true },
-    { "path": "src/Swpj.Core.Tests/", "role": "69 个单元与集成测试（真实 7zip 清单集成测试、真启动子进程的执行引擎测试、真跑 7z 的端到端测试）", "verified": true },
+    { "path": "src/Swpj.Core/Settings/LastValuesStore.cs", "role": "记住字段上次用过的值（save 的落地）；密码永不落盘；文件损坏时按空处理不崩", "verified": true },
+    { "path": "src/Swpj.Core.Tests/LastValuesStoreTests.cs", "role": "LastValuesStore 的 7 个测试（跨实例读回、键隔离、损坏文件兜底、目录自建）", "verified": true },
+    { "path": "src/Swpj.Core.Tests/", "role": "99 个单元与集成测试", "verified": true },
     { "path": "src/Swpj.App/", "role": "WinUI 3 宿主界面：清单驱动的动态表单、命令行预览、实时输出、取消、危险动作二次确认", "verified": true },
     { "path": "scripts/ui-smoke.ps1", "role": "界面冒烟：UIA 填表 → 真的点执行 → 校验输出、进度条与产物；另有场景二验证「取消」路径", "verified": true },
     { "path": "scripts/capture-app-window.ps1", "role": "只截应用窗口的截图工具（PrintWindow，不受遮挡影响；截图不入库）", "verified": true },
@@ -222,6 +224,21 @@
       "verifiedAt": "2026-09-27"
     },
     {
+      "id": "spec-promises-vs-host-audit",
+      "claim": "规范里承诺的字段能力，宿主都真的实现了（不再有『清单写了、界面忽略』的情况）",
+      "command": "统计清单里各字段属性的出现次数，再逐个查宿主是否引用",
+      "result": "审计出两处缺口并已补：save（14 处声明，宿主原先完全忽略）、group（72 处声明，宿主原先完全忽略）。另一处 visibleWhen 声明次数为 0，规范已标注『v1 宿主未实现』",
+      "implication": "这类『规范承诺、宿主没做』的缺口不会有任何报错，只会让清单作者白写字段——值得定期做一次这样的对照审计",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "save-and-group-work-in-ui",
+      "claim": "记住上次输入（save）与界面分组（group）在真实界面上生效",
+      "command": "跑 ui-smoke 记录值 → 重启宿主读回填；并用 UIA 枚举界面文字确认分组标题",
+      "result": "save：执行后写入 %APPDATA%\\swpj\\last-values.json（3 条），重启后『压缩包』与『解压到』自动回填，命令行预览带上恢复的路径；group：7z 解压动作的『筛选』分组标题出现",
+      "verifiedAt": "2026-09-27"
+    },
+    {
       "id": "scoop-cmd-launch",
       "claim": "scoop 只能用 scoop.cmd 启动；scoop.ps1 无法被 CreateProcess 执行",
       "command": "Process.Start(UseShellExecute=false) 分别启动 shims\\scoop.ps1 / scoop.cmd / 无扩展名的 scoop",
@@ -319,6 +336,13 @@
       "doneAt": "2026-09-27",
       "evidence": "scripts/ui-smoke.ps1 增加场景二：选 7z「添加到压缩包」、填 48 MB 输入、点执行、2 秒后点取消。实测输出从 0% 走到 66% 后报告『已被用户取消（退出码 1，耗时 7.3 秒）』，且「执行」按钮恢复可用。至此目标里那句『有实时进度、能取消』在真实界面上完整验证",
       "note": "顺带修掉一个观感问题：取消后伪控制台还会吐出缓冲区内容，跑到结论行之后——现在收到结论就不再追加输出"
+    },
+    {
+      "id": "N9",
+      "task": "补齐『规范承诺了但宿主没实现』的字段能力（save / group）",
+      "doneAt": "2026-09-27",
+      "evidence": "审计：save 在清单里声明 14 次、group 声明 72 次，宿主原先都完全忽略。现已实现：save 落盘到 %APPDATA%\\swpj\\last-values.json（只在执行时记录，password 永不落盘，回填优先于 default）；group 在分组变化时插入小标题。界面实测：重启后字段自动回填、『筛选』分组标题出现。visibleWhen 声明次数为 0，规范已标注 v1 宿主未实现",
+      "note": "这类缺口不会报错，只会让清单作者白写字段——建议以后改规范时同步做一次『声明次数 vs 宿主引用次数』的对照"
     }
   ],
 

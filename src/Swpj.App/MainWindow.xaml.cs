@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Controls;
 using Swpj.Core.Discovery;
 using Swpj.Core.Execution;
 using Swpj.Core.Manifest;
+using Swpj.Core.Settings;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
 
@@ -23,6 +24,7 @@ public sealed partial class MainWindow : Window
     private const int MaxOutputLines = 1000;
 
     private readonly ProcessRunner _runner = new();
+    private readonly LastValuesStore _lastValues = LastValuesStore.OpenDefault();
     private readonly List<PackageEntry> _packages = [];
     private readonly List<ActionEntry> _actions = [];
     private readonly Dictionary<string, object?> _values = new(StringComparer.Ordinal);
@@ -148,6 +150,30 @@ public sealed partial class MainWindow : Window
         var advancedPanel = new StackPanel { Spacing = 12 };
         var hasAdvanced = false;
 
+        // `group` 的落地：清单里 70 多处标了分组（基础 / 安全 / 筛选 / 高级…），
+        // 之前界面完全忽略它，所有字段平铺成一长列。这里在分组变化时插一个小组标题。
+        // 注意普通字段与高级字段在两个不同的面板里，所以"上一个分组"要分别记。
+        var lastGroupByPanel = new Dictionary<Panel, string?>();
+
+        void AddWithGroupHeader(Panel target, FrameworkElement control, string? group)
+        {
+            var lastGroup = lastGroupByPanel.GetValueOrDefault(target);
+
+            if (!string.IsNullOrEmpty(group) && !string.Equals(group, lastGroup, StringComparison.Ordinal))
+            {
+                target.Children.Add(new TextBlock
+                {
+                    Text = group,
+                    FontWeight = FontWeights.SemiBold,
+                    Opacity = 0.7,
+                    Margin = new Thickness(0, 10, 0, 0),
+                });
+                lastGroupByPanel[target] = group;
+            }
+
+            target.Children.Add(control);
+        }
+
         foreach (var field in _action.Fields ?? [])
         {
             if (string.IsNullOrEmpty(field.Id))
@@ -161,12 +187,12 @@ public sealed partial class MainWindow : Window
 
             if (field.Advanced)
             {
-                advancedPanel.Children.Add(control);
+                AddWithGroupHeader(advancedPanel, control, field.Group);
                 hasAdvanced = true;
             }
             else
             {
-                FormPanel.Children.Add(control);
+                AddWithGroupHeader(FormPanel, control, field.Group);
             }
         }
 
@@ -211,6 +237,12 @@ public sealed partial class MainWindow : Window
 
         stack.Children.Add(label);
 
+        // 规范里 save: true 的落地：回填上次用过的值。
+        // 密码类型**永不落盘**，所以这里直接跳过（见 LastValuesStore 的说明）。
+        var saved = field.Save && field.Type != "password" && field.Id is not null
+            ? _lastValues.Get(_manifest?.Id ?? string.Empty, _action?.Id ?? string.Empty, field.Id)
+            : null;
+
         switch (field.Type)
         {
             case "bool":
@@ -218,9 +250,11 @@ public sealed partial class MainWindow : Window
                 var box = new CheckBox
                 {
                     Content = string.IsNullOrEmpty(field.Help) ? "启用" : field.Help,
-                    IsChecked = field.Default is bool b
-                        ? b
-                        : string.Equals(field.Default?.ToString(), "true", StringComparison.OrdinalIgnoreCase),
+                    IsChecked = saved is not null
+                        ? string.Equals(saved, "true", StringComparison.OrdinalIgnoreCase)
+                        : field.Default is bool b
+                            ? b
+                            : string.Equals(field.Default?.ToString(), "true", StringComparison.OrdinalIgnoreCase),
                 };
                 box.Checked += (_, _) => UpdateCommandLine();
                 box.Unchecked += (_, _) => UpdateCommandLine();
@@ -233,7 +267,13 @@ public sealed partial class MainWindow : Window
             case "literal":
             {
                 var combo = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
-                FieldValue? preselect = (field.Values ?? []).FirstOrDefault(v => v.IsDefault);
+
+                // 优先级：上次用过的值 > 清单标了 isDefault 的项 > default 指向的项 > 第一项
+                FieldValue? preselect = saved is null
+                    ? null
+                    : (field.Values ?? []).FirstOrDefault(v => string.Equals(v.Value, saved, StringComparison.Ordinal));
+
+                preselect ??= (field.Values ?? []).FirstOrDefault(v => v.IsDefault);
 
                 preselect ??= field.Default is null
                     ? null
@@ -267,10 +307,13 @@ public sealed partial class MainWindow : Window
                     PlaceholderText = field.Placeholder ?? string.Empty,
                 };
 
-                box.Value = field.Default is not null
-                    && double.TryParse(field.Default.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
-                        ? parsed
-                        : double.NaN;
+                box.Value = saved is not null
+                    && double.TryParse(saved, NumberStyles.Float, CultureInfo.InvariantCulture, out var savedNumber)
+                        ? savedNumber
+                        : field.Default is not null
+                            && double.TryParse(field.Default.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+                                ? parsed
+                                : double.NaN;
 
                 box.ValueChanged += (_, _) => UpdateCommandLine();
                 stack.Children.Add(box);
@@ -304,6 +347,12 @@ public sealed partial class MainWindow : Window
                     PlaceholderText = field.Placeholder ?? "每行一项",
                     HorizontalAlignment = HorizontalAlignment.Stretch,
                 };
+
+                if (saved is not null)
+                {
+                    box.Text = saved;   // 回填上次用过的多值（每行一项）
+                }
+
                 box.TextChanged += (_, _) => UpdateCommandLine();
                 stack.Children.Add(box);
 
@@ -361,10 +410,9 @@ public sealed partial class MainWindow : Window
                     Height = field.Repeatable && field.Type != "textarea" ? 76 : double.NaN,
                 };
 
-                if (field.Default is not null)
-                {
-                    box.Text = field.Default.ToString() ?? string.Empty;
-                }
+                // 回填上次的值优先于清单里的 default：用户上次填的就是他的意图
+                box.Text = saved
+                    ?? (field.Default is not null ? field.Default.ToString() ?? string.Empty : string.Empty);
 
                 box.TextChanged += (_, _) => UpdateCommandLine();
 
@@ -495,6 +543,43 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// 把标了 <c>save: true</c> 的字段值记下来（规范承诺的能力）。
+    /// 只在真正执行时记录——记录"用户真的用过"的值，而不是他随手点过的每个中间状态。
+    /// </summary>
+    private void RememberValues()
+    {
+        if (_manifest?.Id is null || _action?.Id is null)
+        {
+            return;
+        }
+
+        foreach (var field in _action.Fields ?? [])
+        {
+            // 密码永不落盘：这不是"没实现"，是刻意的决定。
+            if (!field.Save || field.Type == "password" || field.Id is null)
+            {
+                continue;
+            }
+
+            _lastValues.Set(_manifest.Id, _action.Id, field.Id, ToStoredText(_values.GetValueOrDefault(field.Id)));
+        }
+
+        _lastValues.Save();
+    }
+
+    /// <summary>把字段值转成"界面上的文本形式"存盘（多值用换行连接）。</summary>
+    private static string? ToStoredText(object? value) => value switch
+    {
+        null => null,
+        string text => text,
+        bool flag => flag ? "true" : "false",
+        System.Collections.IEnumerable items => string.Join(
+            Environment.NewLine,
+            items.Cast<object?>().Select(item => item?.ToString() ?? string.Empty)),
+        _ => value.ToString(),
+    };
+
     private void UpdateCommandLine()
     {
         if (_action is null || _manifest is null)
@@ -545,6 +630,7 @@ public sealed partial class MainWindow : Window
         }
 
         SyncValues();
+        RememberValues();   // 记下这次真正用到的值（标了 save: true 的字段），供下次回填
 
         if (_executablePath is null)
         {
