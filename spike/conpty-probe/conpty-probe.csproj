@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- WinExe（GUI 子系统）是刻意的：要复现"父进程没有控制台"这个真实宿主形态。
+         详见 Program.cs 顶部注释。 -->
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Swpj.ConPtyProbe</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Swpj.Core\Swpj.Core.csproj" />
+  </ItemGroup>
+
+</Project>

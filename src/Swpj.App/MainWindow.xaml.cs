@@ -613,6 +613,7 @@ public sealed partial class MainWindow : Window
                         ? TimeSpan.FromSeconds(_manifest.Runtime.TimeoutSeconds)
                         : null,
                     Environment = _manifest.Runtime?.Env,
+                    UsePseudoConsole = _manifest.Runtime?.UsePseudoConsole ?? false,
                 },
                 progress,
                 _cancellation.Token);
@@ -638,7 +639,7 @@ public sealed partial class MainWindow : Window
         else if (!sawProgressValue && _action.Output?.Progress is not null)
         {
             ProgressIndicator.Value = 0;
-            AppendOutput("# 这个程序在被重定向时没有输出百分比进度，因此进度条没有走动；输出日志仍是实时到达的。");
+            AppendOutput("# 没有解析到百分比进度：任务可能太快，或该程序在这种模式下不报进度；输出日志仍是实时到达的。");
         }
 
         AppendOutput(string.Empty);
@@ -718,7 +719,10 @@ public sealed partial class MainWindow : Window
 
     private void AppendOutput(string line)
     {
-        _outputLines.Add(line);
+        // 走 ConPTY 时输出里混着颜色与光标控制序列（例如 ESC[17;1H）。
+        // 直接显示就是乱码，所以展示前统一清掉。
+        // （将来若要做彩色渲染，应当改成语义化渲染，而不是把这些字节原样丢给 TextBox。）
+        _outputLines.Add(AnsiText.Strip(line));
 
         if (_outputLines.Count > MaxOutputLines)
         {

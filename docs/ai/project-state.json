@@ -80,7 +80,9 @@
     { "path": ".github/workflows/doc-drift.yml", "role": "每周检查上游版本与官方文档，有漂移就开 issue", "verified": true },
     { "path": "src/Swpj.Core/Execution/WindowsCommandLine.cs", "role": "Windows 命令行的引号规则（走 ConPTY 时必须自己拼命令行，这一处必须正确）", "verified": true },
     { "path": "src/Swpj.Core/Execution/AnsiText.cs", "role": "剥离 ANSI 转义序列（伪控制台的输出带颜色与控制序列）", "verified": true },
-    { "path": "src/Swpj.Core/Execution/ConPtyProcessRunner.cs", "role": "伪控制台执行器。**整条路径当前不可用**（输出通道不通，见 P19），没有任何地方启用它；其中 Job Object + 挂起创建后入 job 的做法是可复用的", "verified": false }
+    { "path": "src/Swpj.Core/Execution/ConPtyProcessRunner.cs", "role": "伪控制台执行器：raw CreateProcess + ConPTY + Job Object（挂起创建→入 job→恢复运行）。已打通并启用（7z 靠它输出进度）", "verified": true },
+    { "path": "spike/conpty-probe/", "role": "GUI 子系统探针：复现'父进程有无控制台'对 ConPTY 行为的影响（定位 P19 的关键工具）", "verified": true },
+    { "path": "src/Swpj.Core.Tests/ConPtyTests.cs", "role": "ConPTY 路径的测试：输出捕获、7z 百分比进度、取消杀整树、超时、工作目录", "verified": true }
   ],
 
   "verifiedChecks": [
@@ -204,6 +206,22 @@
       "verifiedAt": "2026-09-27"
     },
     {
+      "id": "conpty-works-and-progress-moves",
+      "claim": "伪控制台（ConPTY）能让'只在真控制台里画进度'的程序输出百分比，且界面进度条真的会走",
+      "command": "dotnet test src\\Swpj.slnx（ConPtyTests）与 pwsh -File scripts\\ui-smoke.ps1",
+      "result": "ConPtyTests 5/5 通过（含 32 MB 输入下 7z 报出百分比）；界面冒烟用 48 MB 样本实测『进度条观察到的最大值 = 100』，且输出区不再出现 ANSI 转义序列",
+      "implication": "N5 完成。关键在于创建子进程时加 STARTF_USESTDHANDLES 并显式置空三个标准句柄——子进程的标准句柄本来是继承父进程的，ConPTY 不会覆盖它们（见 P19）",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "build-output-path-pitfall",
+      "claim": "构建产物路径固定，脚本指向的 exe 就是刚构建出来的那个",
+      "command": "dotnet build src\\Swpj.slnx 后核对 bin 下 exe 与 Swpj.Core.dll 的时间戳",
+      "result": "加了 AppendPlatformToOutputPath=false 之后产物固定在 bin\\Debug\\ 下；此前因 Platforms=x64 落到 bin\\x64\\Debug\\，脚本一直在启动旧 exe，而 App 又不在解决方案里、从不被重建",
+      "implication": "症状是『代码改了、也构建成功，但运行行为没变』。已记为 P20",
+      "verifiedAt": "2026-09-27"
+    },
+    {
       "id": "scoop-cmd-launch",
       "claim": "scoop 只能用 scoop.cmd 启动；scoop.ps1 无法被 CreateProcess 执行",
       "command": "Process.Start(UseShellExecute=false) 分别启动 shims\\scoop.ps1 / scoop.cmd / 无扩展名的 scoop",
@@ -280,6 +298,13 @@
       "doneAt": "2026-09-27",
       "evidence": "plugins/scoop/manifest.yaml：40 动作 / 80 字段 / 28 个命令全覆盖 / 字段出处 100%（校验器 2/2 通过）；examples 22/22 真机 exit=0；13 条长开关探针通过；真机实测确定了启动方式（scoop.cmd）、输出编码（GBK）、versionPattern（捕获 0.5.3）与 scoop 退出码不可靠，全部记入 plugins/scoop/NOTES.md",
       "remaining": "写操作（install/update/uninstall/cleanup/import/hold/reset/shim/alias/config/bucket 增删/cache rm/download/create/home/virustotal）按安全红线未实跑；create 与 shim alter 是交互式，宿主暂无 stdin 交互能力；§8 的 9 条规范缺口待拍板（解释器启动、字段级 requiresAdmin、动作级 exitCodes、userSelected 语义等）"
+    },
+    {
+      "id": "N5",
+      "task": "给子进程一个伪控制台（ConPTY），让进度条真的能走",
+      "doneAt": "2026-09-27",
+      "evidence": "根因是「子进程的标准句柄继承自父进程、ConPTY 并不覆盖它们」，修法是加 STARTF_USESTDHANDLES 并显式把三个标准句柄置空。结果：5 条 ConPtyTests 全部由 Skip 转为通过（含用 32 MB 输入验证 7z 确实报出百分比）；清单加 usePseudoConsole: true 后，界面冒烟实测 48 MB 样本解压时进度条走到 100，且输出区不再有 ANSI 转义序列",
+      "note": "定位过程与 8 项被排除的假设记在 docs/ai/development.md 的 P19；构建产物路径那个坑记为 P20"
     }
   ],
 
@@ -334,13 +359,28 @@
 
   "nextActions": [
     {
-      "id": "N5",
-      "task": "给子进程一个伪控制台（ConPTY），让进度条真的能走",
-      "why": "实测证据：7z 在被重定向时不输出百分比（40 MB 输入只有 354 字节输出、无 %）。凡是'只在真控制台里画进度'的程序都有这个问题，涉及 7z、部分下载器/编译器",
-      "status": "受阻。第一版实现已完成（raw CreateProcess、Windows 命令行引号规则、ANSI 剥离、Job Object + 挂起创建后入 job 以保证后代都在 job 里、取消/超时），但**输出通道不通**：所有子进程（含原生 whoami/findstr/7z）在管道里都只有转义序列、没有内容，子进程自述 IsOutputRedirected=True。已实测排除 8 项假设，逐条列在 docs/ai/development.md 的 P19",
-      "how": "下一步方向：对照 Windows Terminal 的 CreateProcess 参数（它同样是 GUI 进程、无控制台却能正常工作）；或显式给子进程 STARTF_USESTDHANDLES 指向控制台句柄。ConPtyTests 里有 5 条 Skip 的用例，它们就是这条任务的验收标准",
-      "doneWhen": "7z 解压一个较大压缩包时，界面进度条随百分比推进；且 5 条被 Skip 的 ConPtyTests 全部转为通过",
+      "id": "N6",
+      "task": "把 D9 落到宿主：让 repeatable 对 text / textarea 生效（每行一项）",
+      "why": "现在规范里的 repeatable 对 text 名不副实，作者只能借用 multiselect 表达'自由多值'（scoop 的 14 个字段、7zip 的 exclude/includeOnly 都是这么绕的）。宿主补上即可，成本很低",
+      "how": "改 MainWindow.CreateField 的 default 分支：field.Repeatable 为真且 type 是 text/textarea 时，用多行输入框 + 按行取值；同步在 docs/spec/manifest-v1.md 里写明'text 类型 + repeatable = 每行一项'",
+      "doneWhen": "改完后 ui-smoke 仍通过；且规范里对 repeatable 的描述与宿主行为一致",
       "priority": 1
+    },
+    {
+      "id": "N7",
+      "task": "新增第三个工具包（uv）",
+      "why": "继续用 playbook 产出，检验它在第二个作者手里是否还够用；uv 已装、命令面清晰、且是'子命令树'型工具的代表",
+      "how": "照 docs/ai/playbook-tool-package.md 走；注意 uv 的输出是 UTF-8（与 scoop 的 GBK 相反），正好检验 encoding 字段的必要性",
+      "doneWhen": "validate 全绿 + examples 真机冒烟通过 + NOTES.md 记录实测 + project-state 更新",
+      "priority": 2
+    },
+    {
+      "id": "N8",
+      "task": "界面验收「取消」",
+      "why": "取消按钮只做了代码接线与执行引擎单测（取消时杀整树、迅速返回都已验证），但还没在界面上真点过一次",
+      "how": "扩展 scripts/ui-smoke.ps1：选一个耗时动作（如 7z 压缩 48 MB），点执行后再点取消，断言输出里出现'已被用户取消'且界面恢复可用",
+      "doneWhen": "ui-smoke 里多一条取消路径的断言并通过",
+      "priority": 3
     }
   ],
 

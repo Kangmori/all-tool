@@ -47,7 +47,7 @@ project-state   │
 | ManifestLoader | 读 YAML、用 JSON Schema 校验、报错定位到字段 | 校验失败必须拒绝加载并显示原因，不能静默降级 |
 | ToolLocator | 找可执行文件、取版本、与 `minVersion` 比对 | 找不到时展示 `notFoundHint` |
 | ArgvBuilder | 字段 → token 序列 | 纯函数、可单测；**这是最该先写测试的组件** |
-| ProcessRunner | 创建进程、流式读输出、取消时杀进程树 | 默认走管道，用 `Kill(entireProcessTree: true)`。另有一条 ConPTY 路径（`ConPtyProcessRunner`）实现了更彻底的 Job Object 语义（挂起创建 → 入 job → 恢复运行，保证后代都在 job 里），但**它的输出通道不通、整条路径未启用**，见 P19 |
+| ProcessRunner | 创建进程、流式读输出、取消时杀进程树 | 两条路径：默认走管道（`Kill(entireProcessTree: true)`）；清单声明 `runtime.usePseudoConsole: true` 时走 `ConPtyProcessRunner`（伪控制台 + Job Object；挂起创建 → 入 job → 恢复运行，保证后代都在 job 里） |
 | OutputInterpreter | 编码解码、进度解析、退出码翻译 | 中文环境下编码是主要坑，见 §8 |
 | PluginStore | 扫描 `plugins/` 与用户目录、安装/卸载工具包 | 见规范 §2 的布局约定 |
 
@@ -225,7 +225,8 @@ uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py
 | P16 | 启动进程报 `目录名称无效`（Win32Exception） | `ProcessStartInfo.WorkingDirectory` 指向一个**还不存在**的目录时，CreateProcess 直接失败 | `ProcessRunner` 会先创建该目录——"解压到还不存在的目录"是常见合理意图。见 `ProcessRunner.RunAsync` 的注释 |
 | P17 | 截图里混进了桌面上别的窗口（浏览器、聊天工具） | 全屏截取，或 `SetForegroundWindow` 被前台限制挡下导致目标窗口仍在底层 | 用 `PrintWindow(..., PW_RENDERFULLCONTENT)` 让窗口画自己（`scripts/capture-app-window.ps1`）；并约定 `spike/*.png` 不入库 |
 | P18 | 测试偶发失败（同一段代码时过时不过） | 测试里用了 `System.Progress<T>`，它把回调投递到同步上下文/线程池，断言时可能还没落地 | 测试用同步收集器（`SyncProgress<T>`）；`Progress<T>` 只留给有 DispatcherQueue 的界面层 |
-| P19 | **ConPTY（伪控制台）路径拿不到任何子进程输出** | 症状：管道里只有转义序列（清屏、设置标题），**所有**程序都没有内容——原生 `whoami` / `findstr` / `7z` 和 `cmd` / `powershell` 全一样；让子进程把自己的状态写进文件，自述 `[Console]::IsOutputRedirected=True`，即它的标准输出没接到伪控制台上。**已逐一实测排除的假设**：① `STARTUPINFOEX` 尺寸（实测 104/112，正确）② `bInheritHandles` 取 true / false ③ 给 `CreatePipe` 设可继承的 `SECURITY_ATTRIBUTES` ④ PTY 侧句柄的关闭时机（立刻关 / 留到最后关）⑤ `ResizePseudoConsole` 触发渲染（只让转义序列变多、耗时从 3s 涨到 21s）⑥ 渲染时机（给 2 秒余量、200 行输出照样没有）⑦ 读循环吞异常（已改成显式上报，仍无输出）⑧ 结构体字段错位（`lpAttributeList` 位置正确、`UpdateProcThreadAttribute` 返回成功） | 现状：**实现保留但完全不启用**（没有任何清单或界面设置 `usePseudoConsole`）；`ConPtyTests` 里 5 条依赖运行子进程的用例标为 `Skip` 并写明"打通输出后它们就是验收标准"。可继续查的方向：对照 Windows Terminal 的 `CreateProcess` 参数（它同样是 GUI 进程、无控制台却能正常工作）；或显式给子进程 `STARTF_USESTDHANDLES` 指向控制台句柄 |
+| P19 | **ConPTY（伪控制台）路径拿不到任何子进程输出**（已解决，根因值得记住） | 根因：**子进程的标准句柄是从父进程复制过去的**——即使 `bInheritHandles = FALSE`，句柄"值"照样被填进子进程的标准句柄槽，而 ConPTY 只负责提供控制台、**不会覆盖**这些继承来的句柄。于是构成三种截然不同的表现：父进程是控制台程序 → 子进程直接写到父进程的控制台（绕过 ConPTY）；父进程的 stdout 被重定向（如 `dotnet test`）→ 子进程写到那个看不见的管道；父进程是无控制台的 GUI 程序（真实的 WinUI 宿主）→ 没有可继承的句柄，ConPTY 正常工作 | 修法：创建子进程时加 `STARTF_USESTDHANDLES`，并把三个标准句柄显式置为 NULL（见 `ConPtyProcessRunner`）。定位过程同样值得记：先逐一排除 8 项假设（结构体尺寸 / 继承标志 / 管道安全属性 / PTY 句柄关闭时机 / `ResizePseudoConsole` / 渲染时机 / 读循环吞异常 / 字段错位），再用**独立 GUI 子系统探针**（`spike/conpty-probe`）复现出"无控制台父进程下 ConPTY 正常"，最后用 `GetFileType` 在子进程内部确认句柄类型，才锁定"继承"这一条 |
+| P20 | 代码改了、也"构建成功"了，但运行的程序行为没变 | 两个原因各踩过一次：① 项目声明了 `<Platforms>x64</Platforms>`，**经解决方案构建**的产物落在 `bin\x64\Debug\` 而不是 `bin\Debug\`，脚本与启动器却指向后者（旧 exe 一直在被启动）；② `Swpj.App` 曾经不在 `src/Swpj.slnx` 里，于是 `dotnet build src\Swpj.slnx` **从不重建宿主**，清单加了新字段后宿主还在用旧版 `Swpj.Core`，表现为"载入工具包失败：Property 'xxx' not found on type ..." | 已修：加 `<AppendPlatformToOutputPath>false</AppendPlatformToOutputPath>` 固定输出路径，并把 `Swpj.App` 加进解决方案。**通用做法**：改完代码后确认产物时间戳变了再测；"构建成功"不等于"跑的是新代码" |
 
 ---
 

@@ -123,6 +123,11 @@
           "default": false,
           "description": "是否经由 shell 执行。默认 false（直接 CreateProcess，参数以数组传递，不做字符串拼接）。"
         },
+        "usePseudoConsole": {
+          "type": "boolean",
+          "default": false,
+          "description": "是否为子进程分配伪控制台（ConPTY）。给'只在真控制台里画进度'的程序用（7-Zip 实测如此：被重定向时完全不输出百分比）。代价是输出里会混入 ANSI 转义序列，且程序会认为自己在一台真终端里。"
+        },
         "requiresAdmin": { "type": "boolean" },
         "workingDirectory": {
           "enum": ["inherit", "outputDir", "userSelected"]

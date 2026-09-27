@@ -35,6 +35,12 @@ public sealed class ConPtyProcessRunner : IProcessRunner
     private const uint WaitObject0 = 0x00000000;
     private const uint Infinite = 0xFFFFFFFF;
 
+    /// <summary>
+    /// 显式声明子进程的标准句柄（这里三个都置空）。
+    /// 不加这个标志时，子进程会继承父进程的标准句柄值，从而绕过伪控制台——见下面使用处的长注释。
+    /// </summary>
+    private const int StartfUseStdHandles = 0x00000100;
+
     /// <summary>ConPTY 输出里可能出现光标位置询问（ESC[6n），程序会等一个回复；不回它会卡住。</summary>
     private const string CursorPositionQuery = "\u001b[6n";
     private const string CursorPositionReply = "\u001b[1;1R";
@@ -182,7 +188,20 @@ public sealed class ConPtyProcessRunner : IProcessRunner
 
             var startupInfo = new StartupInfoEx
             {
-                StartupInfo = new StartupInfo { cb = Marshal.SizeOf<StartupInfoEx>() },
+                // 关键：STARTF_USESTDHANDLES 加上三个 NULL 句柄。
+                //
+                // 实测结论（这条是花了很久才查清的）：**子进程的标准句柄是从父进程复制过去的**
+                // ——即使 bInheritHandles = FALSE，句柄"值"照样被填进子进程的标准句柄槽，
+                // 而 ConPTY 只负责提供控制台，并**不会**覆盖这些继承来的句柄。后果：
+                //   * 父进程是控制台程序 → 子进程直接写到父进程的控制台，绕过 ConPTY
+                //   * 父进程的 stdout 被重定向（如 dotnet test）→ 子进程写到那个看不见的管道
+                //   * 父进程是无控制台的 GUI 程序（真实的 WinUI 宿主）→ 没有可继承的句柄，ConPTY 正常工作
+                // 显式置空后，三种情形都走控制台，行为一致。
+                StartupInfo = new StartupInfo
+                {
+                    cb = Marshal.SizeOf<StartupInfoEx>(),
+                    dwFlags = StartfUseStdHandles,
+                },
                 lpAttributeList = attributeList,
             };
 

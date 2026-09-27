@@ -9,6 +9,10 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Platforms>x64</Platforms>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <!-- 固定输出路径：声明了 Platforms 之后，经解决方案构建的产物会落到 bin\x64\Debug\ 而不是
+         bin\Debug\，导致脚本与启动器指向旧的可执行文件——症状是"代码改了但行为没变"（踩过）。
+         这个属性让输出始终在 bin\<配置>\ 下。 -->
+    <AppendPlatformToOutputPath>false</AppendPlatformToOutputPath>
     <UseWinUI>true</UseWinUI>
     <!-- unpackaged：个人自用不需要 MSIX 与证书；代价是依赖已安装的 Windows App Runtime -->
     <WindowsPackageType>None</WindowsPackageType>

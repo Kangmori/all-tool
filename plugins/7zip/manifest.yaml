@@ -46,6 +46,11 @@ runtime:
   workingDirectory: inherit
   timeoutSeconds: 0
   preventConcurrentRuns: false
+  # 开伪控制台。原因是实测出来的：7-Zip **只在真控制台里画进度**——被重定向时
+  # 40 MB 输入的完整输出只有 354 字节、一个 % 都没有；接上伪控制台后才输出百分比。
+  # 代价：输出里混入 ANSI 转义序列（宿主用 AnsiText 清理），且 7z 会认为自己在一台真终端里。
+  # 证据与实测见 NOTES.md。规范里的说明见 docs/spec/manifest-v1.md §3。
+  usePseudoConsole: true
 
 # 来源：cmdline/exit_codes.htm
 exitCodes:

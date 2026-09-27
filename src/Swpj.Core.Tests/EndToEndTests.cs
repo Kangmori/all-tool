@@ -13,9 +13,22 @@ namespace Swpj.Core.Tests;
 /// </summary>
 public class EndToEndTests
 {
-    /// <summary>已知事实：7z 在被重定向时不输出百分比进度（只在真控制台里画进度）。见 NOTES.md。</summary>
-    private const string KnownProgressLimitation =
-        "7z 在重定向输出时不报百分比；进度条要动起来需要 ConPTY 伪终端，已记为 N5。";
+    /// <summary>
+    /// 按清单的声明构造执行请求，而不是自己另定一套参数——
+    /// 否则端到端测试验证的就不是"清单描述的行为"了（例如清单开了伪控制台，这里必须跟着开）。
+    /// </summary>
+    private static ProcessRunRequest Request(
+        string executable,
+        IReadOnlyList<string> arguments,
+        ToolManifest manifest,
+        string? workingDirectory = null) => new()
+    {
+        Executable = executable,
+        Arguments = arguments,
+        WorkingDirectory = workingDirectory,
+        OutputEncoding = EncodingResolver.Resolve(manifest.Runtime?.Encoding),
+        UsePseudoConsole = manifest.Runtime?.UsePseudoConsole ?? false,
+    };
 
     [Fact]
     public async Task 用真实_7zip_跑通压缩_校验_解压全流程()
@@ -58,12 +71,7 @@ public class EndToEndTests
                 ["logLevel"] = "0",
             });
 
-            var addRun = await runner.RunAsync(new ProcessRunRequest
-            {
-                Executable = location.ExecutablePath,
-                Arguments = addArgv,
-                OutputEncoding = encoding,
-            });
+            var addRun = await runner.RunAsync(Request(location.ExecutablePath, addArgv, manifest));
 
             Assert.Equal(0, addRun.ExitCode);
             Assert.True(File.Exists(archive), "压缩包没有生成");
@@ -71,16 +79,11 @@ public class EndToEndTests
 
             // ---------------- 2) 测试完整性：7z t ----------------
             var test = manifest.Actions!.Single(a => a.Id == "test");
-            var testRun = await runner.RunAsync(new ProcessRunRequest
+            var testRun = await runner.RunAsync(Request(location.ExecutablePath, ArgvBuilder.Build(test, new Dictionary<string, object?>(StringComparer.Ordinal)
             {
-                Executable = location.ExecutablePath,
-                Arguments = ArgvBuilder.Build(test, new Dictionary<string, object?>(StringComparer.Ordinal)
-                {
-                    ["archive"] = archive,
-                    ["logLevel"] = "1",
-                }),
-                OutputEncoding = encoding,
-            });
+                ["archive"] = archive,
+                ["logLevel"] = "1",
+            }), manifest));
 
             Assert.Equal(0, testRun.ExitCode);
 
@@ -90,10 +93,9 @@ public class EndToEndTests
             var progress = new SyncProgress<ProcessOutputLine>();
 
             var extractRun = await runner.RunAsync(
-                new ProcessRunRequest
-                {
-                    Executable = location.ExecutablePath,
-                    Arguments = ArgvBuilder.Build(extract, new Dictionary<string, object?>(StringComparer.Ordinal)
+                Request(
+                    location.ExecutablePath,
+                    ArgvBuilder.Build(extract, new Dictionary<string, object?>(StringComparer.Ordinal)
                     {
                         ["archive"] = archive,
                         ["outputDir"] = outputDirectory,
@@ -101,9 +103,8 @@ public class EndToEndTests
                         ["recurse"] = "off",
                         ["logLevel"] = "0",
                     }),
-                    WorkingDirectory = outputDirectory,
-                    OutputEncoding = encoding,
-                },
+                    manifest,
+                    outputDirectory),
                 progress);
 
             Assert.Equal(0, extractRun.ExitCode);
@@ -115,12 +116,13 @@ public class EndToEndTests
             // 输出确实被捕获到了（不是空数组）
             Assert.NotEmpty(progress.Items);
 
-            // 已知限制：进度百分比解析不到（7z 重定向时不报进度）。
-            // 这里断言"确实解析不到"，把这个事实钉住；将来上了 ConPTY 之后这条断言必须被改掉，
-            // 从而提醒维护者重新验证界面进度条。
-            var parser = new ProgressParser(extract.Output?.Progress);
-            var sawPercent = progress.Items.Any(line => parser.TryParse(line.Text, out _));
-            Assert.False(sawPercent, KnownProgressLimitation);
+            // 已知事实：进度百分比**不会**出现在这个小压缩包上（7z 对秒级任务来不及画进度）。
+            // 这个限制本身不再断言成"永远解析不到"——因为清单现在开了伪控制台，
+            // 真正验证「7z 在伪控制台下会报百分比」的用例是
+            // ConPtyTests.伪控制台下_7z_能报出百分比进度（那里刻意用 32 MB 输入）。
+            // 这里只确认输出确实被捕获到了，且退出去解读为成功。
+            Assert.NotEmpty(progress.Items);
+            Assert.True(ExitCodeInterpreter.Interpret(extractRun.ExitCode, manifest.ExitCodes).IsSuccess);
         }
         finally
         {

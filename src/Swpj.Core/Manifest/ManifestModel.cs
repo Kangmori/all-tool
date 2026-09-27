@@ -56,6 +56,15 @@ public sealed class RuntimeSpec
     public int TimeoutSeconds { get; init; }
     public bool PreventConcurrentRuns { get; init; }
     public Dictionary<string, string>? Env { get; init; }
+
+    /// <summary>
+    /// 是否为子进程分配伪控制台（ConPTY）。默认 false，按工具包选择。
+    ///
+    /// 需要它的典型情形：**只在真控制台里画进度的程序**。7-Zip 实测就是这样——
+    /// 被重定向时 40 MB 输入的完整输出只有 354 字节、一个 % 都没有；接上伪控制台才有百分比。
+    /// 代价：输出里混入 ANSI 转义序列（用 AnsiText 清理），且程序会认为自己在一台真终端里。
+    /// </summary>
+    public bool UsePseudoConsole { get; init; }
 }
 
 /// <summary>退出码语义，用于把裸数字翻译成人能看懂的结果。</summary>

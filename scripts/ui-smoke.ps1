@@ -31,10 +31,18 @@ $work = Join-Path $env:TEMP ('swpj-uismoke-' + [guid]::NewGuid().ToString('N'))
 $outDir = Join-Path $work 'extracted'
 New-Item -ItemType Directory -Force -Path $work, $outDir | Out-Null
 Set-Content (Join-Path $work 'hello.txt') 'hello from ui smoke' -Encoding ascii
+
+# 刻意造一个不可压缩的大文件：7z 只在"真控制台 + 任务够长"时才会画进度，
+# 小文件秒完根本看不到百分比，那样就验证不了进度条（N5 的全部意义所在）。
+$big = Join-Path $work 'big.bin'
+$payload = New-Object byte[] (48MB)
+(New-Object Random 42).NextBytes($payload)
+[IO.File]::WriteAllBytes($big, $payload)
+
 $archive = Join-Path $work 'sample.7z'
-& $sevenZip a $archive (Join-Path $work 'hello.txt') | Out-Null
+& $sevenZip a -mx1 $archive (Join-Path $work 'hello.txt') $big | Out-Null
 if (-not (Test-Path $archive)) { throw "准备测试压缩包失败" }
-Write-Host "测试数据：$archive → 解压到 $outDir"
+Write-Host "测试数据：$archive ($([math]::Round((Get-Item $archive).Length/1MB)) MB) → 解压到 $outDir"
 
 # ------------------------------------------------------------------ 2. 启动应用
 $env:SWPJ_SELECT_ACTION = "$ActionIndex"
@@ -110,8 +118,21 @@ public static class SwpjUiWin32 {
     # ------------------------------------------------------------------ 6. 等输出出现结果
     $deadline = (Get-Date).AddSeconds($RunTimeoutSeconds)
     $outputText = ''
+    $maxProgress = 0.0
+    $progressCondition = New-Object System.Windows.Automation.PropertyCondition(
+        $automation::ControlTypeProperty, [System.Windows.Automation.ControlType]::ProgressBar)
+
     while ((Get-Date) -lt $deadline) {
-        Start-Sleep -Milliseconds 700
+        Start-Sleep -Milliseconds 400
+
+        # 顺便盯住进度条：这是 N5（ConPTY）的验收点——只有伪控制台真的生效，它才会真的动
+        foreach ($bar in $window.FindAll($scope::Descendants, $progressCondition)) {
+            try {
+                $value = $bar.GetCurrentPattern([System.Windows.Automation.RangeValuePattern]::Pattern).Current.Value
+                if ($value -gt $maxProgress) { $maxProgress = $value }
+            } catch { }
+        }
+
         $editsNow = $window.FindAll($scope::Descendants, $editCondition)
         if ($editsNow.Count -gt 0) {
             try {
@@ -132,15 +153,20 @@ public static class SwpjUiWin32 {
     # ------------------------------------------------------------------ 7. 判定
     $produced = Test-Path (Join-Path $outDir 'hello.txt')
     $succeeded = $outputText -match '成功'
+    $noEscapes = $outputText -notmatch [regex]::Escape([char]27)   # 界面里不该出现原始转义序列
 
     Write-Host "退出码解读里是否含「成功」：$succeeded"
     Write-Host "文件是否真的被解压出来    ：$produced  ($(Join-Path $outDir 'hello.txt'))"
+    Write-Host "进度条观察到的最大值      ：$maxProgress   （N5：> 0 说明 ConPTY 生效、进度真的在走）"
+    Write-Host "输出区是否已清理转义序列  ：$noEscapes"
     Write-Host "截图：$Screenshot"
 
     if (-not $produced) { throw "界面点了执行，但文件没有被解压出来——链路有问题" }
     if (-not $succeeded) { throw "没有从输出里看到成功结论" }
+    if (-not $noEscapes) { throw "输出区里出现了原始 ANSI 转义序列，界面应当先清理再显示" }
+    if ($maxProgress -le 0) { throw "进度条始终为 0：ConPTY 可能没生效（见 docs/ai/development.md 里 usePseudoConsole 的说明）" }
 
-    Write-Host "`n界面冒烟通过：填表 → 执行 → 输出 → 产物 全部符合预期" -ForegroundColor Green
+    Write-Host "`n界面冒烟通过：填表 → 执行 → 进度条走动 → 输出无转义序列 → 产物正确" -ForegroundColor Green
 }
 finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }

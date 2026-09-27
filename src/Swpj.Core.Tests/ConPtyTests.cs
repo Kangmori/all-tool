@@ -15,9 +15,7 @@ public class ConPtyTests
 {
     private static string CmdExe => Path.Combine(Environment.SystemDirectory, "cmd.exe");
 
-    [Fact(Skip = "ConPTY 的输出捕获尚未打通：子进程的标准输出没有接到伪控制台上——所有程序" +
-                 "（含原生 whoami / findstr / 7z 与 cmd / powershell）在管道里都只有转义序列、没有内容，" +
-                 "而子进程自述 IsOutputRedirected=True。已排除的假设见 docs/ai/development.md 的 P19。")]
+    [Fact]
     public async Task 伪控制台下能捕获输出与退出码()
     {
         var runner = new ProcessRunner();
@@ -42,8 +40,7 @@ public class ConPtyTests
             $"没捕获到 echo 的输出。退出码={result.ExitCode}，共 {result.Lines.Count} 行：{dump}");
     }
 
-    [Fact(Skip = "ConPTY 路径整体不可用（输出不通 → 子进程的标准句柄无效，PowerShell 子进程会在启动阶段" +
-                 "就退出，退出码语义也无法验证）。打通输出后这条用例是「取消杀整树」的验收标准。见 P19。")]
+    [Fact]
     public async Task 伪控制台下取消会连孙进程一起杀掉()
     {
         var runner = new ProcessRunner();
@@ -78,7 +75,7 @@ public class ConPtyTests
         Assert.False(File.Exists(marker), $"取消后孙进程仍然活着并写出了 {marker}");
     }
 
-    [Fact(Skip = "同「取消」一条：ConPTY 路径整体不可用，超时语义也无法可靠验证。见 P19。")]
+    [Fact]
     public async Task 伪控制台下超时也会杀进程()
     {
         var runner = new ProcessRunner();
@@ -97,8 +94,7 @@ public class ConPtyTests
         Assert.True(result.Duration < TimeSpan.FromSeconds(15), $"超时后应迅速返回，实际 {result.Duration}");
     }
 
-    [Fact(Skip = "同上：ConPTY 的输出捕获尚未打通，所以还没法验证 7z 在伪控制台下会不会报百分比。" +
-                 "打通输出后这条用例就是 N5 的验收标准。")]
+    [Fact]
     public async Task 伪控制台下_7z_能报出百分比进度()
     {
         var manifest = ManifestLoader.LoadFromFile(
@@ -183,7 +179,7 @@ public class ConPtyTests
         }));
     }
 
-    [Fact(Skip = "同「取消」一条：ConPTY 路径整体不可用，工作目录语义也无法可靠验证。见 P19。")]
+    [Fact]
     public async Task 伪控制台下工作目录不存在时也会被创建()
     {
         var runner = new ProcessRunner();
