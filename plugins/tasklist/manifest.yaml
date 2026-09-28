@@ -1,0 +1,255 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# tasklist —— Windows 自带的进程列表工具（C:\Windows\System32\tasklist.exe）。
+#
+# 参数知识来源：
+#   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tasklist
+#      离线快照 docs/reference/win-docs/tasklist.html
+#   2) 本机 `tasklist /?` 的真实输出：docs/reference/win-help/tasklist.txt（不入库，见 .gitignore）
+#
+# **/s /u /p 是"连远程机器并换账号"**：本工具包刻意**不做**它们。
+# 理由：/p 需要明文密码，把它放进清单会让密码经界面输入；而本项目的界面把 password 字段做了"永不落盘"，
+# 但远程管理不是这个工具包要解决的问题（NOTES.md §9.2 记了这条）。所以本清单只覆盖本机操作。
+#
+# **一处来源冲突**：本机 `/?` 多列了一个 /APPS（"显示 Microsoft Store 应用及其关联的进程"），
+# 官方网页的语法行里没有它 —— 按 playbook 阶段 2 的精神以官方页面为准，本清单不收录（NOTES.md §7）。
+#
+# 版本：Windows 自带命令没有 --version 开关，故不写 versionArgs/versionPattern（R1）。
+# 编码：实测原始字节为 OEM 代码页 936；`/v` 输出有 58 KB、`/svc` 有 20 KB（见 NOTES.md §5、§4）。
+
+spec: 1
+id: tasklist
+name: tasklist
+manifestVersion: 0.1.0
+appVersion: Windows 10/11 自带（随系统版本发布）
+description: 列出本机（或远程）正在运行的进程，可按条件筛选、可切换表格/列表/CSV 输出格式。Windows 自带，无需安装。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tasklist
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 进程, 诊断]
+
+sources:
+  - title: tasklist 命令官方参考（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tasklist
+    retrieved: "2026-09-27"
+    appliesTo: Windows 10/11
+    note: 离线快照 docs/reference/win-docs/tasklist.html。语法行：tasklist [/s <computer> [/u …]] [{/m <module> | /svc | /v}] [/fo {table | list | csv}] [/nh] [/fi <filter> …]；另有筛选器名称与有效运算符的表。
+  - title: 本机 `tasklist /?` 的真实输出快照
+    url: file:///D:/AI/swpj/docs/reference/win-help/tasklist.txt
+    retrieved: "2026-09-27"
+    appliesTo: Windows 11 26200 / tasklist.exe 文件版本 10.0.26100.1
+    note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。与官方页面相比多了 /APPS（见文件头说明）。
+
+locate:
+  executable: tasklist.exe
+  searchPaths:
+    - "%SystemRoot%\\System32"
+  notFoundHint: tasklist.exe 是 Windows 自带命令，正常情况下都在 C:\Windows\System32 下。
+
+runtime:
+  encoding: oem
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  usePseudoConsole: false
+
+# 退出码：微软的 tasklist 文档没有退出码章节（已核对）。下面来自实测，见 NOTES.md §4。
+# 注：`tasklist /?` 的退出码在 Windows 上**实测为 0**（与 ipconfig/tracert/netstat 的 /? 返回 1 不同）。
+exitCodes:
+  # 块式写法，理由见 plugins/ping/manifest.yaml 的同一处注释。
+  - code: 0
+    meaning: 成功（帮助输出 /? 也返回 0）
+    severity: ok
+  - code: 1
+    meaning: 用法错误，或筛选器语法不被接受
+    severity: error
+
+actions:
+
+  # ================================================================= 进程列表
+  - id: list
+    category: 进程列表
+    title: 列出所有进程
+    description: 显示本机所有进程的映像名称、PID、会话名、会话号与内存使用。最常用的一条。
+    command: ""
+    sources:
+      - title: tasklist 官方参考 —— 默认输出与 /nh 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tasklist#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 本机 /? 快照 docs/reference/win-help/tasklist.txt 的 Examples 一节（TASKLIST / TASKLIST /V /FO CSV …）
+    fields:
+      - id: format
+        label: 输出格式
+        type: enum
+        style: separate
+        prefix: "/fo"
+        group: 输出
+        help: 文档：有效值 table、list、csv，默认 table。
+        doc: "official #parameters 的 /fo {table | list | csv}；本机 /? 快照的 /FO format（有效值 TABLE、LIST、CSV）"
+        values:
+          - value: ""
+            label: 表格（默认）
+            isDefault: true
+          - value: list
+            label: 列表
+          - value: csv
+            label: CSV
+      - id: noHeader
+        label: 不显示列标题（/nh）
+        type: bool
+        style: flag
+        prefix: "/nh"
+        group: 输出
+        default: false
+        help: 文档：只在 /fo 为 table 或 csv 时有效。
+        doc: "official #parameters 的 /nh；本机 /? 快照的 /NH"
+    examples:
+      - title: 列出所有进程
+        args: []
+
+  # ================================================================= 进程列表
+  - id: list-verbose
+    category: 进程列表
+    title: 列出详细进程信息
+    description: 额外显示状态、用户名、CPU 时间与窗口标题。实测本机输出约 58 KB。
+    command: ""
+    sources:
+      - title: tasklist 官方参考 —— /v 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tasklist#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档：-v Displays verbose task information in the output. For complete verbose output without truncation, use /v and /svc together.
+    fields:
+      - id: verbose
+        label: 详细模式（/v）
+        type: bool
+        style: flag
+        prefix: "/v"
+        default: true
+        doc: "official #parameters 的 /v；本机 /? 快照的 /V"
+      - id: services
+        label: 同时显示服务（/svc）
+        type: bool
+        style: flag
+        prefix: "/svc"
+        default: false
+        help: 文档：与 /v 一起用可以得到不被截断的完整详细输出。
+        doc: "official #parameters 的 svc 与 /v 的说明；本机 /? 快照的 /SVC"
+      - id: format
+        label: 输出格式
+        type: enum
+        style: separate
+        prefix: "/fo"
+        group: 输出
+        doc: "official #parameters 的 /fo {table | list | csv}"
+        values:
+          - value: ""
+            label: 表格（默认）
+            isDefault: true
+          - value: csv
+            label: CSV
+
+  # ================================================================= 服务映射
+  - id: list-services
+    category: 服务映射
+    title: 列出进程及其承载的服务
+    description: 显示每个进程里主办着哪些服务。排查"某个 svchost 到底是什么服务"时用。
+    command: ""
+    sources:
+      - title: tasklist 官方参考 —— /svc 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tasklist#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档：svc Lists all the service information for each process without truncation. Valid when the /fo parameter is set to table.
+    fields:
+      - id: services
+        label: 显示服务信息（/svc）
+        type: bool
+        style: flag
+        prefix: "/svc"
+        default: true
+        doc: "official #parameters 的 svc；本机 /? 快照的 /SVC"
+
+  # ================================================================= 进程列表
+  - id: list-modules
+    category: 进程列表
+    title: 列出加载了指定模块的进程
+    description: 找出哪些进程加载了某个 DLL 或 exe（文档支持通配符）。不填模块名会列出所有加载的模块，输出很大。
+    command: ""
+    sources:
+      - title: tasklist 官方参考 —— /m 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tasklist#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档：/m <module> Lists all tasks with DLL modules loaded that match the given pattern name. 示例行有 TASKLIST /M wbem*
+    fields:
+      # **字段声明顺序 = argv 顺序**（规范硬规则）。/m 是开关、模块名是它的取值，
+      # 所以必须先声明 byModule 再声明 module，否则会拼出 `tasklist wbem* /m`。
+      - id: byModule
+        label: 启用模块筛选（/m）
+        type: bool
+        style: flag
+        prefix: "/m"
+        default: true
+        help: 文档：不指定模块名时会显示所有加载的模块，输出会非常大。
+        doc: "official #parameters 的 /m <module>；本机 /? 快照的 /M"
+      - id: module
+        label: 模块名称（支持通配符）
+        type: text
+        style: positional
+        placeholder: 例 wbem* / ntdll.dll
+        help: 文档示例：TASKLIST /M wbem*。模块名紧跟在 /m 之后。
+        doc: "official #parameters 的 /m <module>；本机 /? 快照的 /M [module]"
+    examples:
+      - title: 找出加载了 wbem 相关模块的进程
+        args: ["/m", "wbem*"]
+
+  # ================================================================= 筛选
+  - id: filter
+    category: 筛选
+    title: 按条件筛选进程
+    description: 用筛选器表达式挑出关心的进程。多个筛选器之间是"与"的关系。
+    command: ""
+    sources:
+      - title: tasklist 官方参考 —— /fi 参数与筛选器表
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tasklist#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档示例：tasklist /fi "USERNAME ne NT AUTHORITY\SYSTEM" /fi "STATUS eq running"。筛选器名称与运算符在页面的筛选器表里：STATUS / IMAGENAME / PID / SESSION / SESSIONNAME / CPUtime / MEMUSAGE / USERNAME / SERVICES / WINDOWTITLE / MODULES，运算符有 eq ne gt lt ge le。
+    fields:
+      # 同样地：/fi 是开关、表达式是它的取值，顺序必须是 byFilter → filter。
+      - id: byFilter
+        label: 启用筛选（/fi）
+        type: bool
+        style: flag
+        prefix: "/fi"
+        default: true
+        doc: "official #parameters 的 /fi <filter>；本机 /? 快照的 /FI"
+      - id: filter
+        label: 筛选表达式
+        type: text
+        style: positional
+        required: true
+        placeholder: 例 STATUS eq running
+        help: '格式：<筛选器名称> <运算符> <值>。含空格，所以宿主会自动加引号；完整写法见预览的命令行。一次只能填一条筛选器 —— 规范 v1 表达不了「每行生成一个 /fi 值」这种"开关+值成对重复"（见 NOTES.md §8 的规范缺口）。需要多个条件时请分几次查。'
+        doc: "official #parameters 的 /fi <filter> 与页面筛选器表；本机 /? 快照的 /FI filter 与筛选举例"
+      - id: format
+        label: 输出格式
+        type: enum
+        style: separate
+        prefix: "/fo"
+        group: 输出
+        doc: "official #parameters 的 /fo {table | list | csv}"
+        values:
+          - value: ""
+            label: 表格（默认）
+            isDefault: true
+          - value: csv
+            label: CSV
+          - value: list
+            label: 列表
+    examples:
+      - title: 只列正在运行且按 CSV 输出（不带列标题）
+        args: ["/fo", "csv", "/nh", "/fi", "STATUS eq running"]

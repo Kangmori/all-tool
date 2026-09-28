@@ -61,6 +61,16 @@ def normalize_base(token: str) -> str:
     return base
 
 
+def is_switch(token: str) -> bool:
+    """是不是一个开关。
+
+    **同时认 `-` 与 `/`**：7-Zip / scoop / uv 用 `-foo`，而 Windows 自带命令用 `/foo`
+    （`/all` `/svc` `/fo`）。原先只认 `-`，导致 12 个 Windows 工具包在这层里
+    一个开关都没被检查——报告里那句"195 个开关全部可溯源"其实是假完整（实测发现）。
+    """
+    return token.startswith(("-", "/"))
+
+
 def field_switches(field: dict) -> list[str]:
     """列出该字段会用到的开关（用于白名单校验）。"""
     explicit = field.get("switchBase")
@@ -70,13 +80,13 @@ def field_switches(field: dict) -> list[str]:
     style = field.get("style")
     if style in ("attached", "separate", "flag", "repeated"):
         prefix = field.get("prefix") or ""
-        return [normalize_base(prefix)] if prefix.startswith("-") else []
+        return [normalize_base(prefix)] if is_switch(prefix) else []
 
     if style == "literal":
         tokens = []
         for value in field.get("values") or []:
             for arg in value.get("args") or []:
-                if isinstance(arg, str) and arg.startswith("-"):
+                if isinstance(arg, str) and is_switch(arg):
                     tokens.append(normalize_base(arg))
         return tokens
 
@@ -133,6 +143,10 @@ def load_reference_corpus(plugin_id: str) -> tuple[str, int]:
     约定：`docs/reference/` 下**目录名以工具包 id 开头**的都算它的文档
     （例如 7zip → 7zip-md、scoop → scoop-help/scoop-wiki、uv → uv-help/uv-docs）。
     这样不必维护一张映射表，加新工具包时只要按约定命名即可。
+
+    例外：`win-*` 是**一批 Windows 自带命令共用的**语料（它们各自太小，不值得每包一份快照），
+    所以对所有工具包都并入。语料变大只会让这个启发式检查更宽松（它本来就不阻断构建），
+    而 Windows 命令包正是最需要这层检查的——它们全部用 `/xxx` 形式的开关。
     """
     reference = ROOT / "docs" / "reference"
     if not reference.exists():
@@ -142,7 +156,13 @@ def load_reference_corpus(plugin_id: str) -> tuple[str, int]:
     files = 0
 
     for directory in sorted(reference.iterdir()):
-        if not directory.is_dir() or not directory.name.lower().startswith(plugin_id.lower()):
+        if not directory.is_dir():
+            continue
+
+        name = directory.name.lower()
+        shared = name.startswith("win-")
+
+        if not shared and not name.startswith(plugin_id.lower()):
             continue
 
         for path in sorted(directory.rglob("*")):

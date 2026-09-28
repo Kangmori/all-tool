@@ -1,0 +1,247 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# ping —— Windows 自带的连通性测试工具（C:\Windows\System32\PING.EXE）。
+#
+# 参数知识来源（两类，都可离线复核）：
+#   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ping
+#      离线快照 docs/reference/win-docs/ping.html（抓取脚本见 docs/reference/README.md）
+#   2) 本机 `ping /?` 的真实输出：docs/reference/win-help/ping.txt
+#      （该目录已加入 .gitignore：这些是微软的文本，本项目转公开仓库后不能发布）
+#
+# 关于版本：Windows 自带命令**没有统一的 --version 开关**，`ping /?` 是帮助而不是版本输出。
+# 所以这里不写 versionArgs / versionPattern / minVersion —— 不发明参数（R1）。
+# 后果是宿主会提示一句"未能解析出版本号"（见 NOTES.md §6）。
+#
+# 关于编码：实测本机 `ping /?` 与真实输出的原始字节都是 **OEM 代码页 936**（不是 UTF-8），
+# 见 NOTES.md §5 的字节证据。因此 runtime.encoding 必须是 oem（= 控制台输出代码页）。
+
+spec: 1
+id: ping
+name: ping
+manifestVersion: 0.1.0
+appVersion: Windows 10/11 自带（随系统版本发布）
+description: 测试与目标主机之间的 IP 层连通性。发送 ICMP 回显请求并统计往返时间与丢包率。Windows 自带，无需安装。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ping
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 网络, 诊断, 连通性]
+
+sources:
+  - title: ping 命令官方参考（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ping
+    retrieved: "2026-09-27"
+    appliesTo: Windows 10/11
+    note: 离线快照 docs/reference/win-docs/ping.html。参数表在页面 #parameters 小节，逐行列出 /t /a /n /l /f /i /v /r /s /j /k /w /R /S /4 /6。
+  - title: 本机 `ping /?` 的真实输出快照
+    url: file:///D:/AI/swpj/docs/reference/win-help/ping.txt
+    retrieved: "2026-09-27"
+    appliesTo: Windows 11 26200 / PING.EXE 文件版本 10.0.26100.8115
+    note: 由 scripts/fetch-win-help.ps1 抓取。**不入库**（微软文本，公开仓库不发布），见 .gitignore 与 NOTES.md §3。本清单每个开关都对着这份输出核对过。
+
+locate:
+  executable: ping.exe
+  searchPaths:
+    - "%SystemRoot%\\System32"
+  # 刻意不写 versionArgs / versionPattern / minVersion：ping 没有版本开关。
+  notFoundHint: ping.exe 是 Windows 自带命令，正常情况下都在 C:\Windows\System32 下；若缺失，用 `sfc /scannow` 检查系统文件完整性。
+
+runtime:
+  # 实测：stdout/stderr 原始字节为 OEM 代码页 936（中文 GBK），不是 UTF-8。证据见 NOTES.md §5。
+  encoding: oem
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  # 不开伪控制台：ping 不画百分比进度条，走管道即可（重定向后输出与真控制台一致）。
+  usePseudoConsole: false
+
+# 退出码：微软的 ping 文档**没有退出码章节**（已核对：页面里只有 Parameter 一张表）。
+# 下面两条来自 2026-09-27 真机实测，见 NOTES.md §4。
+# 注意 ping 的退出码含义与一般程序相反：**0 表示收到了回复，1 表示一个回复都没收到**。
+exitCodes:
+  # 注意：退出码用块式（block）写法而不是 flow 的 { code: 0, ... }。
+  # 原因是 YAML 的 flow 标量里不能自由出现 ?, :, ` 这类字符（实测报
+  # "expected ',' or '}', but got '?'"）。说明文字里难免要写 /? 和冒号，所以统一用块式。
+  - code: 0
+    meaning: 至少收到一个回显回复（目标可达）
+    severity: ok
+  - code: 1
+    meaning: 一个回复都没收到（目标不可达、被防火墙拦截），或本身就是 /? 帮助输出
+    severity: error
+
+actions:
+
+  # ================================================================= 连通性测试
+  - id: test
+    category: 连通性测试
+    title: 测试连通性
+    description: 向目标主机发送若干个 ICMP 回显请求，统计丢包率与往返时间。最常用的一条。
+    command: ""
+    sources:
+      - title: ping 官方参考 —— 语法与 /n /l /w 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ping#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 本机 /? 快照 docs/reference/win-help/ping.txt（用法行与"选项"一节）
+    fields:
+      - id: target
+        label: 目标主机
+        type: text
+        style: positional
+        required: true
+        placeholder: 例 127.0.0.1 / 8.8.8.8 / example.com
+        help: 目标的主机名或 IP 地址。文档写作 <targetname>。
+        doc: "official #parameters 的 <targetname>（本机 /? 快照 ping.txt 用法行末的 target_name）"
+      - id: count
+        label: 发送次数
+        type: number
+        style: separate
+        prefix: "-n"
+        group: 基础
+        placeholder: 默认 4
+        help: 要发送的回显请求数量。文档默认 4。
+        doc: "official #parameters 的 /n <count>；本机 /? 快照的 -n count（默认 4）"
+      - id: size
+        label: 数据字段大小（字节）
+        type: number
+        style: separate
+        prefix: "-l"
+        group: 高级
+        advanced: true
+        placeholder: 默认 32，最大 65500
+        help: 回显请求里 Data 字段的字节数。用于验证路径 MTU 时可配合"不分片"。
+        doc: "official #parameters 的 /l <size>；本机 /? 快照的 -l size"
+      - id: waitTimeout
+        label: 每次回复的超时（毫秒）
+        type: number
+        style: separate
+        prefix: "-w"
+        group: 高级
+        advanced: true
+        placeholder: 默认 4000
+        help: 等待每个回复的时间。文档默认 4000 毫秒。
+        doc: "official #parameters 的 /w <timeout>；本机 /? 快照的 -w timeout（单位毫秒）"
+      - id: noFragment
+        label: 不分片（探测路径 MTU）
+        type: bool
+        style: flag
+        prefix: "-f"
+        group: 高级
+        advanced: true
+        default: false
+        help: 在 IP 头里把"不分片"标志置 1（仅 IPv4）。用于排查路径最大传输单元问题。
+        doc: "official #parameters 的 /f；本机 /? 快照的 -f（仅适用于 IPv4）"
+      - id: resolveAddress
+        label: 反向解析出主机名
+        type: bool
+        style: flag
+        prefix: "-a"
+        group: 高级
+        advanced: true
+        default: false
+        help: 对目标 IP 做反向名称解析并显示主机名。
+        doc: "official #parameters 的 /a；本机 /? 快照的 -a"
+      - id: forceProtocol
+        label: 强制协议族
+        type: enum
+        style: literal
+        group: 高级
+        advanced: true
+        switchBase: "-4"
+        help: 不选则按目标地址自动选择。文档：用 IPv4/IPv6 地址标识目标时本来也不必写。
+        doc: "official #parameters 的 /4 与 /6；本机 /? 快照的 -4 / -6"
+        values:
+          - { value: "", label: "自动（不指定）", args: [], isDefault: true }
+          - { value: "v4", label: "强制 IPv4", args: ["-4"] }
+          - { value: "v6", label: "强制 IPv6", args: ["-6"] }
+    examples:
+      - title: ping 本机两次
+        args: ["127.0.0.1", "-n", "2"]
+      - title: ping 域名并反向解析
+        args: ["-n", "2", "-a", "example.com"]
+
+  # ================================================================= 连通性测试
+  - id: test-continuous
+    category: 连通性测试
+    title: 持续测试（直到手动停止）
+    description: 不停地发送回显请求，直到用 Ctrl+Break 看统计或 Ctrl+C 终止。适合观察间歇性丢包。
+    command: ""
+    danger: none
+    sources:
+      - title: ping 官方参考 —— /t 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ping#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 本机 /? 快照 docs/reference/win-help/ping.txt 的 -t 一行
+    fields:
+      - id: target
+        label: 目标主机
+        type: text
+        style: positional
+        required: true
+        placeholder: 例 8.8.8.8
+        doc: "official #parameters 的 <targetname>"
+      - id: continuous
+        label: 持续发送（-t）
+        type: bool
+        style: flag
+        prefix: "-t"
+        default: true
+        help: 文档：持续发送回显请求直到被中断。按 Ctrl+Break 看统计，按 Ctrl+C 退出。界面上的「取消」按钮等价于终止进程。
+        doc: "official #parameters 的 /t；本机 /? 快照的 -t"
+    output:
+      # ping 的进度不是百分比；这里不写 progress.pattern（不凭空发明正则）。
+      mode: stream
+      showCommandLine: true
+      resultNote: 持续 ping 不会自己结束。用「取消」按钮停止；被取消时退出码为 1，那是正常的，不是错误。
+
+  # ================================================================= 连通性测试
+  - id: test-v6-roundtrip
+    category: 连通性测试
+    title: 测试并跟踪往返路径（仅 IPv6）
+    description: 使用 IPv6 路由扩展头，让回显请求沿原路返回，用于双向路径诊断。
+    command: ""
+    sources:
+      - title: ping 官方参考 —— /R 与 /S 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ping#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 本机 /? 快照 docs/reference/win-help/ping.txt 的 -R 与 -S 两行
+    fields:
+      - id: target
+        label: 目标主机（IPv6）
+        type: text
+        style: positional
+        required: true
+        placeholder: 例 ::1
+        doc: "official #parameters 的 <targetname>"
+      - id: roundTrip
+        label: 跟踪往返路径（-R）
+        type: bool
+        style: flag
+        prefix: "-R"
+        default: true
+        help: 文档：使用 IPv6 路由扩展头，仅适用于 IPv6。文档另注明 RFC 5095 已弃用该扩展头，某些系统可能丢弃这类报文。
+        doc: "official #parameters 的 /R；本机 /? 快照的 -R（仅适用于 IPv6）"
+      - id: sourceAddress
+        label: 源地址（-S）
+        type: text
+        style: separate
+        prefix: "-S"
+        group: 高级
+        advanced: true
+        placeholder: 例 ::1
+        help: 指定要使用的源地址。文档标注该参数仅适用于 IPv6。
+        doc: "official #parameters 的 /S <Srcaddr>；本机 /? 快照的 -S srcaddr"
+      - id: forceProtocol
+        label: 强制 IPv6
+        type: enum
+        style: literal
+        group: 高级
+        advanced: true
+        switchBase: "-6"
+        help: 该动作只在 IPv6 下有意义，默认打开。
+        doc: "official #parameters 的 /6；本机 /? 快照的 -6"
+        values:
+          - { value: "v6", label: "强制 IPv6（-6）", args: ["-6"], isDefault: true }
+          - { value: "", label: "不指定", args: [] }

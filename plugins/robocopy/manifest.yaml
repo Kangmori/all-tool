@@ -1,0 +1,332 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# robocopy —— Windows 自带的可靠文件复制工具（C:\Windows\System32\Robocopy.exe）。
+#
+# 参数知识来源：
+#   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/robocopy
+#      离线快照 docs/reference/win-docs/robocopy.html（参数表 117 行 + #exit-return-codes 小节）
+#   2) 本机 `robocopy /?` 的真实输出：docs/reference/win-help/robocopy.txt（不入库，见 .gitignore）
+#      本机帮助有 8524 字节，把开关分成"复制选项 / 复制文件限制选项 / 文件选择选项 / 重试选项 /
+#      日志记录选项 / 作业选项"六类，比官方网页更好读。
+#
+# **这个命令最重要的一条事实：退出码不是 0 才算成功**（见 NOTES.md §4）。
+#   0 = 没有文件需要复制（都已是最新）；1 = 有文件被成功复制；2 = 目标端多出文件；…
+#   官方文档 #exit-return-codes 一节原话：Any value equal to or greater than 8 indicates that
+#   there was at least one failure during the copy operation.
+#   所以 >= 8 才算真失败。下面的 exitCodes 就按这个语义写。
+#
+# **危险动作**：/MIR（镜像）与 /PURGE 会**删除目标端多出来的文件**，标 destructive；
+#   /MOV /MOVE 会从源里删文件；其余的复制类动作会覆盖目标文件，标 overwrite。
+#   /MIR 与 /PURGE 本批**未实跑**（见 NOTES.md §9.1）；只跑了 /L（只列出）与 /E（真的复制到临时目录）。
+#
+# 版本：Windows 自带命令没有 --version 开关，故不写 versionArgs/versionPattern（R1）。
+# 没有 progress.pattern：robocopy 的进度是逐文件的百分比，但实测重定向时格式不稳定，
+#   不凭空写正则（见 NOTES.md §6）。它自带 /NP 可以关掉百分比。
+# 编码：实测原始字节为 OEM 代码页 936，见 NOTES.md §5。
+
+spec: 1
+id: robocopy
+name: robocopy
+manifestVersion: 0.1.0
+appVersion: Windows 10/11 自带（随系统版本发布）
+description: 健壮的目录树复制工具，支持镜像同步、多线程、断点续传模式、重试与日志。Windows 自带，无需安装。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/robocopy
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 文件, 复制, 备份]
+
+sources:
+  - title: robocopy 命令官方参考（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/robocopy
+    retrieved: "2026-09-27"
+    appliesTo: Windows 10/11
+    note: 离线快照 docs/reference/win-docs/robocopy.html。语法行：robocopy <source> <destination> [<file>[ ...]] [<options>]；#parameters 是 117 行的开关大表；#exit-return-codes 给出退出码语义。
+  - title: 本机 `robocopy /?` 的真实输出快照
+    url: file:///D:/AI/swpj/docs/reference/win-help/robocopy.txt
+    retrieved: "2026-09-27"
+    appliesTo: Windows 11 26200 / Robocopy.exe 文件版本 10.0.26100.8521
+    note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。注意：**`robocopy /?` 的退出码是 16**，因为它的 /? 实际是"参数不全时的用法输出"，走的是错误路径。
+
+locate:
+  executable: robocopy.exe
+  searchPaths:
+    - "%SystemRoot%\\System32"
+  notFoundHint: robocopy.exe 是 Windows 自带命令，正常情况下都在 C:\Windows\System32 下。
+
+runtime:
+  encoding: oem
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  # 不开伪控制台：robocopy 在被重定向时仍然会打印它的作业摘要（实测 /E 复制时 1394 字节输出完整），
+  # 不像 7-Zip 那样"被重定向就不画百分比"。所以不需要 ConPTY。
+  usePseudoConsole: false
+
+# 退出码：**这组是官方文档 #exit-return-codes 一节明确给出的**（不是实测推断）。
+# 关键语义：>= 8 才表示至少有一次失败。0/1/2/3/5/6/7 都是"没有失败"的不同组合。
+# 另外本机实测补充了一条：**源目录不存在时返回 16**（文档没有逐条列 16，但 >= 8 的规则覆盖它）。
+exitCodes:
+  # 块式写法，理由见 plugins/ping/manifest.yaml 的同一处注释。
+  - code: 0
+    meaning: 没有文件被复制、没有失败、没有不匹配 —— 目标端文件都已存在，复制被跳过（官方文档）
+    severity: ok
+  - code: 1
+    meaning: 所有文件都复制成功（官方文档）。**实测常见结果**：往空目录 /E 复制时就返回 1
+    severity: ok
+  - code: 2
+    meaning: 目标目录里有一些源目录没有的多余文件；没有文件被复制（官方文档）
+    severity: ok
+  - code: 3
+    meaning: 部分文件被复制；存在多余文件；没有失败（官方文档）
+    severity: ok
+  - code: 5
+    meaning: 部分文件被复制；有不匹配的文件；没有失败（官方文档）
+    severity: ok
+  - code: 6
+    meaning: 存在多余文件与不匹配文件；没有文件被复制、没有失败（官方文档）
+    severity: ok
+  - code: 7
+    meaning: 有文件被复制、存在不匹配文件、也存在多余文件（官方文档）
+    severity: ok
+  - code: 8
+    meaning: 有若干文件没能复制（官方文档）。**阈值：官方明确写"等于或大于 8 表示复制过程中至少发生过一次失败"**
+    severity: error
+  - code: 16
+    meaning: 严重错误，例如源目录不存在或无法访问（本机实测：源目录不存在时返回 16，并打印"错误 2 (0x00000002) 正在访问源目录 … 系统找不到指定的文件"）
+    severity: error
+
+actions:
+
+  # ================================================================= 预览
+  - id: list
+    category: 预览
+    title: 只列出将要复制什么（/L，不做任何改动）
+    description: 演算一遍但不复制、不添加时间戳、不删除任何文件。改大的镜像任务之前先用它看一眼。
+    command: ""
+    danger: none
+    sources:
+      - title: robocopy 官方参考 —— /L 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/robocopy#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档原文：/L Specifies to list only - don't copy, timestamp, or delete any files. 本机 /? 快照的 /L 一行同义
+    fields:
+      - id: source
+        label: 源目录
+        type: directory
+        style: positional
+        required: true
+        placeholder: 例 D:\data
+        help: 官方语法第一个位置参数 <source>。可以用拖放填。
+        doc: 'official #parameters 的 <source>；本机 /? 快照的「源 :: 源目录(驱动器:\路径或 \\服务器\共享\路径)」'
+      - id: destination
+        label: 目标目录
+        type: directory
+        style: positional
+        required: true
+        placeholder: 例 E:\backup
+        doc: 'official #parameters 的 <destination>；本机 /? 快照的「目标 :: 目标目录」'
+      - id: listOnly
+        label: 只列出，不复制（/L）
+        type: bool
+        style: flag
+        prefix: "/L"
+        default: true
+        doc: "official #parameters 的 /L；本机 /? 快照的 /L"
+      - id: recurse
+        label: 包含子目录（含空目录，/E）
+        type: bool
+        style: flag
+        prefix: "/E"
+        default: false
+        help: 文档：/E 复制子目录，包括空的子目录。不选就只处理源目录本层。
+        doc: "official #parameters 的 /E；本机 /? 快照的 /E"
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - title: 只列出将要复制什么（不改动任何东西）
+        args: ["<源目录>", "<目标目录>", "/L"]
+
+  # ================================================================= 复制
+  - id: copy
+    category: 复制
+    title: 复制目录树（/E）
+    description: 把源目录树复制到目标，包含空的子目录。已存在且最新的文件会被跳过。目标已有的多余文件**不会**被删除。
+    command: ""
+    danger: overwrite
+    confirmText: 这会把源目录树复制到目标目录；目标端同名文件会被覆盖。目标端多出来的文件不会被删除（那需要 /MIR 或 /PURGE）。确定继续？
+    sources:
+      - title: robocopy 官方参考 —— /E 与 /S 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/robocopy#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档：/E copies subdirectories, including empty ones；/S copies subdirectories but not empty ones。官方示例行有 robocopy C:\Users\Admin\Records D:\Backup /E /ZB /LOG:C:\Logs\Backup.log
+    fields:
+      - id: source
+        label: 源目录
+        type: directory
+        style: positional
+        required: true
+        doc: 'official #parameters 的 <source>；本机 /? 快照的「源 :: 源目录」'
+      - id: destination
+        label: 目标目录
+        type: directory
+        style: positional
+        required: true
+        doc: 'official #parameters 的 <destination>；本机 /? 快照的「目标 :: 目标目录」'
+      - id: recurse
+        label: 包含子目录（含空目录，/E）
+        type: bool
+        style: flag
+        prefix: "/E"
+        default: true
+        doc: "official #parameters 的 /E；本机 /? 快照的 /E"
+      - id: restartable
+        label: 断点续传模式（/Z）
+        type: bool
+        style: flag
+        prefix: "/Z"
+        group: 高级
+        advanced: true
+        default: false
+        help: 文档：在可重新启动模式下复制文件。网络不稳时有用，但更慢。
+        doc: "official #parameters 的 /Z；本机 /? 快照的 /Z"
+      - id: multiThread
+        label: 复制线程数（/MT）
+        type: number
+        style: attached
+        prefix: "/MT:"
+        group: 高级
+        advanced: true
+        placeholder: 默认 8；1–128
+        help: 文档：/MT[:n] 用 n 个线程复制，默认 8，n 必须是 1..128；与 /IPG、/EFSRAW 不兼容；建议配合 /LOG 以获得最佳性能。
+        doc: "official #parameters 的 /MT[:n]；本机 /? 快照的 /MT[:n]（默认值为 8）"
+      - id: noProgress
+        label: 不显示复制百分比（/NP）
+        type: bool
+        style: flag
+        prefix: "/NP"
+        group: 高级
+        advanced: true
+        default: false
+        help: 文档：无进度。输出会短得多，适合只想看结果的时候。
+        doc: "official #parameters 的 /NP；本机 /? 快照的 /NP"
+    examples:
+      - title: 复制目录树到临时目标
+        args: ["<源目录>", "<目标目录>", "/E"]
+        expectExitCode: 1
+
+  # ================================================================= 同步
+  - id: mirror
+    category: 同步
+    title: 镜像目录树（/MIR）—— 会删除目标端多余文件
+    description: 让目标目录变成源目录的镜像：等价于 /E 加 /PURGE。/PURGE 会删除目标端源里已经没有的文件与目录。
+    command: ""
+    danger: destructive
+    requiresAdmin: false
+    confirmText: /MIR 等价于 /E + /PURGE：目标目录里源目录已经不存在的文件和目录会被**删除**，且不可恢复。这是本工具包里最危险的动作。请先确认源与目标没有写反（建议先用「只列出将要复制什么」预览）。确定继续？
+    sources:
+      - title: robocopy 官方参考 —— /MIR 与 /PURGE 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/robocopy#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档原文：/PURGE Deletes destination files and directories that no longer exist in the source. /MIR Mirrors a directory tree (equivalent to /E plus /PURGE). 官方示例行有 robocopy C:\Users\Admin\Records D:\Backup /MIR /R:2 /W:5 /LOG:C:\Logs\Backup.log
+    fields:
+      - id: source
+        label: 源目录
+        type: directory
+        style: positional
+        required: true
+        doc: 'official #parameters 的 <source>；本机 /? 快照的「源 :: 源目录」'
+      - id: destination
+        label: 目标目录（会被删改）
+        type: directory
+        style: positional
+        required: true
+        doc: 'official #parameters 的 <destination>；本机 /? 快照的「目标 :: 目标目录」'
+      - id: mirror
+        label: 镜像（/MIR）
+        type: bool
+        style: flag
+        prefix: "/MIR"
+        default: true
+        doc: "official #parameters 的 /MIR；本机 /? 快照的 /MIR（等同于 /E 加 /PURGE）"
+      - id: retryCount
+        label: 失败重试次数（/R）
+        type: number
+        style: attached
+        prefix: "/R:"
+        group: 重试
+        placeholder: 默认 1000000
+        help: 文档：/R:n 失败副本的重试次数，默认 1 百万。强烈建议显式设小（例如 2），否则遇到锁定的文件会一直重试。
+        doc: "official #parameters 的 /R:n；本机 /? 快照的 /R:n（默认为 1 百万）"
+      - id: retryWait
+        label: 两次重试的等待秒数（/W）
+        type: number
+        style: attached
+        prefix: "/W:"
+        group: 重试
+        placeholder: 默认 30
+        doc: "official #parameters 的 /W:n；本机 /? 快照的 /W:n（默认为 30 秒）"
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 未实跑（破坏性）。退出码 0–7 都表示"没有失败"，>= 8 才是真失败 —— 详见本包 NOTES.md §4。
+    examples:
+      - title: 镜像同步（危险，未实跑）
+        args: ["C:\\Users\\Admin\\Records", "D:\\Backup", "/MIR", "/R:2", "/W:5"]
+
+  # ================================================================= 复制
+  - id: copy-with-log
+    category: 复制
+    title: 复制并把结果写进日志文件（/LOG + /TEE）
+    description: 在 /E 的基础上把状态输出写到日志文件，并同时显示在界面上。
+    command: ""
+    danger: overwrite
+    confirmText: 这会把源目录树复制到目标目录（覆盖同名文件），并把日志写到指定路径。确定继续？
+    sources:
+      - title: robocopy 官方参考 —— /LOG /TEE
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/robocopy#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档：/LOG:file Writes the status output to the log file (overwrites the existing log file). /TEE Writes the status output to the console window, as well as to the log file.
+    fields:
+      - id: source
+        label: 源目录
+        type: directory
+        style: positional
+        required: true
+        doc: 'official #parameters 的 <source>；本机 /? 快照的「源 :: 源目录」'
+      - id: destination
+        label: 目标目录
+        type: directory
+        style: positional
+        required: true
+        doc: 'official #parameters 的 <destination>；本机 /? 快照的「目标 :: 目标目录」'
+      - id: recurse
+        label: 包含子目录（含空目录，/E）
+        type: bool
+        style: flag
+        prefix: "/E"
+        default: true
+        doc: "official #parameters 的 /E；本机 /? 快照的 /E"
+      - id: logFile
+        label: 日志文件路径
+        type: file
+        style: attached
+        prefix: "/LOG:"
+        required: true
+        save: true
+        placeholder: 例 D:\logs\robocopy.log
+        help: 文档：/LOG:文件 会把状态输出写到日志文件（覆盖已有日志）。要用追加请用 /LOG+（本清单未做）。
+        doc: "official #parameters 的 /LOG:file；本机 /? 快照的 /LOG:文件（覆盖现有日志）"
+      - id: tee
+        label: 同时输出到界面（/TEE）
+        type: bool
+        style: flag
+        prefix: "/TEE"
+        default: true
+        help: 文档：把状态同时写到控制台窗口与日志文件。不加就只能去日志里看结果。
+        doc: "official #parameters 的 /TEE；本机 /? 快照的 /TEE"

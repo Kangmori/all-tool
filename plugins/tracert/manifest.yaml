@@ -1,0 +1,238 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# tracert —— Windows 自带的路由跟踪工具（C:\Windows\System32\TRACERT.EXE）。
+#
+# 参数知识来源：
+#   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tracert
+#      离线快照 docs/reference/win-docs/tracert.html
+#   2) 本机 `tracert /?` 的真实输出：docs/reference/win-help/tracert.txt（不入库，见 .gitignore）
+#
+# 版本：Windows 自带命令没有 --version 开关，故不写 versionArgs/versionPattern（R1）。
+# 编码：实测原始字节为 OEM 代码页 936，见 NOTES.md §5。
+
+spec: 1
+id: tracert
+name: tracert
+manifestVersion: 0.1.0
+appVersion: Windows 10/11 自带（随系统版本发布）
+description: 通过逐跳增大 IP 生存时间（TTL），显示数据包到达目标所经过的每一台路由器及其响应时间。Windows 自带，无需安装。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tracert
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 网络, 诊断, 路由]
+
+sources:
+  - title: tracert 命令官方参考（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tracert
+    retrieved: "2026-09-27"
+    appliesTo: Windows 10/11
+    note: 离线快照 docs/reference/win-docs/tracert.html。参数表在 #parameters，含 /d /h /j /w /R /S /4 /6。
+  - title: 本机 `tracert /?` 的真实输出快照
+    url: file:///D:/AI/swpj/docs/reference/win-help/tracert.txt
+    retrieved: "2026-09-27"
+    appliesTo: Windows 11 26200 / TRACERT.EXE 文件版本 10.0.26100.8115
+    note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。本清单的每个开关都对着这份输出核对过。
+
+locate:
+  executable: tracert.exe
+  searchPaths:
+    - "%SystemRoot%\\System32"
+  notFoundHint: tracert.exe 是 Windows 自带命令，正常情况下都在 C:\Windows\System32 下。
+
+runtime:
+  encoding: oem
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  usePseudoConsole: false
+
+# 退出码：微软的 tracert 文档没有退出码章节（已核对）。下面来自实测，见 NOTES.md §4。
+exitCodes:
+  # 块式写法，理由见 plugins/ping/manifest.yaml 的同一处注释。
+  - code: 0
+    meaning: 成功完成跟踪（即使中间有 Request timed out 的行，命令本身仍返回 0）
+    severity: ok
+  - code: 1
+    meaning: 目标不可达、跟踪失败，或本身就是 /? 帮助输出（实测 tracert /? 退出码为 1）
+    severity: error
+
+actions:
+
+  # ================================================================= 路由跟踪
+  - id: trace
+    category: 路由跟踪
+    title: 跟踪到目标的路由
+    description: 最常用的一条：逐跳显示到目标主机所经过的路由器与每跳的往返时间。
+    command: ""
+    sources:
+      - title: tracert 官方参考 —— 语法与 /h /w 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tracert#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 本机 /? 快照 docs/reference/win-help/tracert.txt（用法行与选项一节）
+    fields:
+      - id: target
+        label: 目标主机
+        type: text
+        style: positional
+        required: true
+        placeholder: 例 127.0.0.1 / example.com
+        help: 目标的主机名或 IP 地址。文档写作 <targetname>。
+        doc: "official #parameters 的 <targetname>；本机 /? 快照用法行末的 target_name"
+      - id: maxHops
+        label: 最大跃点数
+        type: number
+        style: separate
+        prefix: "-h"
+        group: 基础
+        placeholder: 默认 30
+        help: 搜索目标时经过的最大跃点数。文档默认 30。调到 1 可做最快的连通性验证。
+        doc: "official #parameters 的 /h <maximumhops>；本机 /? 快照的 -h maximum_hops"
+      - id: timeout
+        label: 每跳超时（毫秒）
+        type: number
+        style: separate
+        prefix: "-w"
+        group: 高级
+        advanced: true
+        placeholder: 默认 4000
+        help: 等待 ICMP 超时或回显回复的毫秒数。
+        doc: "official #parameters 的 /w <timeout>；本机 /? 快照的 -w timeout"
+      - id: forceProtocol
+        label: 强制协议族
+        type: enum
+        style: literal
+        group: 高级
+        advanced: true
+        switchBase: "-4"
+        doc: "official #parameters 的 /4 与 /6；本机 /? 快照的 -4 / -6"
+        values:
+          - value: ""
+            label: 自动（不指定）
+            args: []
+            isDefault: true
+          - value: v4
+            label: 强制 IPv4
+            args: ["-4"]
+          - value: v6
+            label: 强制 IPv6
+            args: ["-6"]
+    examples:
+      - title: 跟踪到本机（只走一跳，最快）
+        args: ["-h", "1", "127.0.0.1"]
+
+  # ================================================================= 路由跟踪
+  - id: trace-fast
+    category: 路由跟踪
+    title: 快速跟踪（不解析路由器名称）
+    description: 不做反向名称解析，直接显示每一跳的 IP 地址。路由器 DNS 反查慢的时候快很多。
+    command: ""
+    sources:
+      - title: tracert 官方参考 —— /d 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tracert#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 本机 /? 快照的 -d 一行（"不将地址解析成主机名"）
+    fields:
+      - id: target
+        label: 目标主机
+        type: text
+        style: positional
+        required: true
+        placeholder: 例 127.0.0.1 / example.com
+        doc: "official #parameters 的 <targetname>"
+      - id: noResolve
+        label: 不解析主机名（-d）
+        type: bool
+        style: flag
+        prefix: "-d"
+        default: true
+        help: 文档：停止把中间路由器的 IP 地址解析成名称，可以加快返回速度。
+        doc: "official #parameters 的 /d；本机 /? 快照的 -d"
+      - id: maxHops
+        label: 最大跃点数
+        type: number
+        style: separate
+        prefix: "-h"
+        group: 基础
+        placeholder: 默认 30
+        doc: "official #parameters 的 /h <maximumhops>；本机 /? 快照的 -h maximum_hops"
+    examples:
+      - title: 不解析名称跟踪
+        args: ["-d", "example.com"]
+
+  # ================================================================= 路由跟踪
+  - id: trace-ipv6
+    category: 路由跟踪
+    title: 跟踪 IPv6 路由并记录往返路径
+    description: 使用 IPv6 路由扩展头，让回显请求按原路返回，用于检查 IPv6 双向路径是否对称。
+    command: ""
+    sources:
+      - title: tracert 官方参考 —— /R /S /6 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tracert#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 本机 /? 快照的 -R 与 -S 两行（都标注"仅适用于 IPv6"）
+    fields:
+      - id: target
+        label: 目标主机（IPv6）
+        type: text
+        style: positional
+        required: true
+        placeholder: 例 ::1
+        doc: "official #parameters 的 <targetname>"
+      - id: roundTrip
+        label: 记录往返路径（-R）
+        type: bool
+        style: flag
+        prefix: "-R"
+        default: true
+        help: 文档：使用 IPv6 路由扩展头把回显请求发给本机，仅适用于 IPv6。
+        doc: "official #parameters 的 /R；本机 /? 快照的 -R（仅适用于 IPv6）"
+      - id: sourceAddress
+        label: 源地址（-S）
+        type: text
+        style: separate
+        prefix: "-S"
+        group: 高级
+        advanced: true
+        placeholder: 例 ::1
+        help: 文档：指定回显请求中使用的源地址，仅在跟踪 IPv6 地址时使用。
+        doc: "official #parameters 的 /S <srcaddr>；本机 /? 快照的 -S srcaddr"
+      - id: forceIpv6
+        label: 强制 IPv6（-6）
+        type: bool
+        style: flag
+        prefix: "-6"
+        default: true
+        doc: "official #parameters 的 /6；本机 /? 快照的 -6"
+
+  # ================================================================= 路由跟踪
+  - id: trace-loose-source
+    category: 路由跟踪
+    title: 松散源路由跟踪（指定中间跳）
+    description: 用 IP 头里的松散源路由选项指定一组中间路由器。多数现代网络会丢弃这类报文。
+    command: ""
+    sources:
+      - title: tracert 官方参考 —— /j 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tracert#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 本机 /? 快照的 -j hostList 一行（"仅适用于 IPv4"）
+    fields:
+      - id: target
+        label: 目标主机
+        type: text
+        style: positional
+        required: true
+        doc: "official #parameters 的 <targetname>"
+      - id: hostList
+        label: 中间主机列表
+        type: text
+        style: separate
+        prefix: "-j"
+        required: true
+        placeholder: 用空格分隔，例 10.12.0.1 10.29.3.1
+        help: 文档示例把多个地址写在同一个参数里（用空格分隔），所以这里是一个文本字段而不是多行。
+        doc: "official #parameters 的 /j <hostlist>；本机 /? 快照的 -j hostList"

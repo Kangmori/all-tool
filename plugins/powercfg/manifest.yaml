@@ -1,0 +1,571 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# powercfg —— Windows 自带的电源配置工具（C:\Windows\System32\powercfg.exe）。
+#
+# 参数知识来源：
+#   1) 官方文档 https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options
+#      离线快照 docs/reference/win-docs/powercfg.html
+#      **注意这个 URL 的位置**：它不在 windows-server/administration/windows-commands/ 下
+#      （那个路径下的 powercfg 是 404），而在 windows-hardware/design/device-experiences/ 下。
+#      这是本批唯一一个"命令参考页不在标准目录下"的命令（见 NOTES.md §6）。
+#   2) 本机 `powercfg /?` 的真实输出：docs/reference/win-help/powercfg.txt（不入库，见 .gitignore）
+#      本机帮助只是命令列表，没有逐条参数；逐条参数只有官方网页有。
+#      所以本清单的开关依据以官方网页为主、`/?` 用于核对命令名与英文/中文写法。
+#
+# **管理员权限（实测，见 NOTES.md §4 与 §7）**：
+#   - 官方文档**明确写"需要管理员"**的只有两个：/systempowerreport 与 /systemsleepdiagnostics
+#     （原文：This command requires administrator privileges and must be executed from an elevated command prompt.）
+#   - 实测本机 `/waketimers` 与 `/requests` 在非管理员下返回**退出码 1**，
+#     并在 **stderr** 打印"此命令需要管理员权限，并且必须从提升的命令提示符中执行。"（58 字节，cp936）
+#     —— 这两条官方文档没写，是本机实测发现的。
+#   - 会改电源设置的动作（/change、/setactive、/hibernate、/delete、/setacvalueindex…）本批**未实跑**，
+#     清单按"会改系统状态"标 danger；只有上面两个有官方文字依据的标了 requiresAdmin: true。
+#     其余是否必须提权**未实测**，已如实记在 NOTES.md §8。
+#
+# 版本：Windows 自带命令没有 --version 开关，故不写 versionArgs/versionPattern（R1）。
+# 编码：实测原始字节（含 stderr）为 OEM 代码页 936，见 NOTES.md §5。
+
+spec: 1
+id: powercfg
+name: powercfg
+manifestVersion: 0.1.0
+appVersion: Windows 10/11 自带（随系统版本发布）
+description: 管理 Windows 电源方案：列出与查看方案、查看可用睡眠状态、修改超时与休眠设置、生成电池与能耗报告。Windows 自带，部分子命令需要管理员权限。
+homepage: https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 电源, 电池, 睡眠]
+
+sources:
+  - title: powercfg 命令行选项官方参考（Microsoft Learn，Windows 硬件设计文档）
+    url: https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options
+    retrieved: "2026-09-27"
+    appliesTo: Windows 10/11
+    note: 离线快照 docs/reference/win-docs/powercfg.html。页面有 #command-line-options（命令总表）与 #command-line-option-descriptions（逐条语法、参数、示例）两个小节，每个子命令有独立锚点，例如 #-query-or-q-、#hibernate-or-h、#batteryreport。
+  - title: 本机 `powercfg /?` 的真实输出快照
+    url: file:///D:/AI/swpj/docs/reference/win-help/powercfg.txt
+    retrieved: "2026-09-27"
+    appliesTo: Windows 11 26200 / powercfg.exe 文件版本 10.0.26100.8521
+    note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。它只列命令名（中文说明 + 英文开关），没有逐条参数；`powercfg /?` 的退出码实测为 0（与本批多数命令的 /? 返回 1 不同）。
+
+locate:
+  executable: powercfg.exe
+  searchPaths:
+    - "%SystemRoot%\\System32"
+  notFoundHint: powercfg.exe 是 Windows 自带命令，正常情况下都在 C:\Windows\System32 下。
+
+runtime:
+  encoding: oem
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  usePseudoConsole: false
+
+# 退出码：微软的 powercfg 文档没有退出码章节（已核对）。下面来自实测，见 NOTES.md §4。
+# 实测汇总：/list、/query、/a、/aliases、/getactivescheme、/lastwake 都是 0；
+#           /waketimers 与 /requests 在非管理员下是 1（stderr: 此命令需要管理员权限…）。
+exitCodes:
+  # 块式写法，理由见 plugins/ping/manifest.yaml 的同一处注释。
+  - code: 0
+    meaning: 成功（帮助 /? 也返回 0）
+    severity: ok
+  - code: 1
+    meaning: 失败。**实测最常见的原因是权限不足**（/waketimers 与 /requests 在非管理员下返回 1，并在 stderr 提示需要管理员权限）；也可能是参数错误
+    severity: error
+
+actions:
+
+  # ================================================================= 方案查询
+  - id: list
+    category: 方案查询
+    title: 列出所有电源方案
+    description: 列出系统里的电源方案及其 GUID，当前活动的那个会标星号。
+    command: ""
+    sources:
+      - title: powercfg 官方参考 —— /list 或 /L
+        url: https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options#list-or-l
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: '文档：/list or /L Lists all power schemes. Syntax: powercfg /list。本机 /? 快照的 /LIST、/L 一行'
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - title: 列出所有电源方案
+        args: ["/list"]
+
+  # ================================================================= 方案查询
+  - id: get-active-scheme
+    category: 方案查询
+    title: 查看当前活动的电源方案
+    description: 显示当前生效的电源方案 GUID 与名称。实测输出 59 字节。
+    command: ""
+    sources:
+      - title: powercfg 官方参考 —— /getactivescheme
+        url: https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options#getactivescheme
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: '文档：/getactivescheme Retrieves the currently active power scheme. Syntax: powercfg /getactivescheme'
+    fields: []
+    examples:
+      - title: 查看当前活动方案
+        args: ["/getactivescheme"]
+
+  # ================================================================= 方案查询
+  - id: query
+    category: 方案查询
+    title: 查看电源方案的详细内容
+    description: 显示方案下所有子组与电源设置及其当前值。这是拿 GUID 的地方：/setacvalueindex 之类需要 scheme/sub/setting 三层 GUID，都从这里抄。
+    command: ""
+    sources:
+      - title: powercfg 官方参考 —— /query 或 /Q
+        url: https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options#-query-or-q-
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档：Syntax powercfg /query [ scheme_GUID ] [ sub_GUID ]；不传参数时显示当前活动方案；只传 scheme_GUID 时显示该方案全部设置。官方示例有 powercfg /query 381b4222-f694-41f0-9685-ff5bb260df2e 238c9fa8-0aad-41ed-83f4-97be242c8f20
+    fields:
+      - id: schemeGuid
+        label: 方案 GUID（留空 = 当前活动方案）
+        type: text
+        style: positional
+        placeholder: 例 381b4222-f694-41f0-9685-ff5bb260df2e
+        help: 先用「列出所有电源方案」拿到 GUID。留空则显示当前活动方案。
+        doc: "official #-query-or-q- 的 scheme_GUID；官方示例行中的第一个 GUID"
+      - id: subGuid
+        label: 子组 GUID（留空 = 该方案全部设置）
+        type: text
+        style: positional
+        advanced: true
+        group: 高级
+        placeholder: 例 238c9fa8-0aad-41ed-83f4-97be242c8f20
+        help: 文档：不指定 sub_GUID 时显示指定方案里的所有设置。子组 GUID 由 /query 的输出给出。
+        doc: "official #-query-or-q- 的 sub_GUID；官方示例行中的第二个 GUID"
+    output:
+      mode: stream
+      showCommandLine: true
+
+  # ================================================================= 方案查询
+  - id: aliases
+    category: 方案查询
+    title: 列出所有别名与 GUID 对照
+    description: 显示电源设置别名与 GUID 的对照表。别名可以替代 GUID 用在任何命令里。
+    command: ""
+    sources:
+      - title: powercfg 官方参考 —— /aliases
+        url: https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options#aliases
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档：/aliases Displays a list of aliases and their corresponding GUIDs. These aliases may be used instead of a GUID in any command. 另注：有些设置没有别名，完整 GUID 列表要用 powercfg /query。
+    fields: []
+
+  # ================================================================= 睡眠与唤醒
+  - id: available-sleep-states
+    category: 睡眠与唤醒
+    title: 查看系统可用的睡眠状态
+    description: 报告本机支持哪些睡眠状态，并尽量说明为什么某些状态不可用。
+    command: ""
+    sources:
+      - title: powercfg 官方参考 —— /availablesleepstates 或 /A
+        url: https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options#availablesleepstates-or-a
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: '文档：Reports the sleep states available on the system. Attempts to report reasons why sleep states are unavailable. Syntax: powercfg /availablesleepstates'
+    fields: []
+    examples:
+      - title: 查看可用睡眠状态
+        args: ["/a"]
+
+  # ================================================================= 睡眠与唤醒
+  - id: last-wake
+    category: 睡眠与唤醒
+    title: 查看上次是什么唤醒了系统
+    description: 显示上一次睡眠转换中被什么唤醒。实测无唤醒记录时输出"唤醒历史记录计数 - 0"（22 字节）。
+    command: ""
+    sources:
+      - title: powercfg 官方参考 —— /lastwake
+        url: https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options#lastwake
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: '文档：Reports information about what woke the system from the last sleep transition. Syntax: powercfg /lastwake'
+    fields: []
+    examples:
+      - title: 查看上次唤醒记录
+        args: ["/lastwake"]
+
+  # ================================================================= 睡眠与唤醒
+  - id: wake-timers
+    category: 睡眠与唤醒
+    title: 枚举活动的唤醒计时器（需要管理员）
+    description: 列出当前活动的唤醒计时器。**实测非管理员下返回退出码 1**，stderr 提示需要管理员权限。
+    command: ""
+    requiresAdmin: true
+    sources:
+      - title: powercfg 官方参考 —— /waketimers
+        url: https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options#waketimers
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档只说 Enumerates the active wake timers（没说需要管理员）。**"需要管理员"是本机实测结论**：非管理员下退出码 1 + stderr 提示。
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测当前非管理员账号下返回退出码 1，stderr 为"此命令需要管理员权限，并且必须从提升的命令提示符中执行。"（58 字节）。官方文档没有写这一条。
+
+  # ================================================================= 睡眠与唤醒
+  - id: power-requests
+    category: 睡眠与唤醒
+    title: 枚举应用程序与驱动的电源请求（需要管理员）
+    description: 列出正在阻止系统自动关闭显示器或进入睡眠的电源请求。**实测非管理员下返回退出码 1**。
+    command: ""
+    requiresAdmin: true
+    sources:
+      - title: powercfg 官方参考 —— /requests
+        url: https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options#requests
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档只说 Enumerates application and driver Power Requests（没说需要管理员）。**"需要管理员"是本机实测结论**。
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测当前非管理员账号下返回退出码 1，stderr 提示需要管理员权限。官方文档没有写这一条。
+
+  # ================================================================= 报告
+  - id: battery-report
+    category: 报告
+    title: 生成电池使用报告
+    description: 生成一份 HTML 电池使用报告文件。官方说明报告默认写到当前路径。
+    command: ""
+    danger: overwrite
+    confirmText: 这会在当前目录写出一个 HTML 报告文件（同名文件会被覆盖）。确定继续？
+    sources:
+      - title: powercfg 官方参考 —— /batteryreport
+        url: https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options#batteryreport
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档：Running powercfg /batteryreport generates an HTML report file in the current path. 语法：powercfg /batteryreport [ /output file_name ] [ /xml ] / 也可用 [ /duration days ]。
+    fields:
+      - id: batteryReport
+        label: 生成电池报告（/batteryreport）
+        type: bool
+        style: flag
+        prefix: "/batteryreport"
+        default: true
+        doc: "official #batteryreport 的 /batteryreport；官方示例行 powercfg /batteryreport /output \"batteryreport.html\""
+      - id: output
+        label: 输出文件名（留空 = 当前目录默认名）
+        type: file
+        style: attached
+        prefix: "/output "
+        group: 输出
+        save: true
+        placeholder: 例 D:\reports\battery.html
+        help: 文档：/output file_name 指定报告 HTML 的路径与文件名。留空则不传，报告写到当前路径的默认文件名。
+        doc: "official #batteryreport 的 /output file_name"
+      - id: xml
+        label: 以 XML 格式输出（/xml）
+        type: bool
+        style: flag
+        prefix: "/xml"
+        group: 输出
+        advanced: true
+        default: false
+        doc: "official #batteryreport 的 /xml"
+      - id: duration
+        label: 统计最近多少天（/duration）
+        type: number
+        style: attached
+        prefix: "/duration "
+        group: 输出
+        advanced: true
+        placeholder: 单位：天
+        doc: "official #batteryreport 的 /duration days；官方示例行 powercfg /batteryreport /duration 4"
+    output:
+      mode: stream
+      showCommandLine: true
+      openOnFinish: explorer
+      resultNote: 未实跑：这条会往磁盘写报告文件（虽然只读系统数据，但按本批"只跑绝无副作用的命令"的红线把它算作写操作），见 NOTES.md §9.1。
+
+  # ================================================================= 报告
+  - id: energy
+    category: 报告
+    title: 生成能耗诊断报告（/energy）
+    description: 分析常见的能效与电池续航问题并生成 HTML 报告。官方建议在系统空闲、没有打开程序时运行。
+    command: ""
+    danger: overwrite
+    confirmText: 这会写出一份 HTML 能耗报告（覆盖同名文件），并按默认 60 秒（或用你填的秒数）持续观测系统行为。期间请不要关机。确定继续？
+    sources:
+      - title: powercfg 官方参考 —— /energy
+        url: https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options#energy
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档：/energy Analyzes the system for common energy-efficiency and battery-life problems and generates a report, an HTML file, in the current path. The /energy option should be used when the computer is idle and has no open programs or documents. 参数：/output、/xml、/duration（默认 60 秒）、/trace、/d。
+    fields:
+      - id: energy
+        label: 生成能耗报告（/energy）
+        type: bool
+        style: flag
+        prefix: "/energy"
+        default: true
+        doc: "official #energy 的 /energy"
+      - id: output
+        label: 输出文件名（留空 = 当前目录默认名）
+        type: file
+        style: attached
+        prefix: "/output "
+        group: 输出
+        save: true
+        placeholder: 例 D:\reports\energy.html
+        doc: "official #energy 的 /output file_name；官方示例行 powercfg /energy /output \"longtrace.html\" /duration 120"
+      - id: duration
+        label: 观测多少秒（/duration）
+        type: number
+        style: attached
+        prefix: "/duration "
+        group: 输出
+        placeholder: 默认 60
+        help: 文档：/duration seconds 指定观测系统行为的秒数，默认 60。
+        doc: "official #energy 的 /duration seconds（默认 60 秒）"
+      - id: xml
+        label: 以 XML 格式输出（/xml）
+        type: bool
+        style: flag
+        prefix: "/xml"
+        group: 输出
+        advanced: true
+        default: false
+        doc: "official #energy 的 /xml"
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 未实跑：会写文件并持续观测至少 60 秒，见 NOTES.md §9.1。
+
+  # ================================================================= 修改设置
+  - id: set-active
+    category: 修改设置
+    title: 切换到指定电源方案（/setactive）
+    description: 把指定 GUID 的电源方案设为系统当前活动的方案。
+    command: ""
+    danger: overwrite
+    confirmText: 这会把系统电源方案换成你填的那个 GUID，立刻影响超时与性能行为。确定继续？
+    sources:
+      - title: powercfg 官方参考 —— /setactive 或 /S
+        url: https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options#setactive-or-s
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: '文档：/setactive or /S Makes the specified power scheme active on the system. Syntax: powercfg /setactive scheme_GUID。官方示例行 powercfg /setactive 381b4222-f694-41f0-9685-ff5bb260df2e'
+    fields:
+      - id: setActive
+        label: 切换电源方案（/setactive）
+        type: bool
+        style: flag
+        prefix: "/setactive"
+        default: true
+        doc: "official #setactive-or-s 的 /setactive"
+      - id: schemeGuid
+        label: 方案 GUID
+        type: text
+        style: positional
+        required: true
+        placeholder: 例 381b4222-f694-41f0-9685-ff5bb260df2e
+        help: GUID 由「列出所有电源方案」给出。
+        doc: "official #setactive-or-s 的 scheme_GUID 与示例行"
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 未实跑（会改系统电源方案）。是否必须提权**未实测**，见 NOTES.md §8。
+
+  # ================================================================= 修改设置
+  - id: change-timeout
+    category: 修改设置
+    title: 修改超时设置（/change）
+    description: 修改当前电源方案里的某个超时值，例如显示器关闭、硬盘关闭、待机、休眠。
+    command: ""
+    danger: overwrite
+    confirmText: 这会改写当前电源方案的超时设置，立刻生效。确定继续？
+    sources:
+      - title: powercfg 官方参考 —— /change 或 /X
+        url: https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options#change-or-x
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: '文档：/change or /X Modifies a setting value in the current power scheme. Syntax: /change setting value。setting 取值有 monitor-timeout-ac / monitor-timeout-dc / disk-timeout-ac / disk-timeout-dc / standby-timeout-ac / standby-timeout-dc / hibernate-timeout-ac / hibernate-timeout-dc。value 单位分钟。'
+    fields:
+      - id: change
+        label: 修改超时（/change）
+        type: bool
+        style: flag
+        prefix: "/change"
+        default: true
+        doc: "official #change-or-x 的 /change"
+      - id: setting
+        label: 要改哪一项
+        type: enum
+        style: positional
+        required: true
+        default: monitor-timeout-ac
+        help: 文档给出八项：-ac 是交流（插电）时，-dc 是直流（电池）时。
+        doc: "official #change-or-x 的 setting 取值列表"
+        values:
+          - value: monitor-timeout-ac
+            label: 交流：关闭显示器前的分钟数
+            isDefault: true
+          - value: monitor-timeout-dc
+            label: 电池：关闭显示器前的分钟数
+          - value: disk-timeout-ac
+            label: 交流：关闭硬盘前的分钟数
+          - value: disk-timeout-dc
+            label: 电池：关闭硬盘前的分钟数
+          - value: standby-timeout-ac
+            label: 交流：进入待机前的分钟数
+          - value: standby-timeout-dc
+            label: 电池：进入待机前的分钟数
+          - value: hibernate-timeout-ac
+            label: 交流：进入休眠前的分钟数
+          - value: hibernate-timeout-dc
+            label: 电池：进入休眠前的分钟数
+      - id: value
+        label: 分钟数
+        type: number
+        style: positional
+        required: true
+        placeholder: 例 5
+        help: 文档：value 是新的值，单位分钟。官方示例 powercfg /change monitor-timeout-ac 5。（要表示"永不"通常填 0 —— 这一点文档没写，所以本清单不替你预置。）
+        doc: "official #change-or-x 的 value 与示例行 powercfg /change monitor-timeout-ac 5"
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 未实跑（会改系统电源设置）。是否必须提权**未实测**，见 NOTES.md §8。
+
+  # ================================================================= 修改设置
+  - id: hibernate
+    category: 修改设置
+    title: 启用或禁用休眠（/hibernate）
+    description: 打开或关闭休眠功能，也可以设置休眠文件大小或类型。
+    command: ""
+    danger: overwrite
+    requiresAdmin: true
+    confirmText: 这会修改系统的休眠功能（/hibernate on|off）或休眠文件大小/类型。禁用休眠会删除 hiberfil.sys 并让"休眠"从关机菜单消失；设置 /size 低于 40% 还会改变休眠文件类型。确定继续？
+    sources:
+      - title: powercfg 官方参考 —— /hibernate 或 /H
+        url: https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options#hibernate-or-h
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档：Syntax powercfg /hibernate / powercfg /hibernate [ on | off ] / powercfg /hibernate [ /size percent_size ] / powercfg /hibernate [ /type reduced | full ]。另注：HiberFileSizePercent >= 40 视为完整休眠文件；改 reduced 前应先 /size 0。
+    fields:
+      - id: hibernate
+        label: 休眠开关
+        type: enum
+        style: literal
+        switchBase: "/hibernate"
+        default: query
+        help: 不带值的 /hibernate 会报告当前状态；on/off 直接改变功能状态。
+        doc: "official #hibernate-or-h 的三种语法（无参 / on|off / /size / /type）"
+        values:
+          - value: query
+            label: 只报告当前状态（powercfg /hibernate）
+            args: ["/hibernate"]
+            isDefault: true
+          - value: "on"
+            label: 启用休眠（/hibernate on）
+            args: ["/hibernate", "on"]
+          - value: "off"
+            label: 禁用休眠（/hibernate off）
+            args: ["/hibernate", "off"]
+      - id: size
+        label: 休眠文件大小百分比（/size）
+        type: number
+        style: attached
+        prefix: "/size "
+        group: 高级
+        advanced: true
+        placeholder: 默认不小于 50
+        help: 文档：/size percent_size 指定休眠文件占总内存的百分比，默认不能小于 50。文档还提到：自定义默认大小或 HiberFileSizePercent >= 40 会被视为完整休眠文件。
+        doc: "official #hibernate-or-h 的 /size percent_size（默认不能小于 50）"
+      - id: type
+        label: 休眠文件类型（/type）
+        type: enum
+        style: separate
+        prefix: "/type"
+        group: 高级
+        advanced: true
+        help: 文档：reduced 只支持 hiberboot；改成 reduced 前需要让系统管理默认休眠文件大小（先 /hibernate /size 0）。
+        doc: "official #hibernate-or-h 的 /type reduced | full"
+        values:
+          - value: ""
+            label: 不指定
+            isDefault: true
+          - value: reduced
+            label: reduced
+          - value: full
+            label: full
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 未实跑（会改系统休眠功能）。标 requiresAdmin 的依据：本机实测 /waketimers 与 /requests 已因权限失败，且 /h 属于会改系统状态的动作；但**官方文档未明写 /hibernate 需要提权**，见 NOTES.md §8。
+
+  # ================================================================= 修改设置
+  - id: set-value-index
+    category: 修改设置
+    title: 按 GUID 设置电源设置值（/setacvalueindex、/setdcvalueindex）
+    description: 直接按 scheme/sub/setting 三层 GUID 改一个电源设置的值。这是最底层也最容易出错的方式 —— 三层 GUID 都要从 /query 的输出里抄。
+    command: ""
+    danger: overwrite
+    confirmText: 这会直接改写指定电源设置的值（交流或电池）。三层 GUID 写错可能改到别的设置。确定继续？
+    sources:
+      - title: powercfg 官方参考 —— /setacvalueindex 与 /setdcvalueindex
+        url: https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options#setacvalueindex
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档：Syntax powercfg /setacvalueindex scheme_GUID sub_GUID setting_GUID setting_index（/setdcvalueindex 同形，只是作用于直流供电时）。官方示例 powercfg /setacvalueindex 381b4222-… 238c9fa8-… 29f6c1db-… 0
+    fields:
+      - id: power
+        label: 交流还是电池
+        type: enum
+        style: literal
+        switchBase: "/setacvalueindex"
+        default: ac
+        help: 文档把它们写成两个独立命令：/setacvalueindex（交流供电）与 /setdcvalueindex（直流/电池供电）。
+        doc: "official #setacvalueindex 与 #setdcvalueindex 两个小节"
+        values:
+          - value: ac
+            label: 交流供电时（/setacvalueindex）
+            args: ["/setacvalueindex"]
+            isDefault: true
+          - value: dc
+            label: 电池供电时（/setdcvalueindex）
+            args: ["/setdcvalueindex"]
+      - id: schemeGuid
+        label: 方案 GUID
+        type: text
+        style: positional
+        required: true
+        placeholder: 例 381b4222-f694-41f0-9685-ff5bb260df2e
+        doc: "official #setacvalueindex 的 scheme_GUID（由 powercfg /list 得到）"
+      - id: subGuid
+        label: 子组 GUID
+        type: text
+        style: positional
+        required: true
+        placeholder: 例 238c9fa8-0aad-41ed-83f4-97be242c8f20
+        doc: "official #setacvalueindex 的 sub_GUID（由 powercfg /query 得到）"
+      - id: settingGuid
+        label: 设置 GUID
+        type: text
+        style: positional
+        required: true
+        placeholder: 例 29f6c1db-86da-48c5-9fdb-f2b67b1f44da
+        doc: "official #setacvalueindex 的 setting_GUID（由 powercfg /query 得到）"
+      - id: valueIndex
+        label: 值索引
+        type: number
+        style: positional
+        required: true
+        placeholder: 例 0
+        help: 文档：setting_index 指定该设置要设成哪个可能值；可能值列表由 powercfg /query 给出。
+        doc: "official #setacvalueindex 的 setting_index（可能值由 powercfg /query 给出）"
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 未实跑（会改系统电源设置）。是否必须提权**未实测**，见 NOTES.md §8。

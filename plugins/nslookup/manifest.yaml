@@ -1,0 +1,235 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# nslookup —— Windows 自带的 DNS 查询工具（C:\Windows\System32\nslookup.exe）。
+#
+# 参数知识来源：
+#   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/nslookup
+#      离线快照 docs/reference/win-docs/nslookup.html
+#      该页把可用的子命令与 set 选项写成一行一行的表格（nslookup set type 等），本清单据此取开关。
+#   2) 本机 `nslookup /?` 的真实输出：docs/reference/win-help/nslookup.txt（不入库，见 .gitignore）
+#
+# **这个工具的 /? 与真实输出行为要特别注意（都实测过，见 NOTES.md §7）**：
+#   - `nslookup /?` 的帮助**写在 stderr**（stdout 为 0 字节），退出码 1 —— 与其他命令相反；
+#   - 加了 `-type=` 之后，不在默认服务器上查到的记录类型会在 **stderr** 打印一行
+#     `*** 没有 xxx 可以使用的 IPv6 address (AAAA)记录`，而命令本身仍返回 0；
+#   - 不带参数运行会进入**交互模式**（打印 `>` 提示符后就等着输入），所以本清单不提供"无参数"动作。
+#
+# 版本：Windows 自带命令没有 --version 开关，故不写 versionArgs/versionPattern（R1）。
+# 编码：实测原始字节（含 stderr）为 OEM 代码页 936，见 NOTES.md §5。
+
+spec: 1
+id: nslookup
+name: nslookup
+manifestVersion: 0.1.0
+appVersion: Windows 10/11 自带（随系统版本发布）
+description: 查询 DNS 域名与地址记录。可以指定查询的记录类型（A / AAAA / MX / NS / TXT 等）与要使用的 DNS 服务器。Windows 自带，无需安装。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/nslookup
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 网络, DNS, 解析]
+
+sources:
+  - title: nslookup 命令官方参考（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/nslookup
+    retrieved: "2026-09-27"
+    appliesTo: Windows 10/11
+    note: 离线快照 docs/reference/win-docs/nslookup.html。页面用表格逐条列出子命令（nslookup exit / ls / server / set …）与 set 选项（set type / set debug / set timeout / set retry …）。
+  - title: 本机 `nslookup /?` 的真实输出快照
+    url: file:///D:/AI/swpj/docs/reference/win-help/nslookup.txt
+    retrieved: "2026-09-27"
+    appliesTo: Windows 11 26200 / nslookup.exe 文件版本 10.0.26100.8521
+    note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。这份快照揭示了两个关键行为：帮助走 stderr；以及 `-opt ...` 的用法行。
+
+locate:
+  executable: nslookup.exe
+  searchPaths:
+    - "%SystemRoot%\\System32"
+  notFoundHint: nslookup.exe 是 Windows 自带命令，正常情况下都在 C:\Windows\System32 下。也可考虑用 PowerShell 的 Resolve-DnsName。
+
+runtime:
+  encoding: oem
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  usePseudoConsole: false
+
+# 退出码：微软的 nslookup 文档没有退出码章节（已核对）。下面来自实测，见 NOTES.md §4。
+# 特别注意：**查询成功但记录类型不存在时仍返回 0**（例如 -type=AAAA 查只有 IPv4 的名字），
+# 只在 stderr 打印一行 *** 说明。所以"退出码 0"不等于"查到了记录"。
+exitCodes:
+  # 块式写法，理由见 plugins/ping/manifest.yaml 的同一处注释。
+  - code: 0
+    meaning: 查询完成（即使没有该类型的记录、或域名不存在，也返回 0，详情要看输出文本）
+    severity: ok
+  - code: 1
+    meaning: 用法错误，或本身就是 /? 帮助输出（实测 nslookup /? 退出码为 1）
+    severity: error
+
+actions:
+
+  # ================================================================= 解析
+  - id: query
+    category: 解析
+    title: 查询域名
+    description: 用系统默认 DNS 服务器查询一个域名或 IP 地址。最常用的一条。
+    command: ""
+    sources:
+      - title: nslookup 官方参考 —— 语法行（host / host server）与 set type
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/nslookup#syntax
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 本机 /? 快照 docs/reference/win-help/nslookup.txt 的四行用法
+    fields:
+      - id: host
+        label: 要查询的域名或地址
+        type: text
+        style: positional
+        required: true
+        placeholder: 例 example.com / 127.0.0.1
+        help: 文档把这一项写作 host。
+        doc: "official #syntax 的 nslookup [-opt ...] host（本机 /? 快照的 host）"
+      - id: server
+        label: 指定 DNS 服务器（留空 = 系统默认）
+        type: text
+        style: positional
+        placeholder: 例 8.8.8.8 / 1.1.1.1
+        help: 文档语法：nslookup [-opt ...] host server，服务器是第二个位置参数。
+        doc: "official #syntax 的 nslookup [-opt ...] host server（本机 /? 快照的 host server）"
+      - id: recordType
+        label: 记录类型
+        type: enum
+        style: attached
+        prefix: "-type"
+        separator: "="
+        group: 记录类型
+        switchBase: "-type"
+        help: 对应文档里的 nslookup set type（等价写法 -querytype / -type）。不选则不指定，用服务器默认。
+        doc: "official 页面表格的 nslookup set type / nslookup set querytype；示例行 nslookup -type=AAAA mydomain.com"
+        values:
+          - value: ""
+            label: 不指定（服务器默认）
+            isDefault: true
+          - value: A
+            label: A —— IPv4 地址
+          - value: AAAA
+            label: AAAA —— IPv6 地址
+          - value: CNAME
+            label: CNAME —— 别名
+          - value: MX
+            label: MX —— 邮件交换
+          - value: NS
+            label: NS —— 名称服务器
+          - value: SOA
+            label: SOA —— 起始授权机构
+          - value: TXT
+            label: TXT —— 文本记录
+          - value: PTR
+            label: PTR —— 反向解析指针
+    examples:
+      - title: 查询本机名字
+        args: ["localhost"]
+      - title: 用指定服务器查 A 记录
+        args: ["-type=A", "example.com", "1.1.1.1"]
+
+  # ================================================================= 解析
+  - id: query-verbose
+    category: 解析
+    title: 查询并显示调试信息
+    description: 打开调试模式，打印每个数据包的字段，用于排查 DNS 服务器行为异常。
+    command: ""
+    sources:
+      - title: nslookup 官方参考 —— nslookup set debug
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/nslookup
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档示例行有 nslookup -debug mydomain.com；表格里有 nslookup set debug
+    fields:
+      - id: host
+        label: 要查询的域名或地址
+        type: text
+        style: positional
+        required: true
+        doc: "official #syntax 的 host"
+      - id: server
+        label: 指定 DNS 服务器（留空 = 系统默认）
+        type: text
+        style: positional
+        doc: "official #syntax 的 host server"
+      - id: debug
+        label: 调试模式（-debug）
+        type: bool
+        style: flag
+        prefix: "-debug"
+        default: true
+        help: 对应文档里的 nslookup set debug（"-debug" 是指定选项时逐条的写法）。
+        doc: "official 表格的 nslookup set debug；示例行 nslookup -debug mydomain.com"
+      - id: recordType
+        label: 记录类型
+        type: enum
+        style: attached
+        prefix: "-type"
+        separator: "="
+        group: 记录类型
+        switchBase: "-type"
+        doc: "official 表格的 nslookup set type；示例行 nslookup -debug -type=A+AAAA -nosearch -recurse mydomain.com 1.1.1.1"
+        values:
+          - value: ""
+            label: 不指定（服务器默认）
+            isDefault: true
+          - value: A
+            label: A —— IPv4 地址
+          - value: AAAA
+            label: AAAA —— IPv6 地址
+          - value: MX
+            label: MX —— 邮件交换
+          - value: NS
+            label: NS —— 名称服务器
+          - value: TXT
+            label: TXT —— 文本记录
+
+  # ================================================================= 解析
+  - id: query-timeout
+    category: 解析
+    # 这一条把 set timeout / set retry 暴露出来：文档表格里是 nslookup set timeout 与 nslookup set retry。
+    title: 查询并调整超时与重试
+    description: 自定义等待回复的秒数与重试次数。网络慢或 DNS 服务器不稳时用。
+    command: ""
+    sources:
+      - title: nslookup 官方参考 —— nslookup set timeout / set retry
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/nslookup
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 表格里两条：nslookup set timeout（Changes the initial number of seconds to wait for a reply）与 nslookup set retry（Sets the number of retries）
+    fields:
+      - id: host
+        label: 要查询的域名或地址
+        type: text
+        style: positional
+        required: true
+        doc: "official #syntax 的 host"
+      - id: server
+        label: 指定 DNS 服务器（留空 = 系统默认）
+        type: text
+        style: positional
+        doc: "official #syntax 的 host server"
+      - id: timeout
+        label: 等待回复的秒数（-timeout）
+        type: number
+        style: attached
+        prefix: "-timeout"
+        separator: "="
+        group: 超时与重试
+        switchBase: "-timeout"
+        placeholder: 默认 5
+        doc: "official 表格的 nslookup set timeout（-timeout= 是指定选项时的等价写法）"
+      - id: retry
+        label: 重试次数（-retry）
+        type: number
+        style: attached
+        prefix: "-retry"
+        separator: "="
+        group: 超时与重试
+        switchBase: "-retry"
+        placeholder: 默认 4
+        doc: "official 表格的 nslookup set retry（-retry= 是指定选项时的等价写法）"

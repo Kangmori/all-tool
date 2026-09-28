@@ -1,0 +1,269 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# chkdsk —— Windows 自带的磁盘检查工具（C:\Windows\System32\chkdsk.exe）。
+#
+# 参数知识来源：
+#   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/chkdsk
+#      离线快照 docs/reference/win-docs/chkdsk.html
+#   2) 本机 `chkdsk /?` 的真实输出：docs/reference/win-help/chkdsk.txt（不入库，见 .gitignore）
+#
+# **管理员权限（本工具包的重点）**：
+#   - 官方文档 #understanding-exit-codes 一节写明：**必须是管理员**，且必须从提升的命令提示符里运行。
+#   - 本机实测：**当前账号不是管理员，连只读的 `chkdsk`（不带任何开关）都直接失败**，
+#     输出"访问被拒绝，因为你没有足够的权限，或该磁盘可能被另一个进程锁定…"，退出码 3。
+#     也就是说在这个账号下，本工具包的任何动作都跑不通 —— 这是环境事实，不是清单问题。
+#   - 本清单给会改盘的动作（/f /r /x /b /spotfix /offlinescanandfix /sdcleanup /scan）标了 requiresAdmin，
+#     只读的默认检查不标（它本身没有提升需求，只是当前账号权限不够）。
+#
+# **绝不实跑**：/f、/r、/x、/b、/spotfix、/offlinescanandfix 会改磁盘数据，本批一律未跑（见 NOTES.md §9.1）。
+#
+# 版本：Windows 自带命令没有 --version 开关，故不写 versionArgs/versionPattern（R1）。
+# 编码：实测原始字节为 OEM 代码页 936，见 NOTES.md §5。
+
+spec: 1
+id: chkdsk
+name: chkdsk
+manifestVersion: 0.1.0
+appVersion: Windows 10/11 自带（随系统版本发布）
+description: 检查磁盘卷的文件系统与扇区，并显示状态报告；可用开关修复错误、恢复坏扇区上的可读信息。Windows 自带，无需安装。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/chkdsk
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 磁盘, 维护, 修复, 需要管理员]
+
+sources:
+  - title: chkdsk 命令官方参考（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/chkdsk
+    retrieved: "2026-09-27"
+    appliesTo: Windows 10/11
+    note: 离线快照 docs/reference/win-docs/chkdsk.html。语法行列出全部开关；#understanding-exit-codes 一节给出退出码表并说明"必须是管理员"。
+  - title: 本机 `chkdsk /?` 的真实输出快照
+    url: file:///D:/AI/swpj/docs/reference/win-help/chkdsk.txt
+    retrieved: "2026-09-27"
+    appliesTo: Windows 11 26200 / chkdsk.exe 文件版本 10.0.26100.1150
+    note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。注意：**`chkdsk /?` 自身的退出码是 3**（不是 0/1），这是本机实测的事实。
+
+locate:
+  executable: chkdsk.exe
+  searchPaths:
+    - "%SystemRoot%\\System32"
+  notFoundHint: chkdsk.exe 是 Windows 自带命令，正常情况下都在 C:\Windows\System32 下。
+
+runtime:
+  encoding: oem
+  useShell: false
+  # 工具包级默认不要求提权：只读检查本身不需要（但当前账号权限不足，见文件头）。
+  # 会改盘的动作在各自动作上标 requiresAdmin: true。
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  usePseudoConsole: false
+
+# 退出码：**这一组是官方文档里明确定义的**（#understanding-exit-codes 一节），不是实测推断。
+# 原文：0 No errors were found. / 1 Errors were found and fixed. /
+#       2 Performed disk cleanup (such as garbage collection) or didn't perform cleanup because /f was not specified. /
+#       3 Could not check the disk, errors could not be fixed, or errors were not fixed because /f was not specified.
+exitCodes:
+  # 块式写法，理由见 plugins/ping/manifest.yaml 的同一处注释。
+  - code: 0
+    meaning: 没有发现错误（官方文档）
+    severity: ok
+  - code: 1
+    meaning: 发现错误并已修复（官方文档）
+    severity: warning
+  - code: 2
+    meaning: 执行了磁盘清理（如垃圾回收），或因为没指定 /f 而没有清理（官方文档）
+    severity: warning
+  - code: 3
+    meaning: 无法检查磁盘、错误无法修复，或因为没指定 /f 而没有修复（官方文档）。实测当前非管理员账号下运行只读 chkdsk 就返回 3。
+    severity: error
+
+actions:
+
+  # ================================================================= 只读检查
+  - id: check
+    category: 只读检查
+    title: 检查卷并显示状态报告（只读）
+    description: 不带任何开关运行，只报告问题、不做修复。**官方文档明确要求管理员权限**；实测非管理员账号下会直接以"访问被拒绝"失败（退出码 3）。
+    command: ""
+    sources:
+      - title: chkdsk 官方参考 —— 语法与退出码
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/chkdsk#understanding-exit-codes
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 本机 /? 快照 docs/reference/win-help/chkdsk.txt 的用法行（"检查磁盘并显示状态报告"）
+    fields:
+      - id: volume
+        label: 卷（驱动器号、装入点或卷名）
+        type: text
+        style: positional
+        placeholder: '留空 = 当前卷；例 C: 或 D:'
+        help: 文档：指定驱动器号（后面跟一个冒号）、装入点或卷名。留空时 chkdsk 检查当前工作目录所在的卷。
+        doc: "official #parameters 的 <volume>；本机 /? 快照的 volume 一行"
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测（非管理员）返回退出码 3 与"访问被拒绝"提示。要真的检查请用「文件 → 以管理员身份重新启动」。
+    examples:
+      - title: 只读检查本卷（不带任何开关）
+        args: []
+        expectExitCode: 3
+
+  # ================================================================= 修复
+  - id: fix
+    category: 修复
+    title: 修复磁盘错误（/f）
+    description: 修复卷上的错误。文档与帮助都写明：磁盘必须能被锁定（占用中的系统卷会被要求在下次重启时检查）。
+    command: ""
+    danger: overwrite
+    requiresAdmin: true
+    confirmText: 这会真的修改文件系统结构来修复错误。系统卷通常无法立即锁定，chkdsk 会提示"是否在下次重启时检查"，那意味着重启时才动手。确定继续？
+    sources:
+      - title: chkdsk 官方参考 —— /f 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/chkdsk#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档原文：Fixes errors on the disk. The disk must be locked. If chkdsk can't lock the drive, a message appears that asks you if you want to check the drive the next time you restart the computer.
+    fields:
+      - id: volume
+        label: 卷
+        type: text
+        style: positional
+        required: true
+        placeholder: '例 C: 或 D:'
+        doc: "official #parameters 的 <volume>；本机 /? 快照的 volume"
+      - id: fix
+        label: 修复错误（/f）
+        type: bool
+        style: flag
+        prefix: "/f"
+        default: true
+        doc: "official #parameters 的 /f；本机 /? 快照的 /F"
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 未实跑（会改盘、且需要管理员）。见 NOTES.md §9.1。
+    examples:
+      - title: 检查 D 盘并修复（需要管理员，未实跑）
+        args: ["D:", "/f"]
+
+  # ================================================================= 修复
+  - id: recover
+    category: 修复
+    title: 查找坏扇区并恢复可读信息（/r）
+    description: 扫描坏扇区并尝试恢复可读信息。/r 隐含 /f。耗时很长（按磁盘容量可能数小时）。
+    command: ""
+    danger: overwrite
+    requiresAdmin: true
+    confirmText: /r 会逐扇区扫描整个卷并隐含 /f（真的会改文件系统）。大容量磁盘可能耗时数小时。系统卷通常要在下次重启时才执行。确定继续？
+    sources:
+      - title: chkdsk 官方参考 —— /r 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/chkdsk#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档原文：Locates bad sectors and recovers readable information. The disk must be locked. /r includes the functionality of /f, with the additional …（本机 /? 同义）
+    fields:
+      - id: volume
+        label: 卷
+        type: text
+        style: positional
+        required: true
+        doc: "official #parameters 的 <volume>；本机 /? 快照的 volume"
+      - id: recover
+        label: 查找坏扇区并恢复（/r）
+        type: bool
+        style: flag
+        prefix: "/r"
+        default: true
+        help: 本机帮助与官方文档都注明 /r 隐含 /f。
+        doc: "official #parameters 的 /r；本机 /? 快照的 /R（未指定 /scan 时隐含 /F）"
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 未实跑（会改盘、耗时长、且需要管理员）。见 NOTES.md §9.1。
+
+  # ================================================================= 修复
+  - id: force-dismount
+    category: 修复
+    title: 强制卸除卷并修复（/x）
+    description: 必要时先强制卸除卷，使所有打开句柄失效，然后修复。/x 隐含 /f。
+    command: ""
+    danger: destructive
+    requiresAdmin: true
+    confirmText: 这个动作会强制卸除卷：该卷上所有打开的句柄立即失效，正在用这个卷的程序可能报错或丢数据。/x 还隐含 /f。确定继续？
+    sources:
+      - title: chkdsk 官方参考 —— /x 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/chkdsk#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档原文：Forces the volume to dismount first, if necessary. All open handles to the drive are invalidated. /x also includes the functionality of /f.
+    fields:
+      - id: volume
+        label: 卷
+        type: text
+        style: positional
+        required: true
+        doc: "official #parameters 的 <volume>；本机 /? 快照的 volume"
+      - id: dismount
+        label: 强制卸除并修复（/x）
+        type: bool
+        style: flag
+        prefix: "/x"
+        default: true
+        doc: "official #parameters 的 /x；本机 /? 快照的 /X（隐含 /F）"
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 未实跑（破坏性且需要管理员）。见 NOTES.md §9.1。
+
+  # ================================================================= 联机扫描
+  - id: scan
+    category: 联机扫描
+    title: 联机扫描卷（/scan，仅 NTFS）
+    description: 在卷保持挂载的状态下做联机扫描。找到的问题默认排队等脱机修复。
+    command: ""
+    requiresAdmin: true
+    sources:
+      - title: chkdsk 官方参考 —— /scan 与 /perf /forceofflinefix
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/chkdsk#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档：/scan Use with NTFS only. Runs an online scan on the volume. /perf Use with NTFS only (must be used with /scan). /forceofflinefix Use with NTFS only (must be used with /scan).
+    fields:
+      - id: volume
+        label: 卷（仅 NTFS）
+        type: text
+        style: positional
+        required: true
+        doc: "official #parameters 的 <volume>；本机 /? 快照的 volume"
+      - id: scan
+        label: 联机扫描（/scan）
+        type: bool
+        style: flag
+        prefix: "/scan"
+        default: true
+        doc: "official #parameters 的 /scan；本机 /? 快照的 /scan（仅 NTFS）"
+      - id: forceOfflineFix
+        label: 跳过联机修复，全部排队脱机修复（/forceofflinefix）
+        type: bool
+        style: flag
+        prefix: "/forceofflinefix"
+        group: 高级
+        advanced: true
+        default: false
+        help: 文档：必须与 /scan 一起使用。跳过所有联机修复，发现的问题全部排队等脱机修复。
+        doc: "official #parameters 的 /forceofflinefix；本机 /? 快照的 /forceofflinefix（必须与 /scan 一起使用）"
+      - id: perf
+        label: 使用更多资源加速扫描（/perf）
+        type: bool
+        style: flag
+        prefix: "/perf"
+        group: 高级
+        advanced: true
+        default: false
+        help: 文档：必须与 /scan 一起使用。会占用更多系统资源，可能影响同时运行的其它任务。
+        doc: "official #parameters 的 /perf；本机 /? 快照的 /perf（必须与 /scan 一起使用）"
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 未实跑（需要管理员）。见 NOTES.md §9.1。

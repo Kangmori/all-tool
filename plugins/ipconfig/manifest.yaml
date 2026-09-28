@@ -1,0 +1,335 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# ipconfig —— Windows 自带的 IP 配置查看工具（C:\Windows\System32\ipconfig.exe）。
+#
+# 参数知识来源：
+#   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ipconfig
+#      离线快照 docs/reference/win-docs/ipconfig.html
+#   2) 本机 `ipconfig /?` 的真实输出：docs/reference/win-help/ipconfig.txt（不入库，见 .gitignore）
+#
+# **管理员权限**：官方文档与 `/?` 都没有明说哪些开关要提权，但实测与常识都指向
+# /release、/renew、/renew6、/release6、/registerdns、/flushdns、/setclassid 这几条会改动系统状态。
+# 本清单**只给有官方文字依据的动作标 requiresAdmin**，其余在 NOTES.md §8 里逐条写明"未实测"。
+# 本机当前账号不是管理员，这些动作一律未实跑（见 NOTES.md §9）。
+#
+# 版本：Windows 自带命令没有 --version 开关，故不写 versionArgs/versionPattern（R1）。
+# 编码：实测原始字节为 OEM 代码页 936，见 NOTES.md §5。
+
+spec: 1
+id: ipconfig
+name: ipconfig
+manifestVersion: 0.1.0
+appVersion: Windows 10/11 自带（随系统版本发布）
+description: 显示与刷新 TCP/IP 配置：IP 地址、子网掩码、默认网关、DNS 客户端缓存。Windows 自带，无需安装。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ipconfig
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 网络, 地址信息, DNS]
+
+sources:
+  - title: ipconfig 命令官方参考（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ipconfig
+    retrieved: "2026-09-27"
+    appliesTo: Windows 10/11
+    note: 离线快照 docs/reference/win-docs/ipconfig.html。参数表在 #parameters，含 /all /displaydns /flushdns /registerdns /release /release6 /renew /renew6 /setclassid /showclassid。
+  - title: 本机 `ipconfig /?` 的真实输出快照
+    url: file:///D:/AI/swpj/docs/reference/win-help/ipconfig.txt
+    retrieved: "2026-09-27"
+    appliesTo: Windows 11 26200 / ipconfig.exe 文件版本 10.0.26100.8521
+    note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。注意 /? 里还列了 /allcompartments 与 /showclassid6 /setclassid6，官方网页的语法行里没有 /allcompartments —— 见 NOTES.md §7 的来源冲突记录。
+
+locate:
+  executable: ipconfig.exe
+  searchPaths:
+    - "%SystemRoot%\\System32"
+  notFoundHint: ipconfig.exe 是 Windows 自带命令，正常情况下都在 C:\Windows\System32 下。
+
+runtime:
+  encoding: oem
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  usePseudoConsole: false
+
+# 退出码：微软的 ipconfig 文档没有退出码章节（已核对）。下面来自实测，见 NOTES.md §4。
+exitCodes:
+  # 块式写法，理由见 plugins/ping/manifest.yaml 的同一处注释。
+  - code: 0
+    meaning: 成功
+    severity: ok
+  - code: 1
+    meaning: 用法错误（例如参数不认识），或本身就是 /? 帮助输出（实测 ipconfig /? 退出码为 1）
+    severity: error
+
+actions:
+
+  # ================================================================= 地址信息
+  - id: show
+    category: 地址信息
+    title: 查看 IP 配置
+    description: 显示每个已绑定 TCP/IP 的适配器的 IP 地址、子网掩码与默认网关。不带任何开关。
+    command: ""
+    sources:
+      - title: ipconfig 官方参考 —— 默认行为与语法
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ipconfig#syntax
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 本机 /? 快照 docs/reference/win-help/ipconfig.txt（"默认情况下，仅显示绑定到 TCP/IP 的每个适配器的…"）
+    fields: []
+    examples:
+      - title: 查看简要配置
+        args: []
+
+  # ================================================================= 地址信息
+  - id: show-all
+    category: 地址信息
+    title: 查看完整配置（/all）
+    description: 显示所有适配器的完整 TCP/IP 配置，含主机名、DNS 后缀、MAC 地址、DHCP 与 DNS 服务器。排查网络问题的第一步。
+    command: ""
+    sources:
+      - title: ipconfig 官方参考 —— /all 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ipconfig#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 本机 /? 快照的 /all 一行
+    fields:
+      - id: all
+        label: 显示完整配置（/all）
+        type: bool
+        style: flag
+        prefix: "/all"
+        default: true
+        doc: "official #parameters 的 /all；本机 /? 快照 /all"
+      - id: allCompartments
+        label: 包含所有隔离舱（/allcompartments）
+        type: bool
+        style: flag
+        prefix: "/allcompartments"
+        group: 高级
+        advanced: true
+        default: false
+        help: 显示所有网络隔离舱的信息。容器的网络配置才需要它。
+        doc: "本机 /? 快照 ipconfig.txt 的 /allcompartments（官方网页的语法行未列该开关，见 NOTES.md §7）"
+    examples:
+      - title: 查看完整配置
+        args: ["/all"]
+
+  # ================================================================= DNS
+  - id: show-dns-cache
+    category: DNS
+    title: 查看 DNS 缓存内容（/displaydns）
+    description: 列出 DNS 客户端解析程序缓存里的记录，含本机 hosts 文件预加载的条目。
+    command: ""
+    sources:
+      - title: ipconfig 官方参考 —— /displaydns 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ipconfig#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 本机 /? 快照的 /displaydns 一行
+    fields:
+      - id: displaydns
+        label: 显示 DNS 缓存（/displaydns）
+        type: bool
+        style: flag
+        prefix: "/displaydns"
+        default: true
+        doc: "official #parameters 的 /displaydns；本机 /? 快照 /displaydns"
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测本机这份输出有 1.6 MB（缓存条目多）。宿主会按上限截断但仍如实计数。
+    examples:
+      - title: 查看 DNS 缓存
+        args: ["/displaydns"]
+
+  # ================================================================= DNS
+  - id: flush-dns
+    category: DNS
+    title: 清空 DNS 缓存（/flushdns）
+    description: 清空并重置 DNS 客户端解析程序缓存。换了 DNS 服务器或改了 hosts 之后常用。
+    command: ""
+    danger: overwrite
+    requiresAdmin: true
+    confirmText: 这会清空本机 DNS 解析缓存，正在进行的解析会重新查询 DNS 服务器。确定继续？
+    sources:
+      - title: ipconfig 官方参考 —— /flushdns 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ipconfig#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 本机 /? 快照的 /flushdns 一行（"清除 DNS 解析程序缓存"）
+    fields:
+      - id: flushdns
+        label: 清空 DNS 缓存（/flushdns）
+        type: bool
+        style: flag
+        prefix: "/flushdns"
+        default: true
+        doc: "official #parameters 的 /flushdns；本机 /? 快照 /flushdns"
+
+  # ================================================================= DNS
+  - id: register-dns
+    category: DNS
+    title: 重新注册 DNS 名称（/registerdns）
+    description: 刷新所有 DHCP 租用并重新注册 DNS 名称。加域机器改名后常用。
+    command: ""
+    danger: overwrite
+    requiresAdmin: true
+    confirmText: 这会刷新所有 DHCP 租约并重新向 DNS 服务器注册本机名称，可能短暂影响网络。确定继续？
+    sources:
+      - title: ipconfig 官方参考 —— /registerdns 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ipconfig#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 本机 /? 快照的 /registerdns 一行
+    fields:
+      - id: registerdns
+        label: 重新注册 DNS（/registerdns）
+        type: bool
+        style: flag
+        prefix: "/registerdns"
+        default: true
+        doc: "official #parameters 的 /registerdns；本机 /? 快照 /registerdns"
+
+  # ================================================================= 地址信息
+  - id: release
+    category: 地址信息
+    title: 释放 DHCP 地址（/release）
+    description: 向 DHCP 服务器发送 DHCPRELEASE，释放并丢弃当前 IPv4 地址租约。
+    command: ""
+    danger: overwrite
+    requiresAdmin: true
+    confirmText: 释放 DHCP 租约会立刻断开这个适配器的 IPv4 网络（直到重新获取地址）。确定继续？
+    sources:
+      - title: ipconfig 官方参考 —— /release 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ipconfig#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 本机 /? 快照的 /release 一行，另注明"如果未指定适配器名称，则会释放…所有…适配器"
+    fields:
+      - id: adapter
+        label: 适配器（留空 = 全部）
+        type: text
+        style: positional
+        placeholder: 例 "以太网"，可用通配符 * 与 ?
+        help: 连接名称。留空表示对所有绑定 TCP/IP 的适配器操作。含空格时要用引号包住。
+        doc: 'official #parameters 的 /release [<adapter>]；本机 /? 快照的 「adapter 连接名称（允许使用通配符 * 和 ?）」'
+
+  # ================================================================= 地址信息
+  - id: renew
+    category: 地址信息
+    title: 更新 DHCP 地址（/renew）
+    description: 为适配器续租 IPv4 地址。释放之后用这条拿回地址。
+    command: ""
+    danger: overwrite
+    requiresAdmin: true
+    confirmText: 续租会先与 DHCP 服务器重新协商地址，过程中该适配器可能短暂中断。确定继续？
+    sources:
+      - title: ipconfig 官方参考 —— /renew 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ipconfig#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 本机 /? 快照的 /renew 一行
+    fields:
+      - id: adapter
+        label: 适配器（留空 = 全部）
+        type: text
+        style: positional
+        placeholder: 例 "以太网"，可用通配符 * 与 ?
+        doc: "official #parameters 的 /renew [<adapter>]；本机 /? 快照的 adapter 一行"
+
+  # ================================================================= 地址信息
+  - id: release6
+    category: 地址信息
+    title: 释放 DHCPv6 地址（/release6）
+    description: 向 DHCPv6 服务器发送 DHCPRELEASE，释放当前 IPv6 地址租约。
+    command: ""
+    danger: overwrite
+    requiresAdmin: true
+    confirmText: 释放 DHCPv6 租约会断开这个适配器的 IPv6 网络。确定继续？
+    sources:
+      - title: ipconfig 官方参考 —— /release6 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ipconfig#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 本机 /? 快照的 /release6 一行
+    fields:
+      - id: adapter
+        label: 适配器（留空 = 全部）
+        type: text
+        style: positional
+        doc: "official #parameters 的 /release6[<adapter>]；本机 /? 快照的 /release6 一行"
+
+  # ================================================================= 地址信息
+  - id: renew6
+    category: 地址信息
+    title: 更新 DHCPv6 地址（/renew6）
+    description: 为适配器续租 IPv6 地址。
+    command: ""
+    danger: overwrite
+    requiresAdmin: true
+    confirmText: 续租 IPv6 地址会与 DHCPv6 服务器重新协商，过程中可能短暂中断。确定继续？
+    sources:
+      - title: ipconfig 官方参考 —— /renew6 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ipconfig#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 本机 /? 快照的 /renew6 一行
+    fields:
+      - id: adapter
+        label: 适配器（留空 = 全部）
+        type: text
+        style: positional
+        doc: "official #parameters 的 /renew6 [<adapter>]；本机 /? 快照的 /renew6 一行"
+
+  # ================================================================= DHCP 类 ID
+  - id: show-class-id
+    category: DHCP 类 ID
+    title: 查看 DHCP 类 ID（/showclassid）
+    description: 显示指定适配器允许的所有 DHCP 类 ID。
+    command: ""
+    sources:
+      - title: ipconfig 官方参考 —— /showclassid 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ipconfig#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 本机 /? 快照的 /showclassid 一行
+    fields:
+      - id: adapter
+        label: 适配器
+        type: text
+        style: positional
+        required: true
+        placeholder: 例 Local* （用 * 表示全部）
+        help: 文档说明：要对所有适配器操作，用星号。
+        doc: "official #parameters 的 /showclassid <adapter>；本机 /? 快照的 /showclassid adapter"
+
+  # ================================================================= DHCP 类 ID
+  - id: set-class-id
+    category: DHCP 类 ID
+    title: 设置 DHCP 类 ID（/setclassid）
+    description: 为适配器设置 DHCP 类 ID。不填类 ID 则删除现有的类 ID。
+    command: ""
+    danger: overwrite
+    confirmText: 这会修改适配器的 DHCP 类 ID，影响它向 DHCP 服务器请求的选项。确定继续？
+    sources:
+      - title: ipconfig 官方参考 —— /setclassid 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ipconfig#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 本机 /? 快照的 /setclassid 一行，另注明"如果未指定 ClassId，则会删除 ClassId"
+    fields:
+      - id: adapter
+        label: 适配器
+        type: text
+        style: positional
+        required: true
+        placeholder: 例 Local* （用 * 表示全部）
+        doc: "official #parameters 的 /setclassid <adapter>[<classID>]；本机 /? 快照"
+      - id: classId
+        label: 类 ID（留空 = 删除）
+        type: text
+        style: positional
+        placeholder: 例 TEST
+        help: 留空等价于删除这个适配器的类 ID（官方文档明确这么写）。
+        doc: 'official #parameters 的 /setclassid <adapter>[<classID>]；本机 /? 快照的 「如果未指定 ClassId，则会删除 ClassId」'

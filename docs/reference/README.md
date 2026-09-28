@@ -34,7 +34,22 @@ docs/reference/
     exit_codes.md             退出码
   7zip-switch-matrix.json     从上述文档提取的"命令 × 可用开关"矩阵（供 CI 校验）
   7zip-chm/                   反编译的原始 HTML（已被 .gitignore 忽略，可重新生成）
+  win-docs/                   Windows 自带命令的官方文档快照（Microsoft Learn）
+    ping.html 等 13 个 HTML    12 个命令的参考页 + cleanmgr 的补充文档 + powercfg（它在另一个目录下）
+    _switches.json            从上述 HTML 提取的"开关表 + 小节锚点"（机器可读）
+  win-help/                   Windows 自带命令的 `/?` 帮助快照（**已 .gitignore，不入库**）
+    _meta.json                抓取时间、每个命令的 exe 路径/文件版本/退出码/所在流/字节数/编码判定
+    _probe.json               真实输出（不是 `/?`）的编码与退出码实测
+    <命令>.txt                每个命令的 `/?` 输出（含 stdout 与 stderr 两段）
+  win-commands-shared.md      Windows 自带命令工具包的**共用事实与实测记录**（编码、退出码、坑、规范缺口）
 ```
+
+## 关于 Windows 自带命令这批工具包
+
+12 个包（ping / ipconfig / tracert / nslookup / netstat / tasklist / systeminfo / chkdsk / sfc /
+robocopy / cleanmgr / powercfg）的**公共结论**（编码、退出码语义、`/?` 的各种形态、
+宿主与规范的缺口）统一写在 `win-commands-shared.md`；每个包自己的 `plugins/<id>/NOTES.md`
+只写该包特有的内容。
 
 ## 如何重新生成
 
@@ -111,6 +126,47 @@ pwsh -File scripts/fetch-uv-help.ps1
 0.11.15 上前者是 21 个、后者是 22 个（多了 `generate-shell-completion`）。
 判断"有哪些命令"时两个都看一下。
 
+### Windows 自带命令（win-docs / win-help）
+
+两类来源都要抓，分工是：
+
+- **官方文档（Microsoft Learn）** → `win-docs/*.html`，**入库**。字段的 `doc:` 指向它的锚点。
+- **本机 `/?` 输出** → `win-help/*.txt`，**不入库**（`.gitignore`：微软文本 + 可秒级再生）。
+  用途是核对"官方文档与已安装版本是否一致"（`netstat` 的 `-d` 重复、`tasklist` 的 `/APPS`、
+  `ipconfig` 的 `/allcompartments` 都是这样发现的）。
+
+```powershell
+# 1. `/?` 帮助快照（每个命令有 8 秒超时保护 —— cleanmgr /? 会弹 GUI 并永久等待，没保护会挂死）
+pwsh -File scripts/fetch-win-help.ps1
+#    只抓某几个：pwsh -File scripts/fetch-win-help.ps1 -Commands ping,netstat
+
+# 2. 真实输出（不是 /?）的编码与退出码实测 → win-help/_probe.json
+pwsh -File scripts/probe-win-output.ps1
+
+# 3. 官方文档。**必须用 Invoke-WebRequest**（web_fetch 因 fake-ip DNS 不可用，见 development.md §4.4）
+$out = 'docs/reference/win-docs'
+New-Item -ItemType Directory -Force -Path $out | Out-Null
+$base = 'https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/'
+foreach ($c in 'ping','ipconfig','tracert','nslookup','netstat','tasklist','systeminfo','chkdsk','sfc','robocopy','cleanmgr') {
+    Invoke-WebRequest "$base$c" -UseBasicParsing -OutFile "$out\$c.html"
+}
+# powercfg **不在**上面的目录下（那个路径 404），它在：
+Invoke-WebRequest 'https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options' -UseBasicParsing -OutFile "$out\powercfg.html"
+# cleanmgr 另有补充文档（讲 /sageset + /sagerun 的配合）：
+Invoke-WebRequest 'https://learn.microsoft.com/en-us/troubleshoot/windows-server/backup-and-storage/automating-disk-cleanup-tool' -UseBasicParsing -OutFile "$out\cleanmgr-aux.html"
+
+# 4. 从 HTML 提取"开关表 + 小节锚点" → win-docs/_switches.json
+pwsh -File scripts/extract-win-docs-switches.ps1
+```
+
+**三条实测出来的注意点**：
+
+1. `cleanmgr /?` 是 GUI 对话框，**没有控制台输出且进程不退出** —— 抓取脚本必须带超时。
+2. `sfc` 的**所有**输出都是 **UTF-16LE**（含权限错误），而其余 11 个命令是 OEM 代码页 936
+   （本机 936）。判定 UTF-16LE 不能只看"ASCII 后跟 `00`"（汉字对的第二个字节不是 0）。
+3. 官方文档里的开关用 `/xxx` 斜杠写法，**程序实际接受的是 `-xxx`**（本机 `/?` 用的是减号）。
+   清单里写程序接受的形态，官方写法保留在 `doc` 里。
+
 ### 为什么需要矩阵
 
 官方帮助里，每个命令页都有一节 "Switches that can be used with this command"，
@@ -125,3 +181,10 @@ pwsh -File scripts/fetch-uv-help.ps1
 
 这些快照来自第三方软件的官方文档，仅用于本机个人开发与查阅，不对外分发。
 如果将来这个仓库要公开，`docs/reference/` 整个目录应当先移除（改用文档链接）。
+
+**已经按这个原则处理的部分**：`docs/reference/win-help/`（Windows 自带命令的 `/?` 文本，
+是微软的文档内容）**已加入 `.gitignore`，不会随仓库发布**，随时可用
+`scripts/fetch-win-help.ps1` 重新生成。
+`docs/reference/win-docs/`（从 Microsoft Learn 抓下来的官方页面）目前**仍在库里** ——
+它同样是微软的文档内容，**若要转公开仓库，这个目录也必须一并移出**（或换成只保留
+`_switches.json` 这种提取结果，不再保留原始 HTML）。

@@ -1,0 +1,185 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# systeminfo —— Windows 自带的系统信息工具（C:\Windows\System32\systeminfo.exe）。
+#
+# 参数知识来源：
+#   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/systeminfo
+#      离线快照 docs/reference/win-docs/systeminfo.html
+#   2) 本机 `systeminfo /?` 的真实输出：docs/reference/win-help/systeminfo.txt（不入库，见 .gitignore）
+#
+# **刻意不做 /s /u /p**（连远程机器并换账号）：会把明文密码带进界面，见 tasklist 清单头部的同一说明。
+#
+# **实测性能事实**：本机跑一次 `systeminfo` 要 **4.5 秒**，`/fo csv` 要 4.7 秒
+# （它要查 WMI、已安装更新等；无参数版本 3623 字节）。见 NOTES.md §4。所以这两个动作用起来会有等待感。
+#
+# 版本：Windows 自带命令没有 --version 开关，故不写 versionArgs/versionPattern（R1）。
+# 编码：实测原始字节为 OEM 代码页 936，见 NOTES.md §5。
+
+spec: 1
+id: systeminfo
+name: systeminfo
+manifestVersion: 0.1.0
+appVersion: Windows 10/11 自带（随系统版本发布）
+description: 显示操作系统配置信息：系统版本与内部版本号、处理器、内存、已安装更新、网卡等。Windows 自带，无需安装。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/systeminfo
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 系统信息, 诊断]
+
+sources:
+  - title: systeminfo 命令官方参考（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/systeminfo
+    retrieved: "2026-09-27"
+    appliesTo: Windows 10/11
+    note: 离线快照 docs/reference/win-docs/systeminfo.html。语法行：systeminfo [/s <computer> [/u …]] [/fo {TABLE | LIST | CSV}] [/nh]；参数只有 /s /u /p /fo /nh 五个。
+  - title: 本机 `systeminfo /?` 的真实输出快照
+    url: file:///D:/AI/swpj/docs/reference/win-help/systeminfo.txt
+    retrieved: "2026-09-27"
+    appliesTo: Windows 11 26200 / systeminfo.exe 文件版本 10.0.26100.4202
+    note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。与官方页面内容一致（参数表 + 举例）。
+
+locate:
+  executable: systeminfo.exe
+  searchPaths:
+    - "%SystemRoot%\\System32"
+  notFoundHint: systeminfo.exe 是 Windows 自带命令，正常情况下都在 C:\Windows\System32 下。
+
+runtime:
+  encoding: oem
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  usePseudoConsole: false
+
+# 退出码：微软的 systeminfo 文档没有退出码章节（已核对）。下面来自实测，见 NOTES.md §4。
+exitCodes:
+  # 块式写法，理由见 plugins/ping/manifest.yaml 的同一处注释。
+  - code: 0
+    meaning: 成功（帮助输出 /? 也返回 0）
+    severity: ok
+  - code: 1
+    meaning: 用法错误
+    severity: error
+
+actions:
+
+  # ================================================================= 系统信息
+  - id: show
+    category: 系统信息
+    title: 查看系统信息
+    description: 以人读的表格显示系统概览。实测本机耗时约 4.5 秒。
+    command: ""
+    sources:
+      - title: systeminfo 官方参考 —— 语法与 /fo 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/systeminfo#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 本机 /? 快照 docs/reference/win-help/systeminfo.txt 的 Examples（SYSTEMINFO / SYSTEMINFO /FO CSV / SYSTEMINFO /S system /FO LIST …）
+    fields:
+      - id: format
+        label: 输出格式
+        type: enum
+        style: separate
+        prefix: "/fo"
+        group: 输出
+        help: 文档：有效值 TABLE、LIST、CSV。TABLE 是默认。
+        doc: "official #parameters 的 /fo <format>；本机 /? 快照的 /FO format"
+        values:
+          - value: ""
+            label: 表格（默认）
+            isDefault: true
+          - value: list
+            label: 列表
+          - value: csv
+            label: CSV
+      - id: noHeader
+        label: 不显示列标题（/nh）
+        type: bool
+        style: flag
+        prefix: "/nh"
+        group: 输出
+        default: false
+        help: 文档：只在 /fo 为 TABLE 或 CSV 时有效。
+        doc: "official #parameters 的 /nh；本机 /? 快照的 /NH"
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 本机实测约 4.5 秒返回；期间宿主显示不确定进度。
+    examples:
+      - title: 查看系统信息
+        args: []
+
+  # ================================================================= 系统信息
+  - id: show-list
+    category: 系统信息
+    title: 以列表格式查看系统信息
+    description: '每项一行（名称: 值），比表格更适合复制。'
+    command: ""
+    sources:
+      - title: systeminfo 官方参考 —— /fo LIST
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/systeminfo#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档示例行有 SYSTEMINFO /S system /FO LIST；本机 /? 快照的示例有 SYSTEMINFO /FO format
+    fields:
+      - id: format
+        label: 输出格式
+        type: enum
+        style: literal
+        switchBase: "/fo"
+        values:
+          - value: list
+            label: 列表（/FO LIST）
+            args: ["/fo", "list"]
+            isDefault: true
+          - value: table
+            label: 表格（/FO TABLE）
+            args: ["/fo", "table"]
+          - value: csv
+            label: CSV（/FO CSV）
+            args: ["/fo", "csv"]
+        doc: "official #parameters 的 /fo <format>（TABLE | LIST | CSV）；本机 /? 快照的 /FO format"
+      - id: noHeader
+        label: 不显示列标题（/nh）
+        type: bool
+        style: flag
+        prefix: "/nh"
+        group: 输出
+        default: false
+        doc: "official #parameters 的 /nh；本机 /? 快照的 /NH"
+
+  # ================================================================= 系统信息
+  - id: export-csv
+    category: 系统信息
+    title: 导出为 CSV
+    description: 以 CSV 格式输出系统信息，方便粘进表格软件。实测本机 2471 字节。
+    command: ""
+    sources:
+      - title: systeminfo 官方参考 —— /fo CSV 与 /nh
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/systeminfo#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档示例行有 SYSTEMINFO /S system /FO CSV /NH
+    fields:
+      - id: format
+        label: 输出格式
+        type: enum
+        style: literal
+        switchBase: "/fo"
+        values:
+          - value: csv
+            label: CSV（/FO CSV）
+            args: ["/fo", "csv"]
+            isDefault: true
+        doc: "official #parameters 的 /fo <format>；本机 /? 快照的 /FO CSV"
+      - id: noHeader
+        label: 不显示列标题（/nh）
+        type: bool
+        style: flag
+        prefix: "/nh"
+        default: true
+        doc: "official #parameters 的 /nh；本机 /? 快照的示例 SYSTEMINFO /S system /FO CSV /NH"
+    examples:
+      - title: 导出 CSV
+        args: ["/fo", "csv", "/nh"]

@@ -75,9 +75,21 @@ public static class ManifestValidation
                 errors.Add($"{where}：缺少 title");
             }
 
-            if (string.IsNullOrWhiteSpace(action.Command))
+            // 只要求"写了这个键"，**允许空串**。
+            //
+            // 为什么：有一类程序根本没有子命令——Windows 自带命令就是典型
+            // （`ping 8.8.8.8`、`ipconfig`、`netstat -an` 里没有"命令"这一段）。
+            // 这种情况下 `command: ""` 是唯一诚实的写法；强迫作者填个非空值
+            // 就等于编造参数（违反 R1）。
+            //
+            // 执行层本来就是这么支持的（ArgvBuilder 用 IsNullOrEmpty 判断，空则跳过），
+            // 这里原先用 IsNullOrWhiteSpace 拦了一道，属于**校验与执行自相矛盾**——
+            // 12 个 Windows 工具包一进来就把这个矛盾撞出来了（子智能体报告 §0）。
+            // schema 里仍然把 command 列为 required：强制作者显式决定"有没有子命令"，
+            // 免得 7z 那种必须写 `command: a` 的地方漏写而产生一条静默错误的命令。
+            if (action.Command is null)
             {
-                errors.Add($"{where}：缺少 command");
+                errors.Add($"{where}：缺少 command（没有子命令的工具请显式写 command: \"\"）");
             }
 
             if (action.Sources is null || action.Sources.Count == 0)

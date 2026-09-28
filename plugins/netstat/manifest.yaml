@@ -1,0 +1,356 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# netstat —— Windows 自带的网络连接与统计工具（C:\Windows\System32\NETSTAT.EXE）。
+#
+# 参数知识来源：
+#   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netstat
+#      离线快照 docs/reference/win-docs/netstat.html
+#   2) 本机 `netstat /?` 的真实输出：docs/reference/win-help/netstat.txt（不入库，见 .gitignore）
+#
+# **两处来源不一致，已记录在 NOTES.md §7（按 playbook 阶段 2 的精神，以本机内置帮助为准做取舍）**：
+#   - 官方网页的语法行只列了 -a -b -e -n -o -p -q -r -s [interval]；
+#     本机 /? 还多出 -c -d -f -i -t -x -y（"-d" 在 /? 里出现了两次，含义不同，疑为帮助文本笔误）。
+#   - 本清单**只收录官方网页语法行里有的开关**，本机 /? 多出来的那些一律不做，
+#     在 NOTES.md §9.2 里逐条列出"不做及原因"。这样 R1（不发明参数）有唯一可指的出处。
+#
+# **-b 需要管理员权限**：官方文档的 -b 说明里明确写"此选项可能很耗时，并且会失败，
+# 除非你有足够的权限"，本机 /? 的措辞相同。所以 identify-owner 动作标了 requiresAdmin。未实跑。
+#
+# 版本：Windows 自带命令没有 --version 开关，故不写 versionArgs/versionPattern（R1）。
+# 编码：实测原始字节为 OEM 代码页 936，见 NOTES.md §5。
+
+spec: 1
+id: netstat
+name: netstat
+manifestVersion: 0.1.0
+appVersion: Windows 10/11 自带（随系统版本发布）
+description: 显示 TCP/IP 协议统计与当前连接：活动连接、侦听端口、路由表、按协议的收发统计。Windows 自带，无需安装。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netstat
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 网络, 连接, 诊断]
+
+sources:
+  - title: netstat 命令官方参考（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netstat
+    retrieved: "2026-09-27"
+    appliesTo: Windows 10/11
+    note: 离线快照 docs/reference/win-docs/netstat.html。语法行：netstat [-a] [-b] [-e] [-n] [-o] [-p <Protocol>] [-q] [-r] [-s] [<interval>]；#parameters 表逐条解释。
+  - title: 本机 `netstat /?` 的真实输出快照
+    url: file:///D:/AI/swpj/docs/reference/win-help/netstat.txt
+    retrieved: "2026-09-27"
+    appliesTo: Windows 11 26200 / NETSTAT.EXE 文件版本 10.0.26100.8521
+    note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。注意这份帮助**写在 stderr**（stdout 0 字节，stderr 2074 字节），退出码 1。
+
+locate:
+  executable: netstat.exe
+  searchPaths:
+    - "%SystemRoot%\\System32"
+  notFoundHint: netstat.exe 是 Windows 自带命令，正常情况下都在 C:\Windows\System32 下。也可考虑 PowerShell 的 Get-NetTCPConnection。
+
+runtime:
+  encoding: oem
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  usePseudoConsole: false
+
+# 退出码：微软的 netstat 文档没有退出码章节（已核对）。下面来自实测，见 NOTES.md §4。
+# 也**没有进度百分比**，所以清单里不写 progress.pattern（不凭空发明正则）。
+exitCodes:
+  # 块式写法，理由见 plugins/ping/manifest.yaml 的同一处注释。
+  - code: 0
+    meaning: 成功
+    severity: ok
+  - code: 1
+    meaning: 用法错误，或本身就是 /? 帮助输出（实测 netstat /? 退出码为 1）
+    severity: error
+
+actions:
+
+  # ================================================================= 连接列表
+  - id: list-all
+    category: 连接列表
+    title: 列出所有连接与侦听端口
+    description: 显示全部活动的 TCP 连接，以及 TCP/UDP 正在侦听的端口，端口用数字表示。最常用的排查入口。
+    command: ""
+    sources:
+      - title: netstat 官方参考 —— -a 与 -n 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netstat#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 本机 /? 快照 docs/reference/win-help/netstat.txt 的 -a 与 -n 两行
+    fields:
+      - id: all
+        label: 包含侦听端口（-a）
+        type: bool
+        style: flag
+        prefix: "-a"
+        default: true
+        help: 文档：显示所有活动的 TCP 连接以及计算机正在侦听的 TCP 与 UDP 端口。
+        doc: "official #parameters 的 -a；本机 /? 快照的 -a"
+      - id: numeric
+        label: 用数字显示地址与端口（-n）
+        type: bool
+        style: flag
+        prefix: "-n"
+        default: true
+        help: 文档：地址与端口号用数字表示，不尝试解析成名称。能避免 DNS 反查拖慢输出。
+        doc: "official #parameters 的 -n；本机 /? 快照的 -n"
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - title: 列出所有连接与侦听端口（数字）
+        args: ["-an"]
+
+  # ================================================================= 连接列表
+  - id: list-tcp
+    category: 连接列表
+    title: 只看 TCP 连接
+    description: 用 -p 限定协议为 TCP，再配合 -a 与 -n 列出连接。
+    command: ""
+    sources:
+      - title: netstat 官方参考 —— -p 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netstat#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档：-p <Protocol> 里 Protocol 可以是 tcp、udp、tcpv6 或 udpv6；示例行有 netstat -s -p tcp udp
+    fields:
+      - id: protocol
+        label: 协议
+        type: enum
+        style: separate
+        prefix: "-p"
+        required: true
+        default: tcp
+        help: 文档给出四个取值。这里把最常用的两个 TCP/UDP 与两个 IPv6 变体都列出来。
+        doc: "official #parameters 的 -p <Protocol>；本机 /? 快照的 -p proto"
+        values:
+          - value: tcp
+            label: TCP
+            isDefault: true
+          - value: udp
+            label: UDP
+          - value: tcpv6
+            label: TCPv6
+          - value: udpv6
+            label: UDPv6
+      - id: all
+        label: 包含侦听端口（-a）
+        type: bool
+        style: flag
+        prefix: "-a"
+        default: true
+        doc: "official #parameters 的 -a；本机 /? 快照的 -a"
+      - id: numeric
+        label: 用数字显示地址与端口（-n）
+        type: bool
+        style: flag
+        prefix: "-n"
+        default: true
+        doc: "official #parameters 的 -n；本机 /? 快照的 -n"
+
+  # ================================================================= 进程归属
+  - id: list-pid
+    category: 进程归属
+    title: 列出连接并显示进程 ID
+    description: 在连接列表里加上拥有该连接的进程 PID，再用任务管理器对照就能找到是哪个程序占着端口。
+    command: ""
+    sources:
+      - title: netstat 官方参考 —— -o 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netstat#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档：-o 显示活动 TCP 连接并包含每个连接的进程 ID（PID）；示例行有 netstat -o 5 与 netstat -n -o
+    fields:
+      - id: ownerPid
+        label: 显示进程 ID（-o）
+        type: bool
+        style: flag
+        prefix: "-o"
+        default: true
+        doc: "official #parameters 的 -o；本机 /? 快照的 -o"
+      - id: all
+        label: 包含侦听端口（-a）
+        type: bool
+        style: flag
+        prefix: "-a"
+        default: true
+        doc: "official #parameters 的 -a；本机 /? 快照的 -a"
+      - id: numeric
+        label: 用数字显示地址与端口（-n）
+        type: bool
+        style: flag
+        prefix: "-n"
+        default: true
+        doc: "official #parameters 的 -n；本机 /? 快照的 -n"
+
+  # ================================================================= 进程归属
+  - id: identify-owner
+    category: 进程归属
+    title: 找出占用端口的可执行文件（需要管理员）
+    description: 显示创建每个连接或侦听端口的**可执行文件**（比只看 PID 更直观）。文档明确指出权限不足时会失败。
+    command: ""
+    requiresAdmin: true
+    sources:
+      - title: netstat 官方参考 —— -b 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netstat#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档原文：Displays the executable involved in creating each connection or listening port. … 本机 /? 的措辞："请注意，此选项可能很耗时，并且会失败，除非你有足够的权限。"
+    fields:
+      - id: executable
+        label: 显示可执行文件（-b）
+        type: bool
+        style: flag
+        prefix: "-b"
+        default: true
+        help: 文档警告：这个选项可能很耗时；权限不足时会失败。所以本动作标了"需要管理员权限"。
+        doc: "official #parameters 的 -b；本机 /? 快照的 -b（含权限提示）"
+      - id: all
+        label: 包含侦听端口（-a）
+        type: bool
+        style: flag
+        prefix: "-a"
+        default: true
+        doc: "official #parameters 的 -a；本机 /? 快照的 -a"
+      - id: numeric
+        label: 用数字显示地址与端口（-n）
+        type: bool
+        style: flag
+        prefix: "-n"
+        default: true
+        doc: "official #parameters 的 -n；本机 /? 快照的 -n"
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测未跑（当前账号不是管理员，且这条命令耗时长）。文档与本机帮助都提示权限不足会失败。
+
+  # ================================================================= 路由与统计
+  - id: routes
+    category: 路由与统计
+    title: 查看 IP 路由表
+    description: 显示 IP 路由表，等价于 route print。用 -n 可以避免对网关做名称解析。
+    command: ""
+    sources:
+      - title: netstat 官方参考 —— -r 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netstat#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档：-r Displays the contents of the IP routing table. This is equivalent to the route print command.
+    fields:
+      - id: routes
+        label: 显示路由表（-r）
+        type: bool
+        style: flag
+        prefix: "-r"
+        default: true
+        doc: "official #parameters 的 -r；本机 /? 快照的 -r"
+      - id: numeric
+        label: 用数字显示地址（-n）
+        type: bool
+        style: flag
+        prefix: "-n"
+        default: true
+        doc: "official #parameters 的 -n；本机 /? 快照的 -n"
+    examples:
+      - title: 查看路由表（数字）
+        args: ["-rn"]
+
+  # ================================================================= 路由与统计
+  - id: statistics
+    category: 路由与统计
+    title: 查看协议统计
+    description: 按协议显示收发统计，可以只看某个协议。
+    command: ""
+    sources:
+      - title: netstat 官方参考 —— -s 与 -p 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netstat#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档：-s Displays statistics by protocol. By default, statistics are shown for the TCP, UDP, ICMP, and IP protocols. If the -p parameter is used, you can specify a subset of the default. 示例行有 netstat -s -p tcp udp
+    fields:
+      - id: statistics
+        label: 显示协议统计（-s）
+        type: bool
+        style: flag
+        prefix: "-s"
+        default: true
+        doc: "official #parameters 的 -s；本机 /? 快照的 -s"
+      - id: protocol
+        label: 只统计某个协议（-p，留空 = 全部默认）
+        type: enum
+        style: separate
+        prefix: "-p"
+        help: 文档：与 -s 一起使用时，Protocol 可以是 ip、ipv6、icmp、icmpv6、tcp、tcpv6、udp 或 udpv6。这里收录文档示例里出现过的 tcp 与 udp。
+        doc: "official #parameters 的 -p <Protocol>（与 -s 合用时取值不同）；示例行 netstat -s -p tcp udp"
+        values:
+          - value: ""
+            label: 不指定（显示全部默认协议）
+            isDefault: true
+          - value: tcp
+            label: TCP
+          - value: udp
+            label: UDP
+    examples:
+      - title: 查看协议统计
+        args: ["-s"]
+
+  # ================================================================= 路由与统计
+  - id: ethernet-stats
+    category: 路由与统计
+    title: 查看以太网统计
+    description: 显示收发字节数与单播/非单播/丢弃/错误的数据包计数。可以与 -s 组合。
+    command: ""
+    sources:
+      - title: netstat 官方参考 —— -e 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netstat#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档：-e Displays Ethernet statistics, such as the number of bytes and packets sent and received. This parameter can be combined with -s. 示例行 netstat -e -s
+    fields:
+      - id: ethernet
+        label: 显示以太网统计（-e）
+        type: bool
+        style: flag
+        prefix: "-e"
+        default: true
+        doc: "official #parameters 的 -e；本机 /? 快照的 -e"
+      - id: statistics
+        label: 一并显示协议统计（-s）
+        type: bool
+        style: flag
+        prefix: "-s"
+        default: false
+        doc: "official #parameters 的 -s 与示例行 netstat -e -s；本机 /? 快照的 -s"
+
+  # ================================================================= 连接列表
+  - id: list-bound-ports
+    category: 连接列表
+    title: 列出绑定的非侦听端口（-q）
+    description: 显示所有连接、侦听端口，以及绑定了但未侦听的 TCP 端口。
+    command: ""
+    sources:
+      - title: netstat 官方参考 —— -q 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netstat#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档：-q Displays all connections, listening ports, and bound nonlistening TCP ports. Bound nonlistening ports may or may not be associated with an active connection.
+    fields:
+      - id: bound
+        label: 包含绑定的非侦听端口（-q）
+        type: bool
+        style: flag
+        prefix: "-q"
+        default: true
+        doc: "official #parameters 的 -q；本机 /? 快照的 -q"
+      - id: numeric
+        label: 用数字显示地址与端口（-n）
+        type: bool
+        style: flag
+        prefix: "-n"
+        default: true
+        doc: "official #parameters 的 -n；本机 /? 快照的 -n"
+

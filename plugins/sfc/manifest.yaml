@@ -1,0 +1,186 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# sfc —— Windows 自带的系统文件检查器（C:\Windows\System32\sfc.exe）。
+#
+# 参数知识来源：
+#   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/sfc
+#      离线快照 docs/reference/win-docs/sfc.html
+#   2) 本机 `sfc /?` 的真实输出：docs/reference/win-help/sfc.txt（不入库，见 .gitignore）
+#
+# **这个命令有两个"怪脾气"，都实测过（见 NOTES.md §5、§7）**：
+#   1) **它的输出是 UTF-16LE**，不是 OEM 代码页。原始字节实测为
+#      `0d 00 0d 00 0a 00 3a 4e 86 4e …`，按 UTF-16LE 解码正好是
+#      "为了使用 sfc 工具，你必须作为管理员运行控制台会话。"
+#      所以本工具包的 runtime.encoding 必须是 utf-16le —— 这一批 Windows 命令里**只有 sfc 是这样**。
+#   2) **它完全不接受 /?**：`sfc /?` 不打印帮助，只打印上面那句权限提示（68 字节，退出码 1）。
+#      它的"帮助"必须从官方文档读 —— 这也是本清单把 sfc 放进这一批的原因之一：
+#      它是"本机 /? 拿不到参数表、只能靠官方文档"的正面案例。
+#
+# **管理员权限**：实测 `sfc /verifyonly` 与 `sfc /verifyfile=…` 在非管理员账号下都直接失败
+# （输出"为了使用 sfc 工具，你必须作为管理员运行控制台会话。"，退出码 1）。
+# 本清单给全部四个动作都标了 requiresAdmin: true —— 因为实测四条路都走不通，而不是猜测。
+#
+# **绝不实跑**：/scannow 与 /scanfile 会修复系统文件，本批一律未跑（见 NOTES.md §9.1）。
+#
+# 版本：Windows 自带命令没有 --version 开关，故不写 versionArgs/versionPattern（R1）。
+
+spec: 1
+id: sfc
+name: sfc
+manifestVersion: 0.1.0
+appVersion: Windows 10/11 自带（随系统版本发布）
+description: 扫描并校验受保护的系统文件完整性，可扫描全部或指定文件，也可在发现问题时自动修复。Windows 自带，需要管理员权限。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/sfc
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 系统文件, 修复, 需要管理员]
+
+sources:
+  - title: sfc 命令官方参考（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/sfc
+    retrieved: "2026-09-27"
+    appliesTo: Windows 10/11
+    note: 离线快照 docs/reference/win-docs/sfc.html。语法行：sfc [/scannow] [/verifyonly] [/scanfile=<file>] [/verifyfile=<file>] [/offwindir=… /offbootdir=… /offlogfile=…]；#parameters 表逐条解释。
+  - title: 本机 `sfc /?` 的真实输出快照
+    url: file:///D:/AI/swpj/docs/reference/win-help/sfc.txt
+    retrieved: "2026-09-27"
+    appliesTo: Windows 11 26200 / sfc.exe 文件版本 10.0.26100.8521
+    note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。注意这份快照的正文是 UTF-16LE 且内容只有一句权限提示 —— sfc 不支持 /?。
+
+locate:
+  executable: sfc.exe
+  searchPaths:
+    - "%SystemRoot%\\System32"
+  notFoundHint: sfc.exe 是 Windows 自带命令，正常情况下都在 C:\Windows\System32 下。
+
+runtime:
+  # **实测结论**：sfc 的输出是 UTF-16LE（原始字节里 ASCII 后面跟 00），
+  # 与这一批其它 Windows 命令（OEM 代码页 936）都不一样。见 NOTES.md §5。
+  encoding: utf-16le
+  useShell: false
+  # 实测：四个动作在非管理员账号下全部失败并提示提权，所以工具包级默认就标上需要管理员。
+  requiresAdmin: true
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  usePseudoConsole: false
+
+# 退出码：微软的 sfc 文档没有退出码章节（已核对）。下面来自实测 + 官方"如何看结果"的说明。
+# 注意：**sfc 的退出码在非管理员下不可靠** —— 实测 /verifyonly 与 /verifyfile= 都返回 1 并只打印权限提示，
+# 所以"退出码 1"既可能是权限不足，也可能是真的校验出问题。判定必须看输出文本。
+exitCodes:
+  # 块式写法，理由见 plugins/ping/manifest.yaml 的同一处注释。
+  - code: 0
+    meaning: 操作成功（校验通过、或修复已完成）
+    severity: ok
+  - code: 1
+    meaning: 失败或发现问题。**实测非管理员运行时也返回 1**（只打印"你必须作为管理员运行控制台会话"），所以不能只看退出码，要看输出文本
+    severity: error
+
+actions:
+
+  # ================================================================= 校验
+  - id: verifyonly
+    category: 校验
+    title: 校验全部系统文件（只校验，不修复）
+    description: 扫描所有受保护系统文件的完整性，但不做任何修复。官方推荐先跑这个确认是否真的有问题。
+    command: ""
+    requiresAdmin: true
+    sources:
+      - title: sfc 官方参考 —— /verifyonly 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/sfc#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档原文：/verifyonly Scans the integrity of all protected system files, without performing repairs.
+    fields:
+      - id: verifyonly
+        label: 只校验不修复（/verifyonly）
+        type: bool
+        style: flag
+        prefix: "/verifyonly"
+        default: true
+        doc: "official #parameters 的 /verifyonly"
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测当前非管理员账号下返回退出码 1 并打印"为了使用 sfc 工具，你必须作为管理员运行控制台会话。"（UTF-16LE）。
+    examples:
+      - title: 只校验不修复（需要管理员）
+        args: ["/verifyonly"]
+        expectExitCode: 1
+
+  # ================================================================= 修复
+  - id: scannow
+    category: 修复
+    title: 扫描并修复系统文件（/scannow）
+    description: 扫描所有受保护系统文件，并在可能时修复有问题的文件。耗时较长（几分钟到十几分钟）。
+    command: ""
+    danger: overwrite
+    requiresAdmin: true
+    confirmText: /scannow 会在发现问题时替换受保护的系统文件（通常从 %WinDir%\WinSxS 的组件存储里取正确的副本）。过程中不要中断，也不要断电。确定继续？
+    sources:
+      - title: sfc 官方参考 —— /scannow 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/sfc#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档原文：/scannow Scans the integrity of all protected system files and repairs files with problems when possible.
+    fields:
+      - id: scannow
+        label: 扫描并修复（/scannow）
+        type: bool
+        style: flag
+        prefix: "/scannow"
+        default: true
+        doc: "official #parameters 的 /scannow"
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 未实跑（会改系统文件、耗时、且需要管理员）。见 NOTES.md §9.1。
+
+  # ================================================================= 单文件
+  - id: verifyfile
+    category: 单文件
+    title: 校验指定的系统文件（/verifyfile）
+    description: 只校验一个文件，不修复。用于确认某个具体文件是否被改动过。
+    command: ""
+    requiresAdmin: true
+    sources:
+      - title: sfc 官方参考 —— /verifyfile 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/sfc#parameters
+        retrieved: "2026-09-27"
+        appliesTo: Windows 10/11
+        note: 文档原文：/verifyfile <file> Verifies the integrity of the specified file (full path and filename), without performing repairs.
+    fields:
+      # **顺序关键**：官方文档的语法是 /verifyfile=<file>，开关与取值要在同一个 token 里。
+      # 规范 v1 的 six styles 无法把"开关+取值"粘成一个 token（separator 只允许 "" / " " / "="，
+      # 而 "=" 会生成三个 token：/verifyfile、=、<file>）。
+      # 见 NOTES.md §8 的规范缺口 D-sfc。刻意**不发明** `-verifyfile` 这种写法。
+      - id: mode
+        label: 操作
+        type: enum
+        style: literal
+        switchBase: "/verifyfile"
+        help: 对应官方语法 /verifyfile=<file>，必须是同一个参数。
+        doc: "official #parameters 的 /verifyfile <file>；官方语法行 sfc [/verifyfile=<file>]"
+        values:
+          - value: verifyfile
+            label: 校验指定文件（/verifyfile）
+            args: ["/verifyfile="]
+            isDefault: true
+          - value: scanfile
+            label: 校验并修复指定文件（/scanfile）
+            args: ["/scanfile="]
+      - id: file
+        label: 文件完整路径
+        type: file
+        style: positional
+        required: true
+        placeholder: 例 C:\Windows\System32\kernel32.dll
+        help: 官方示例：sfc /verifyfile=c:\windows\system32\kernel32.dll。**必须填完整路径**（含文件名）。上一栏的 /verifyfile= 与这里填的路径是两个 argv token，Windows 命令行会把它们并成 `sfc /verifyfile="C:\...\kernel32.dll"`。
+        doc: 'official #parameters 的 /verifyfile <file> 与 /scanfile <file>；示例行 sfc /verifyfile=c:\windows\system32\kernel32.dll'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测非管理员下返回退出码 1 与权限提示；未在管理员下实跑。
+    examples:
+      - title: 校验单个文件（需要管理员）
+        args: ["/verifyfile=C:\\Windows\\System32\\kernel32.dll"]
