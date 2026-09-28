@@ -4,8 +4,8 @@
 #
 # 参数知识来源：
 #   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/chkdsk
-#      离线快照 docs/reference/win-docs/chkdsk.html
-#   2) 本机 `chkdsk /?` 的真实输出：docs/reference/win-help/chkdsk.txt（不入库，见 .gitignore）
+#      离线快照 Microsoft Learn 官方文档（见各动作的 sources）/chkdsk.html
+#   2) 本机 `chkdsk /?` 的真实输出：本机帮助快照（**未入库**，可用下列命令重新抓取）/chkdsk.txt（不入库，见 .gitignore）
 #
 # **管理员权限（本工具包的重点）**：
 #   - 官方文档 #understanding-exit-codes 一节写明：**必须是管理员**，且必须从提升的命令提示符里运行。
@@ -35,9 +35,9 @@ sources:
     url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/chkdsk
     retrieved: "2026-09-27"
     appliesTo: Windows 10/11
-    note: 离线快照 docs/reference/win-docs/chkdsk.html。语法行列出全部开关；#understanding-exit-codes 一节给出退出码表并说明"必须是管理员"。
+    note: 离线快照 Microsoft Learn 官方文档（见各动作的 sources）/chkdsk.html。语法行列出全部开关；#understanding-exit-codes 一节给出退出码表并说明"必须是管理员"。
   - title: 本机 `chkdsk /?` 的真实输出快照
-    url: file:///D:/AI/swpj/docs/reference/win-help/chkdsk.txt
+    url: file:///D:/AI/All Tool/本机帮助快照（**未入库**，可用下列命令重新抓取）/chkdsk.txt
     retrieved: "2026-09-27"
     appliesTo: Windows 11 26200 / chkdsk.exe 文件版本 10.0.26100.1150
     note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。注意：**`chkdsk /?` 自身的退出码是 3**（不是 0/1），这是本机实测的事实。
@@ -87,11 +87,11 @@ actions:
     description: 不带任何开关运行，只报告问题、不做修复。**官方文档明确要求管理员权限**；实测非管理员账号下会直接以"访问被拒绝"失败（退出码 3）。
     command: ""
     sources:
-      - title: chkdsk 官方参考 —— 语法与退出码
-        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/chkdsk#understanding-exit-codes
+      - title: chkdsk 官方参考（Microsoft Learn）
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/chkdsk
         retrieved: "2026-09-27"
         appliesTo: Windows 10/11
-        note: 本机 /? 快照 docs/reference/win-help/chkdsk.txt 的用法行（"检查磁盘并显示状态报告"）
+        note: "开关以本机 `chkdsk /?` 的输出核对过；/ ? 快照不入库（见 .gitignore）"
     fields:
       - id: volume
         label: 卷（驱动器号、装入点或卷名）

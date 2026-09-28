@@ -3,7 +3,7 @@
   "updatedAt": "2026-09-27",
   "purpose": "机器可读的项目状态。AI 智能体接手时先读这里，再跑 scripts/check-env.ps1 核对 environment 段是否过期。",
   "project": {
-    "repo": "https://github.com/Kangmori/swpj",
+    "repo": "https://github.com/Kangmori/all-tool",
     "visibility": "private",
     "branch": "main",
     "hostStack": ".NET 10 + WinUI 3 (Windows App SDK 2.5.1), unpackaged",
@@ -20,7 +20,7 @@
       "isAdmin": false
     },
     "workspace": {
-      "path": "D:\\AI\\swpj",
+      "path": "D:\\AI\\All Tool",
       "writable": true
     },
     "dotnet": {
@@ -51,7 +51,7 @@
     "noCppToolchain": "未安装 C++ 工作负载与 MSVC。宿主走纯 C# + P/Invoke，不要引入需要编译原生代码的依赖。",
     "vsWorkloadId": "WinUI 开发工作负载的 id 是 Microsoft.VisualStudio.Workload.Universal（显示名 WinUI 应用程序开发）。这是历史改名遗留，不存在名为 WinUI 的 id。",
     "consoleEncoding": "pwsh 捕获含中文的输出前需设 $OutputEncoding = [Console]::OutputEncoding = [Text.Encoding]::UTF8，否则中文乱码。",
-    "workspaceAcl": "D:\\AI\\swpj 曾因 DACL 缺显式 WRITE_DAC 导致沙箱无法写；已用 icacls 授予当前用户完全控制。若再现（所有命令被沙箱拦下），重跑该命令。"
+    "workspaceAcl": "D:\\AI\\All Tool 曾因 DACL 缺显式 WRITE_DAC 导致沙箱无法写；已用 icacls 授予当前用户完全控制。若再现（所有命令被沙箱拦下），重跑该命令。"
   },
   "artifacts": [
     {
@@ -145,52 +145,52 @@
       "verified": true
     },
     {
-      "path": "src/Swpj.slnx",
+      "path": "src/AllTool.slnx",
       "role": "宿主解决方案（新格式 .slnx）",
       "verified": true
     },
     {
-      "path": "src/Swpj.Core/Manifest/",
+      "path": "src/AllTool.Core/Manifest/",
       "role": "清单模型、加载器、结构校验（ManifestLoader/ManifestValidation/ManifestModel）",
       "verified": true
     },
     {
-      "path": "src/Swpj.Core/Execution/ArgvBuilder.cs",
+      "path": "src/AllTool.Core/Execution/ArgvBuilder.cs",
       "role": "字段值 → argv 的展开器（纯函数，最关键组件）",
       "verified": true
     },
     {
-      "path": "src/Swpj.Core/Execution/ProcessRunner.cs",
+      "path": "src/AllTool.Core/Execution/ProcessRunner.cs",
       "role": "进程执行引擎：argv 数组启动、\\r/\\n 双行结束符读取、取消杀整树、超时、编码解析",
       "verified": true
     },
     {
-      "path": "src/Swpj.Core/Execution/OutputInterpreter.cs",
+      "path": "src/AllTool.Core/Execution/OutputInterpreter.cs",
       "role": "进度解析与退出码翻译",
       "verified": true
     },
     {
-      "path": "src/Swpj.Core/Discovery/ToolLocator.cs",
+      "path": "src/AllTool.Core/Discovery/ToolLocator.cs",
       "role": "在 PATH/searchPaths 找可执行文件、取版本、与 minVersion 比对",
       "verified": true
     },
     {
-      "path": "src/Swpj.Core/Settings/LastValuesStore.cs",
+      "path": "src/AllTool.Core/Settings/LastValuesStore.cs",
       "role": "记住字段上次用过的值（save 的落地）；密码永不落盘；文件损坏时按空处理不崩",
       "verified": true
     },
     {
-      "path": "src/Swpj.Core.Tests/LastValuesStoreTests.cs",
+      "path": "src/AllTool.Core.Tests/LastValuesStoreTests.cs",
       "role": "LastValuesStore 的 7 个测试（跨实例读回、键隔离、损坏文件兜底、目录自建）",
       "verified": true
     },
     {
-      "path": "src/Swpj.Core.Tests/",
+      "path": "src/AllTool.Core.Tests/",
       "role": "99 个单元与集成测试",
       "verified": true
     },
     {
-      "path": "src/Swpj.App/",
+      "path": "src/AllTool.App/",
       "role": "WinUI 3 宿主界面：清单驱动的动态表单、命令行预览、实时输出、取消、危险动作二次确认",
       "verified": true
     },
@@ -225,17 +225,17 @@
       "verified": true
     },
     {
-      "path": "src/Swpj.Core/Execution/WindowsCommandLine.cs",
+      "path": "src/AllTool.Core/Execution/WindowsCommandLine.cs",
       "role": "Windows 命令行的引号规则（走 ConPTY 时必须自己拼命令行，这一处必须正确）",
       "verified": true
     },
     {
-      "path": "src/Swpj.Core/Execution/AnsiText.cs",
+      "path": "src/AllTool.Core/Execution/AnsiText.cs",
       "role": "剥离 ANSI 转义序列（伪控制台的输出带颜色与控制序列）",
       "verified": true
     },
     {
-      "path": "src/Swpj.Core/Execution/ConPtyProcessRunner.cs",
+      "path": "src/AllTool.Core/Execution/ConPtyProcessRunner.cs",
       "role": "伪控制台执行器：raw CreateProcess + ConPTY + Job Object（挂起创建→入 job→恢复运行）。已打通并启用（7z 靠它输出进度）",
       "verified": true
     },
@@ -245,7 +245,7 @@
       "verified": true
     },
     {
-      "path": "src/Swpj.Core.Tests/ConPtyTests.cs",
+      "path": "src/AllTool.Core.Tests/ConPtyTests.cs",
       "role": "ConPTY 路径的测试：输出捕获、7z 百分比进度、取消杀整树、超时、工作目录",
       "verified": true
     },
@@ -330,14 +330,14 @@
     {
       "id": "argvbuilder-tests",
       "claim": "ArgvBuilder 严格实现规范里的全部展开规则（含空值不输出、literal 的 args 展开、perLine 拆词）",
-      "command": "dotnet test src\\Swpj.slnx",
+      "command": "dotnet test src\\AllTool.slnx",
       "result": "26 个测试全部通过；编译 0 警告 0 错误",
       "verifiedAt": "2026-09-27"
     },
     {
       "id": "real-manifest-drives-argv",
       "claim": "真实的 7zip 清单经 ManifestLoader + ArgvBuilder 能生成预期 argv",
-      "command": "dotnet test src\\Swpj.slnx（RealManifestTests）",
+      "command": "dotnet test src\\AllTool.slnx（RealManifestTests）",
       "result": "extract 得到 [x, <archive>, -o<dir>, -aoa, -r-, -bb0]；add 得到 [a, <archive>, <inputs...>, -t7z, -mx5, -r-, -bb0]",
       "implication": "规范确实能驱动出可执行命令，不是纸上设计",
       "verifiedAt": "2026-09-27"
@@ -345,7 +345,7 @@
     {
       "id": "process-runner-behaviour",
       "claim": "进程执行引擎能捕获输出与退出码、把 \\r 当行结束符（抓得住原地刷新的进度）、取消与超时都会杀掉子进程并迅速返回、超量输出会截断但仍如实计数",
-      "command": "dotnet test src\\Swpj.slnx（ProcessRunnerTests，真启动 cmd/powershell 子进程）",
+      "command": "dotnet test src\\AllTool.slnx（ProcessRunnerTests，真启动 cmd/powershell 子进程）",
       "result": "全部通过；取消与超时都在 15 秒内返回",
       "verifiedAt": "2026-09-27"
     },
@@ -368,7 +368,7 @@
     {
       "id": "e2e-real-7z",
       "claim": "端到端：真实 7zip 清单 + 真实 7-Zip 走完 定位 → argv → 执行 → 退出码",
-      "command": "dotnet test src\\Swpj.slnx（EndToEndTests）",
+      "command": "dotnet test src\\AllTool.slnx（EndToEndTests）",
       "result": "通过：a / t / x 三个动作退出码均为 0，x 保留了子目录结构",
       "verifiedAt": "2026-09-27"
     },
@@ -383,7 +383,7 @@
     {
       "id": "test-suite-stable",
       "claim": "测试套件不偶发失败",
-      "command": "连续三次 dotnet test src\\Swpj.slnx",
+      "command": "连续三次 dotnet test src\\AllTool.slnx",
       "result": "三次均 69/69 通过（此前 Progress<T> 造成的偶发失败已改为同步收集器）",
       "verifiedAt": "2026-09-27"
     },
@@ -398,7 +398,7 @@
     {
       "id": "conpty-works-and-progress-moves",
       "claim": "伪控制台（ConPTY）能让'只在真控制台里画进度'的程序输出百分比，且界面进度条真的会走",
-      "command": "dotnet test src\\Swpj.slnx（ConPtyTests）与 pwsh -File scripts\\ui-smoke.ps1",
+      "command": "dotnet test src\\AllTool.slnx（ConPtyTests）与 pwsh -File scripts\\ui-smoke.ps1",
       "result": "ConPtyTests 5/5 通过（含 32 MB 输入下 7z 报出百分比）；界面冒烟用 48 MB 样本实测『进度条观察到的最大值 = 100』，且输出区不再出现 ANSI 转义序列",
       "implication": "N5 完成。关键在于创建子进程时加 STARTF_USESTDHANDLES 并显式置空三个标准句柄——子进程的标准句柄本来是继承父进程的，ConPTY 不会覆盖它们（见 P19）",
       "verifiedAt": "2026-09-27"
@@ -406,7 +406,7 @@
     {
       "id": "build-output-path-pitfall",
       "claim": "构建产物路径固定，脚本指向的 exe 就是刚构建出来的那个",
-      "command": "dotnet build src\\Swpj.slnx 后核对 bin 下 exe 与 Swpj.Core.dll 的时间戳",
+      "command": "dotnet build src\\AllTool.slnx 后核对 bin 下 exe 与 AllTool.Core.dll 的时间戳",
       "result": "加了 AppendPlatformToOutputPath=false 之后产物固定在 bin\\Debug\\ 下；此前因 Platforms=x64 落到 bin\\x64\\Debug\\，脚本一直在启动旧 exe，而 App 又不在解决方案里、从不被重建",
       "implication": "症状是『代码改了、也构建成功，但运行行为没变』。已记为 P20",
       "verifiedAt": "2026-09-27"
@@ -423,7 +423,7 @@
       "id": "save-and-group-work-in-ui",
       "claim": "记住上次输入（save）与界面分组（group）在真实界面上生效",
       "command": "跑 ui-smoke 记录值 → 重启宿主读回填；并用 UIA 枚举界面文字确认分组标题",
-      "result": "save：执行后写入 %APPDATA%\\swpj\\last-values.json（3 条），重启后『压缩包』与『解压到』自动回填，命令行预览带上恢复的路径；group：7z 解压动作的『筛选』分组标题出现",
+      "result": "save：执行后写入 %APPDATA%\\All Tool\\last-values.json（3 条），重启后『压缩包』与『解压到』自动回填，命令行预览带上恢复的路径；group：7z 解压动作的『筛选』分组标题出现",
       "verifiedAt": "2026-09-27"
     },
     {
@@ -469,7 +469,7 @@
     {
       "id": "scoop-plugin-loads-in-host",
       "claim": "新增的 scoop 清单能被已实现的宿主真实加载（不是只过 python 校验器）",
-      "command": "dotnet test src\\Swpj.slnx（RealManifestTests 里 ManifestLoader.LoadAll 会遍历 plugins/ 下所有工具包）",
+      "command": "dotnet test src\\AllTool.slnx（RealManifestTests 里 ManifestLoader.LoadAll 会遍历 plugins/ 下所有工具包）",
       "result": "69/69 通过，含 LoadAll 对 7zip 与 scoop 两个清单的反序列化与结构校验",
       "implication": "清单与 YamlDotNet 模型、ManifestValidation 的规则一致；arg 展开走 ArgvBuilder（已支持 separate）",
       "verifiedAt": "2026-09-27"
@@ -509,7 +509,7 @@
     {
       "id": "uv-plugin-loads-in-host",
       "claim": "新增的 uv 清单能被已实现的宿主真实加载（不是只过 python 校验器）",
-      "command": "dotnet test src\\Swpj.slnx（RealManifestTests 里 ManifestLoader.LoadAll 会遍历 plugins/ 下所有工具包）",
+      "command": "dotnet test src\\AllTool.slnx（RealManifestTests 里 ManifestLoader.LoadAll 会遍历 plugins/ 下所有工具包）",
       "result": "99/99 通过，含 LoadAll 对 7zip / scoop / uv 三个清单的反序列化与结构校验",
       "implication": "清单与 YamlDotNet 模型、ManifestValidation 的规则一致",
       "verifiedAt": "2026-09-27"
@@ -518,14 +518,14 @@
       "id": "delivery-runs",
       "claim": "交付目录里的程序能独立启动并载入插件（插件就在 exe 旁边）",
       "command": "pwsh -File scripts\\publish-app.ps1 后用 UIA 读交付版窗口内容",
-      "result": "dist\\swpj\\Swpj.App.exe 启动正常、载入 7zip/scoop/uv 三个工具包、无载入失败、命令行预览正确；同时验证了「优先在 exe 旁找 plugins」这条查找顺序",
+      "result": "dist\\All Tool\\AllTool.App.exe 启动正常、载入 7zip/scoop/uv 三个工具包、无载入失败、命令行预览正确；同时验证了「优先在 exe 旁找 plugins」这条查找顺序",
       "verifiedAt": "2026-09-27"
     },
     {
       "id": "publish-drops-xaml-resources",
       "claim": "dotnet publish 的 WinUI 输出缺 XAML 资源，会导致启动即崩",
       "command": "对比 bin\\Release\\<tfm>\\ 与 dist 的 publish 产物文件清单，并分别启动",
-      "result": "publish 产物缺 Swpj.App.pri、App.xbf、MainWindow.xbf（另有 runtimes\\win-arm64 之类的无用件）；build 产物能启动、publish 产物崩溃 0xC000027B。已记为 P22",
+      "result": "publish 产物缺 AllTool.App.pri、App.xbf、MainWindow.xbf（另有 runtimes\\win-arm64 之类的无用件）；build 产物能启动、publish 产物崩溃 0xC000027B。已记为 P22",
       "verifiedAt": "2026-09-27"
     },
     {
@@ -587,7 +587,7 @@
     {
       "id": "menu-bar-and-about",
       "claim": "菜单栏与「关于」可用",
-      "command": "UIA 打开「帮助」→「关于 swpj」",
+      "command": "UIA 打开「帮助」→「关于 All Tool」",
       "result": "对话框内容正确：宿主版本 1.0.0.0、.NET 10.0.12 / Windows 10.0.26200、三个工具包及版本与动作数、工具包目录",
       "verifiedAt": "2026-09-27"
     },
@@ -615,7 +615,7 @@
     {
       "id": "windows-packages-load-and-run",
       "claim": "12 个 Windows 命令包在真实宿主里能载入、能生成正确命令",
-      "command": "UIA 启动宿主（SWPJ_SELECT_PACKAGE）并读命令行预览；dotnet test 的 RealManifestTests 也会加载 plugins 下全部清单",
+      "command": "UIA 启动宿主（ALLTOOL_SELECT_PACKAGE）并读命令行预览；dotnet test 的 RealManifestTests 也会加载 plugins 下全部清单",
       "result": "15 个包全部载入（未分组（15）），无「载入工具包失败」；ping 的动作分组「连通性测试（3）」正常；命令行预览是 `ping.exe`——**空 command 被正确跳过**，没有多出空段；chkdsk 的动作分组为「只读检查(1)/修复(3)/联机扫描(1)」",
       "verifiedAt": "2026-09-28"
     },
@@ -639,8 +639,8 @@
       "id": "N2",
       "task": "搭 GitHub Actions：校验 + 构建",
       "doneAt": "2026-09-27",
-      "evidence": "CI 首次运行成功（54 秒）：Linux 跑清单校验，Windows 跑 dotnet build/test src/Swpj.slnx",
-      "remaining": "WinUI 应用项目尚未纳入 CI；等 src/Swpj.App 建好并本地验证能编译后再加"
+      "evidence": "CI 首次运行成功（54 秒）：Linux 跑清单校验，Windows 跑 dotnet build/test src/AllTool.slnx",
+      "remaining": "WinUI 应用项目尚未纳入 CI；等 src/AllTool.App 建好并本地验证能编译后再加"
     },
     {
       "id": "N3",
@@ -687,7 +687,7 @@
       "id": "N9",
       "task": "补齐『规范承诺了但宿主没实现』的字段能力（save / group）",
       "doneAt": "2026-09-27",
-      "evidence": "审计：save 在清单里声明 14 次、group 声明 72 次，宿主原先都完全忽略。现已实现：save 落盘到 %APPDATA%\\swpj\\last-values.json（只在执行时记录，password 永不落盘，回填优先于 default）；group 在分组变化时插入小标题。界面实测：重启后字段自动回填、『筛选』分组标题出现。visibleWhen 声明次数为 0，规范已标注 v1 宿主未实现",
+      "evidence": "审计：save 在清单里声明 14 次、group 声明 72 次，宿主原先都完全忽略。现已实现：save 落盘到 %APPDATA%\\All Tool\\last-values.json（只在执行时记录，password 永不落盘，回填优先于 default）；group 在分组变化时插入小标题。界面实测：重启后字段自动回填、『筛选』分组标题出现。visibleWhen 声明次数为 0，规范已标注 v1 宿主未实现",
       "note": "这类缺口不会报错，只会让清单作者白写字段——建议以后改规范时同步做一次『声明次数 vs 宿主引用次数』的对照"
     },
     {
@@ -702,14 +702,14 @@
       "id": "N10",
       "task": "把宿主交付成可运行的目录（供人工测试）",
       "doneAt": "2026-09-27",
-      "evidence": "scripts/publish-app.ps1 产出 dist\\swpj\\（80 MB，含 exe + plugins + 启动说明）。实测：交付版启动正常、载入 3 个工具包、无载入失败、命令行预览带出记住的上次路径。过程中踩到并定位：dotnet publish 会漏掉 Swpj.App.pri 与 .xbf，导致启动即崩 0xC000027B；交付因此改用「dotnet build -c Release + 拷贝」",
+      "evidence": "scripts/publish-app.ps1 产出 dist\\All Tool\\（80 MB，含 exe + plugins + 启动说明）。实测：交付版启动正常、载入 3 个工具包、无载入失败、命令行预览带出记住的上次路径。过程中踩到并定位：dotnet publish 会漏掉 AllTool.App.pri 与 .xbf，导致启动即崩 0xC000027B；交付因此改用「dotnet build -c Release + 拷贝」",
       "remaining": "仍依赖目标机器预装 .NET 10 桌面运行时与 Windows App Runtime —— 见 N13"
     },
     {
       "id": "N14",
       "task": "主程序易用性改进（用户要求：拖放、分组、推荐下一步、其它人性化）",
       "doneAt": "2026-09-27",
-      "evidence": "① 拖放：资源管理器拖文件/文件夹到输入框即填充，多值字段追加且去重；填充规则抽成 PathDropLogic 并有 7 个单测（拖放本身无法自动化，界面上的接线需人工点一次）。② 分组：左侧工具包与动作按分组展示（可折叠），清单用 category 声明默认分组、用户右键可改并存在 %APPDATA%\\swpj\\grouping.json；界面实测：三个工具包分成「包管理／压缩归档／Python 与包管理」，7zip 动作分成查看(4)/解压(2)/维护归档(3)/压缩(1)/诊断(1)，scoop 分成 10 组（应用管理 15、Shim 管理 5…）。③ 推荐下一步：清单声明 nextSteps，跑完按输出正则匹配给出按钮，点了可一键执行；界面实测：scoop list → 推荐「看看有没有可用更新」；scoop status（真有 5 个更新）→ 推荐「一键更新全部」+「清掉旧版本释放空间」。从推荐执行危险动作会先确认（实测弹框并取消，未执行）。④ 其它：必填校验（实测拦住空参数并高亮字段）、筛选框、复制命令/输出、记住上次选中的工具包与动作、执行期间禁用表单、防重入。⑤ 顺带修掉一个真 bug：没写 danger 的动作（Danger 为 null）被当成 overwrite，所有只读动作都挂着「⚠ 此动作会覆盖已有文件」；已加 DangerOrDefault 规范化属性 + 3 个单测。",
+      "evidence": "① 拖放：资源管理器拖文件/文件夹到输入框即填充，多值字段追加且去重；填充规则抽成 PathDropLogic 并有 7 个单测（拖放本身无法自动化，界面上的接线需人工点一次）。② 分组：左侧工具包与动作按分组展示（可折叠），清单用 category 声明默认分组、用户右键可改并存在 %APPDATA%\\All Tool\\grouping.json；界面实测：三个工具包分成「包管理／压缩归档／Python 与包管理」，7zip 动作分成查看(4)/解压(2)/维护归档(3)/压缩(1)/诊断(1)，scoop 分成 10 组（应用管理 15、Shim 管理 5…）。③ 推荐下一步：清单声明 nextSteps，跑完按输出正则匹配给出按钮，点了可一键执行；界面实测：scoop list → 推荐「看看有没有可用更新」；scoop status（真有 5 个更新）→ 推荐「一键更新全部」+「清掉旧版本释放空间」。从推荐执行危险动作会先确认（实测弹框并取消，未执行）。④ 其它：必填校验（实测拦住空参数并高亮字段）、筛选框、复制命令/输出、记住上次选中的工具包与动作、执行期间禁用表单、防重入。⑤ 顺带修掉一个真 bug：没写 danger 的动作（Danger 为 null）被当成 overwrite，所有只读动作都挂着「⚠ 此动作会覆盖已有文件」；已加 DangerOrDefault 规范化属性 + 3 个单测。",
       "note": "规范随之扩展：新增工具包级/动作级 category 与动作级 nextSteps（schema、规范文档、playbook 同步）。"
     },
     {
@@ -974,8 +974,8 @@
     {
       "id": "N18",
       "task": "收尾迁移：改名 All Tool / 清第三方快照 / MIT / 转公开 / 发开发测试版 Release",
-      "why": "产品负责人已批准（选择 A 方案），并要求推送由我自行完成；授权在 D:\\AI\\All Tool 与 D:\\AI\\swpj 操作",
-      "how": "① 在 D:\\AI\\All Tool 克隆 → `git filter-repo --path <第三方快照目录> --invert-paths` 清历史；**只清第三方快照，保留 docs/reference/README.md 与 7zip-switch-matrix.json**（后者是校验器第 3 层的输入）；另把清单 sources 里的 file:///D:/... 路径换成官方网页 URL。② 改名：仓库名、窗口标题、About、AllTool.exe、命名空间 AllTool.Core/App、环境变量 ALLTOOL_*、`%APPDATA%\\AllTool`（**旧设置做一次性迁移**，别让用户丢记住的参数与分组）；本机目录 D:\\AI\\swpj 保留不动，免得会话工作区失效。③ MIT LICENSE + 转公开。④ Release 附件用 `scripts/publish-app.ps1` 的独立包（zip），说明写清 Win10/11 x64、解压即用、已知限制",
+      "why": "产品负责人已批准（选择 A 方案），并要求推送由我自行完成；授权在 D:\\AI\\All Tool 与 D:\\AI\\All Tool 操作",
+      "how": "① 在 D:\\AI\\All Tool 克隆 → `git filter-repo --path <第三方快照目录> --invert-paths` 清历史；**只清第三方快照，保留 docs/reference/README.md 与 7zip-switch-matrix.json**（后者是校验器第 3 层的输入）；另把清单 sources 里的 file:///D:/... 路径换成官方网页 URL。② 改名：仓库名、窗口标题、About、AllTool.exe、命名空间 AllTool.Core/App、环境变量 ALLTOOL_*、`%APPDATA%\\AllTool`（**旧设置做一次性迁移**，别让用户丢记住的参数与分组）；本机目录 D:\\AI\\All Tool 保留不动，免得会话工作区失效。③ MIT LICENSE + 转公开。④ Release 附件用 `scripts/publish-app.ps1` 的独立包（zip），说明写清 Win10/11 x64、解压即用、已知限制",
       "doneWhen": "公开仓库可访问、Release 可下载、另一台 Win10/11 机器解压即用、文档里的名字与链接都指向 All Tool",
       "priority": 1
     }

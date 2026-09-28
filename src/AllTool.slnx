@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="AllTool.App/AllTool.App.csproj">
+    <Platform Project="x64" />
+  </Project>
+  <Project Path="AllTool.Core.Tests/AllTool.Core.Tests.csproj" />
+  <Project Path="AllTool.Core/AllTool.Core.csproj" />
+</Solution>

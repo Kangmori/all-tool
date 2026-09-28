@@ -4,8 +4,8 @@
 #
 # 参数知识来源：
 #   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netstat
-#      离线快照 docs/reference/win-docs/netstat.html
-#   2) 本机 `netstat /?` 的真实输出：docs/reference/win-help/netstat.txt（不入库，见 .gitignore）
+#      离线快照 Microsoft Learn 官方文档（见各动作的 sources）/netstat.html
+#   2) 本机 `netstat /?` 的真实输出：本机帮助快照（**未入库**，可用下列命令重新抓取）/netstat.txt（不入库，见 .gitignore）
 #
 # **两处来源不一致，已记录在 NOTES.md §7（按 playbook 阶段 2 的精神，以本机内置帮助为准做取舍）**：
 #   - 官方网页的语法行只列了 -a -b -e -n -o -p -q -r -s [interval]；
@@ -34,9 +34,9 @@ sources:
     url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netstat
     retrieved: "2026-09-27"
     appliesTo: Windows 10/11
-    note: 离线快照 docs/reference/win-docs/netstat.html。语法行：netstat [-a] [-b] [-e] [-n] [-o] [-p <Protocol>] [-q] [-r] [-s] [<interval>]；#parameters 表逐条解释。
+    note: 离线快照 Microsoft Learn 官方文档（见各动作的 sources）/netstat.html。语法行：netstat [-a] [-b] [-e] [-n] [-o] [-p <Protocol>] [-q] [-r] [-s] [<interval>]；#parameters 表逐条解释。
   - title: 本机 `netstat /?` 的真实输出快照
-    url: file:///D:/AI/swpj/docs/reference/win-help/netstat.txt
+    url: file:///D:/AI/All Tool/本机帮助快照（**未入库**，可用下列命令重新抓取）/netstat.txt
     retrieved: "2026-09-27"
     appliesTo: Windows 11 26200 / NETSTAT.EXE 文件版本 10.0.26100.8521
     note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。注意这份帮助**写在 stderr**（stdout 0 字节，stderr 2074 字节），退出码 1。
@@ -76,11 +76,11 @@ actions:
     description: 显示全部活动的 TCP 连接，以及 TCP/UDP 正在侦听的端口，端口用数字表示。最常用的排查入口。
     command: ""
     sources:
-      - title: netstat 官方参考 —— -a 与 -n 参数
-        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netstat#parameters
+      - title: netstat 官方参考（Microsoft Learn）
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netstat
         retrieved: "2026-09-27"
         appliesTo: Windows 10/11
-        note: 本机 /? 快照 docs/reference/win-help/netstat.txt 的 -a 与 -n 两行
+        note: "开关以本机 `netstat /?` 的输出核对过；/ ? 快照不入库（见 .gitignore）"
     fields:
       - id: all
         label: 包含侦听端口（-a）

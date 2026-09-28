@@ -4,8 +4,8 @@
 #
 # 参数知识来源：
 #   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ipconfig
-#      离线快照 docs/reference/win-docs/ipconfig.html
-#   2) 本机 `ipconfig /?` 的真实输出：docs/reference/win-help/ipconfig.txt（不入库，见 .gitignore）
+#      离线快照 Microsoft Learn 官方文档（见各动作的 sources）/ipconfig.html
+#   2) 本机 `ipconfig /?` 的真实输出：本机帮助快照（**未入库**，可用下列命令重新抓取）/ipconfig.txt（不入库，见 .gitignore）
 #
 # **管理员权限**：官方文档与 `/?` 都没有明说哪些开关要提权，但实测与常识都指向
 # /release、/renew、/renew6、/release6、/registerdns、/flushdns、/setclassid 这几条会改动系统状态。
@@ -30,9 +30,9 @@ sources:
     url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ipconfig
     retrieved: "2026-09-27"
     appliesTo: Windows 10/11
-    note: 离线快照 docs/reference/win-docs/ipconfig.html。参数表在 #parameters，含 /all /displaydns /flushdns /registerdns /release /release6 /renew /renew6 /setclassid /showclassid。
+    note: 离线快照 Microsoft Learn 官方文档（见各动作的 sources）/ipconfig.html。参数表在 #parameters，含 /all /displaydns /flushdns /registerdns /release /release6 /renew /renew6 /setclassid /showclassid。
   - title: 本机 `ipconfig /?` 的真实输出快照
-    url: file:///D:/AI/swpj/docs/reference/win-help/ipconfig.txt
+    url: file:///D:/AI/All Tool/本机帮助快照（**未入库**，可用下列命令重新抓取）/ipconfig.txt
     retrieved: "2026-09-27"
     appliesTo: Windows 11 26200 / ipconfig.exe 文件版本 10.0.26100.8521
     note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。注意 /? 里还列了 /allcompartments 与 /showclassid6 /setclassid6，官方网页的语法行里没有 /allcompartments —— 见 NOTES.md §7 的来源冲突记录。
@@ -71,11 +71,11 @@ actions:
     description: 显示每个已绑定 TCP/IP 的适配器的 IP 地址、子网掩码与默认网关。不带任何开关。
     command: ""
     sources:
-      - title: ipconfig 官方参考 —— 默认行为与语法
-        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ipconfig#syntax
+      - title: ipconfig 官方参考（Microsoft Learn）
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ipconfig
         retrieved: "2026-09-27"
         appliesTo: Windows 10/11
-        note: 本机 /? 快照 docs/reference/win-help/ipconfig.txt（"默认情况下，仅显示绑定到 TCP/IP 的每个适配器的…"）
+        note: "开关以本机 `ipconfig /?` 的输出核对过；/ ? 快照不入库（见 .gitignore）"
     fields: []
     examples:
       - title: 查看简要配置

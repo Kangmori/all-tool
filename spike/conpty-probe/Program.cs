@@ -1,5 +1,5 @@
 using System.Text;
-using Swpj.Core.Execution;
+using AllTool.Core.Execution;
 
 // ConPTY 诊断程序（**无控制台的 GUI 子系统**）。
 //
@@ -12,7 +12,7 @@ using Swpj.Core.Execution;
 // 用法：conpty-probe.exe <报告文件路径>
 var reportPath = args.Length > 0
     ? args[0]
-    : Path.Combine(Path.GetTempPath(), "swpj-conpty-probe.txt");
+    : Path.Combine(Path.GetTempPath(), "All Tool-conpty-probe.txt");
 
 var log = new StringBuilder();
 log.AppendLine($"父进程 pid={Environment.ProcessId}，是否有控制台={HasConsole()}");

@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>AllTool.App</RootNamespace>
+    <AssemblyName>AllTool</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <!-- 固定输出路径：声明了 Platforms 之后，经解决方案构建的产物会落到 bin\x64\Debug\ 而不是
+         bin\Debug\，导致脚本与启动器指向旧的可执行文件——症状是"代码改了但行为没变"（踩过）。
+         这个属性让输出始终在 bin\<配置>\ 下。 -->
+    <AppendPlatformToOutputPath>false</AppendPlatformToOutputPath>
+    <UseWinUI>true</UseWinUI>
+    <!-- unpackaged：个人自用不需要 MSIX 与证书；代价是依赖已安装的 Windows App Runtime -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AllTool.Core\AllTool.Core.csproj" />
+  </ItemGroup>
+
+  <!--
+    修 `dotnet publish` 丢 XAML 资源的问题（陷阱 P22）。
+    publish 的输出里**没有** AllTool.App.pri 与 *.xbf，于是程序一启动就在 XAML 初始化时崩，
+    退出码 0xC000027B（看起来像缺运行时，其实只是资源没拷）。
+    这里在 Publish 之后把编译产生的资源补进发布目录——这样"自包含发布"才能真正独立运行
+    （不需要目标机器预装 Windows App Runtime）。
+  -->
+  <Target Name="CopyXamlResourcesToPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <XamlResourceToPublish Include="$(TargetDir)$(AssemblyName).pri" />
+      <XamlResourceToPublish Include="$(TargetDir)**\*.xbf" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(XamlResourceToPublish)"
+          DestinationFiles="@(XamlResourceToPublish->'$(PublishDir)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true"
+          Condition="'$(PublishDir)' != ''" />
+
+    <Message Importance="high"
+             Text="已把 XAML 资源补进发布目录（$(AssemblyName).pri 与 *.xbf）：@(XamlResourceToPublish->'%(Filename)%(Extension)', ', ')" />
+  </Target>
+
+</Project>

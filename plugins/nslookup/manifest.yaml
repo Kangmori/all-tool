@@ -4,9 +4,9 @@
 #
 # 参数知识来源：
 #   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/nslookup
-#      离线快照 docs/reference/win-docs/nslookup.html
+#      离线快照 Microsoft Learn 官方文档（见各动作的 sources）/nslookup.html
 #      该页把可用的子命令与 set 选项写成一行一行的表格（nslookup set type 等），本清单据此取开关。
-#   2) 本机 `nslookup /?` 的真实输出：docs/reference/win-help/nslookup.txt（不入库，见 .gitignore）
+#   2) 本机 `nslookup /?` 的真实输出：本机帮助快照（**未入库**，可用下列命令重新抓取）/nslookup.txt（不入库，见 .gitignore）
 #
 # **这个工具的 /? 与真实输出行为要特别注意（都实测过，见 NOTES.md §7）**：
 #   - `nslookup /?` 的帮助**写在 stderr**（stdout 为 0 字节），退出码 1 —— 与其他命令相反；
@@ -32,9 +32,9 @@ sources:
     url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/nslookup
     retrieved: "2026-09-27"
     appliesTo: Windows 10/11
-    note: 离线快照 docs/reference/win-docs/nslookup.html。页面用表格逐条列出子命令（nslookup exit / ls / server / set …）与 set 选项（set type / set debug / set timeout / set retry …）。
+    note: 离线快照 Microsoft Learn 官方文档（见各动作的 sources）/nslookup.html。页面用表格逐条列出子命令（nslookup exit / ls / server / set …）与 set 选项（set type / set debug / set timeout / set retry …）。
   - title: 本机 `nslookup /?` 的真实输出快照
-    url: file:///D:/AI/swpj/docs/reference/win-help/nslookup.txt
+    url: file:///D:/AI/All Tool/本机帮助快照（**未入库**，可用下列命令重新抓取）/nslookup.txt
     retrieved: "2026-09-27"
     appliesTo: Windows 11 26200 / nslookup.exe 文件版本 10.0.26100.8521
     note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。这份快照揭示了两个关键行为：帮助走 stderr；以及 `-opt ...` 的用法行。
@@ -75,11 +75,11 @@ actions:
     description: 用系统默认 DNS 服务器查询一个域名或 IP 地址。最常用的一条。
     command: ""
     sources:
-      - title: nslookup 官方参考 —— 语法行（host / host server）与 set type
-        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/nslookup#syntax
+      - title: nslookup 官方参考（Microsoft Learn）
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/nslookup
         retrieved: "2026-09-27"
         appliesTo: Windows 10/11
-        note: 本机 /? 快照 docs/reference/win-help/nslookup.txt 的四行用法
+        note: "开关以本机 `nslookup /?` 的输出核对过；/ ? 快照不入库（见 .gitignore）"
     fields:
       - id: host
         label: 要查询的域名或地址

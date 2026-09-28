@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://swpj.invalid/schemas/manifest-v1.schema.json",
+  "$id": "https://All Tool.invalid/schemas/manifest-v1.schema.json",
   "title": "命令行工具包清单 manifest v1",
   "description": "描述一个命令行工具如何被可视化调用：如何找到它、如何把界面字段变成 argv、如何解释输出。所有字段都不得凭空发明，必须有官方文档依据。",
   "type": "object",

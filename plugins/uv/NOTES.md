@@ -137,7 +137,7 @@ commandArgs: ["install"]
 ### 3.1 为什么正则写成 `uvx?` 而不是 `uv`（**实测抓出来的真缺陷**）
 
 `locate.alternativeNames` 里列了 `uv` 与 `uvx`。宿主 `ToolLocator.FindExecutable`
-会**先试 `executable`，再按顺序试 `alternativeNames`**（`src/Swpj.Core/Discovery/ToolLocator.cs` 第 40–67 行），
+会**先试 `executable`，再按顺序试 `alternativeNames`**（`src/AllTool.Core/Discovery/ToolLocator.cs` 第 40–67 行），
 所以 `uv.exe` 不在搜索目录里时会回退到 `uvx.exe`。
 
 winget 的安装目录里**两个 exe 都有**：
@@ -227,7 +227,7 @@ uv version     (空目录)         exit=2  error: No `pyproject.toml` found in c
 
 清单写 `runtime.encoding: utf-8`（**不是 `auto`**）。
 理由：uv 是 Rust 写的，stdout / stderr 都是 UTF-8；而宿主 `EncodingResolver.DefaultForConsoleApps()`
-在中文 Windows 上默认按 cp936 解码（`src/Swpj.Core/Execution/ProcessRunner.cs`）。
+在中文 Windows 上默认按 cp936 解码（`src/AllTool.Core/Execution/ProcessRunner.cs`）。
 
 宿主代码里本来就有这条判断（`ProcessRunner.cs` 第 301–303 行的注释原文）：
 > 理由：Windows 上的传统命令行程序在被重定向时，通常仍按控制台输出码页（中文系统上是 936）写字节，
@@ -524,7 +524,7 @@ uv 这条事实**不存在**，只能实测。规范没有说明"文档没写时
 （注意：上面这几行是**按 cp936 解码**得到的。校验器本身是 Python，它的中文按系统代码页输出，
 按 UTF-8 解会是乱码——与 §5.3 是同一个坑。）
 
-**宿主侧核对**：`dotnet test src\Swpj.slnx` → **99/99 通过**，
+**宿主侧核对**：`dotnet test src\AllTool.slnx` → **99/99 通过**，
 其中 `RealManifestTests.加载全部工具包都不应抛异常` 会遍历 `plugins/` 下的**全部**清单
 （`ManifestLoader.LoadAll`），所以 uv 清单**已被宿主的真实加载器 + 结构校验接受**，
 不只是过了 Python 校验器。

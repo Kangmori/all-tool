@@ -4,8 +4,8 @@
 #
 # 参数知识来源：
 #   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tasklist
-#      离线快照 docs/reference/win-docs/tasklist.html
-#   2) 本机 `tasklist /?` 的真实输出：docs/reference/win-help/tasklist.txt（不入库，见 .gitignore）
+#      离线快照 Microsoft Learn 官方文档（见各动作的 sources）/tasklist.html
+#   2) 本机 `tasklist /?` 的真实输出：本机帮助快照（**未入库**，可用下列命令重新抓取）/tasklist.txt（不入库，见 .gitignore）
 #
 # **/s /u /p 是"连远程机器并换账号"**：本工具包刻意**不做**它们。
 # 理由：/p 需要明文密码，把它放进清单会让密码经界面输入；而本项目的界面把 password 字段做了"永不落盘"，
@@ -32,9 +32,9 @@ sources:
     url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tasklist
     retrieved: "2026-09-27"
     appliesTo: Windows 10/11
-    note: 离线快照 docs/reference/win-docs/tasklist.html。语法行：tasklist [/s <computer> [/u …]] [{/m <module> | /svc | /v}] [/fo {table | list | csv}] [/nh] [/fi <filter> …]；另有筛选器名称与有效运算符的表。
+    note: 离线快照 Microsoft Learn 官方文档（见各动作的 sources）/tasklist.html。语法行：tasklist [/s <computer> [/u …]] [{/m <module> | /svc | /v}] [/fo {table | list | csv}] [/nh] [/fi <filter> …]；另有筛选器名称与有效运算符的表。
   - title: 本机 `tasklist /?` 的真实输出快照
-    url: file:///D:/AI/swpj/docs/reference/win-help/tasklist.txt
+    url: file:///D:/AI/All Tool/本机帮助快照（**未入库**，可用下列命令重新抓取）/tasklist.txt
     retrieved: "2026-09-27"
     appliesTo: Windows 11 26200 / tasklist.exe 文件版本 10.0.26100.1
     note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。与官方页面相比多了 /APPS（见文件头说明）。
@@ -74,11 +74,11 @@ actions:
     description: 显示本机所有进程的映像名称、PID、会话名、会话号与内存使用。最常用的一条。
     command: ""
     sources:
-      - title: tasklist 官方参考 —— 默认输出与 /nh 参数
-        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tasklist#parameters
+      - title: tasklist 官方参考（Microsoft Learn）
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tasklist
         retrieved: "2026-09-27"
         appliesTo: Windows 10/11
-        note: 本机 /? 快照 docs/reference/win-help/tasklist.txt 的 Examples 一节（TASKLIST / TASKLIST /V /FO CSV …）
+        note: "开关以本机 `tasklist /?` 的输出核对过；/ ? 快照不入库（见 .gitignore）"
     fields:
       - id: format
         label: 输出格式

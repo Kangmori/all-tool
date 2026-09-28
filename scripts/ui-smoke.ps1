@@ -9,7 +9,7 @@
 # 用法：pwsh -File scripts/ui-smoke.ps1
 [CmdletBinding()]
 param(
-    [string]$Exe = (Join-Path $PSScriptRoot '..\src\Swpj.App\bin\Debug\net10.0-windows10.0.26100.0\Swpj.App.exe'),
+    [string]$Exe = (Join-Path $PSScriptRoot '..\src\AllTool.App\bin\Debug\net10.0-windows10.0.26100.0\AllTool.App.exe'),
     [int]$ActionIndex = 1,
     [string]$Screenshot = (Join-Path $PSScriptRoot '..\spike\ui-smoke.png'),
     [int]$RunTimeoutSeconds = 60
@@ -21,13 +21,13 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Drawing
 
 $Exe = [IO.Path]::GetFullPath($Exe)
-if (-not (Test-Path $Exe)) { throw "找不到 $Exe，先 dotnet build src\Swpj.App\Swpj.App.csproj" }
+if (-not (Test-Path $Exe)) { throw "找不到 $Exe，先 dotnet build src\AllTool.App\AllTool.App.csproj" }
 
 # ------------------------------------------------------------------ 1. 造测试数据
 $sevenZip = (Get-Command 7z -ErrorAction SilentlyContinue).Source
 if (-not $sevenZip) { throw "本机找不到 7z，无法准备测试数据" }
 
-$work = Join-Path $env:TEMP ('swpj-uismoke-' + [guid]::NewGuid().ToString('N'))
+$work = Join-Path $env:TEMP ('alltool-uismoke-' + [guid]::NewGuid().ToString('N'))
 $outDir = Join-Path $work 'extracted'
 New-Item -ItemType Directory -Force -Path $work, $outDir | Out-Null
 Set-Content (Join-Path $work 'hello.txt') 'hello from ui smoke' -Encoding ascii
@@ -46,12 +46,12 @@ Write-Host "测试数据：$archive ($([math]::Round((Get-Item $archive).Length/
 
 # ------------------------------------------------------------------ 2. 启动应用
 # 必须同时钉住工具包：宿主现在会"恢复上次选中的工具包/动作"，
-# 只设 SWPJ_SELECT_ACTION 的话，序号会被套用到上次那个包上（脚本会失灵）。
-$env:SWPJ_SELECT_PACKAGE = '7zip'
-$env:SWPJ_SELECT_ACTION = "$ActionIndex"
+# 只设 ALLTOOL_SELECT_ACTION 的话，序号会被套用到上次那个包上（脚本会失灵）。
+$env:ALLTOOL_SELECT_PACKAGE = '7zip'
+$env:ALLTOOL_SELECT_ACTION = "$ActionIndex"
 $process = Start-Process -FilePath $Exe -PassThru
-Remove-Item Env:\SWPJ_SELECT_ACTION -ErrorAction SilentlyContinue
-Remove-Item Env:\SWPJ_SELECT_PACKAGE -ErrorAction SilentlyContinue
+Remove-Item Env:\ALLTOOL_SELECT_ACTION -ErrorAction SilentlyContinue
+Remove-Item Env:\ALLTOOL_SELECT_PACKAGE -ErrorAction SilentlyContinue
 
 $automation = [System.Windows.Automation.AutomationElement]
 $scope = [System.Windows.Automation.TreeScope]
@@ -75,13 +75,13 @@ try {
     # 让窗口置顶，UIA 对不可见元素会返回空
     Add-Type @'
 using System; using System.Runtime.InteropServices;
-public static class SwpjUiWin32 {
+public static class AllToolUiWin32 {
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint f);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
 }
 '@ -ErrorAction SilentlyContinue
-    [void][SwpjUiWin32]::ShowWindow($window.Current.NativeWindowHandle, 9)
-    [void][SwpjUiWin32]::SetWindowPos($window.Current.NativeWindowHandle, [IntPtr]::Zero, 0, 0, 1440, 900, 0x40)
+    [void][AllToolUiWin32]::ShowWindow($window.Current.NativeWindowHandle, 9)
+    [void][AllToolUiWin32]::SetWindowPos($window.Current.NativeWindowHandle, [IntPtr]::Zero, 0, 0, 1440, 900, 0x40)
     Start-Sleep -Milliseconds 1200
 
     # ------------------------------------------------------------------ 3. 列出输入框
@@ -204,12 +204,12 @@ public static class SwpjUiWin32 {
     Start-Sleep -Milliseconds 800
 
     $cancelArchive = Join-Path $work 'cancelled.7z'
-    $env:SWPJ_SELECT_ACTION = '0'
+    $env:ALLTOOL_SELECT_ACTION = '0'
     $process = Start-Process -FilePath $Exe -PassThru
-    Remove-Item Env:\SWPJ_SELECT_ACTION -ErrorAction SilentlyContinue
+    Remove-Item Env:\ALLTOOL_SELECT_ACTION -ErrorAction SilentlyContinue
     $window = Get-AppWindow
-    [void][SwpjUiWin32]::ShowWindow($window.Current.NativeWindowHandle, 9)
-    [void][SwpjUiWin32]::SetWindowPos($window.Current.NativeWindowHandle, [IntPtr]::Zero, 0, 0, 1440, 900, 0x40)
+    [void][AllToolUiWin32]::ShowWindow($window.Current.NativeWindowHandle, 9)
+    [void][AllToolUiWin32]::SetWindowPos($window.Current.NativeWindowHandle, [IntPtr]::Zero, 0, 0, 1440, 900, 0x40)
     Start-Sleep -Milliseconds 1200
 
     # 「添加到压缩包」的表单：0=压缩包，1=要压缩的文件/文件夹（每行一项）

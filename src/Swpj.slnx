@@ -1,7 +1,0 @@
-<Solution>
-  <Project Path="Swpj.App/Swpj.App.csproj">
-    <Platform Project="x64" />
-  </Project>
-  <Project Path="Swpj.Core.Tests/Swpj.Core.Tests.csproj" />
-  <Project Path="Swpj.Core/Swpj.Core.csproj" />
-</Solution>

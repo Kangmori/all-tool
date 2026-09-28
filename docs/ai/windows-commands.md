@@ -264,10 +264,10 @@ Windows 自带命令**没有统一的版本开关**：没有 `--version`，`/?` 
 **现象**：
 
 ```
-$ dotnet test src\Swpj.slnx
-失败 Swpj.Core.Tests.RealManifestTests.加载全部工具包都不应抛异常 [12 ms]
+$ dotnet test src\AllTool.slnx
+失败 AllTool.Core.Tests.RealManifestTests.加载全部工具包都不应抛异常 [12 ms]
 错误消息:
- Swpj.Core.Manifest.ManifestException : 清单校验失败 D:\AI\swpj\plugins\chkdsk\manifest.yaml：
+ AllTool.Core.Manifest.ManifestException : 清单校验失败 D:\AI\All Tool\plugins\chkdsk\manifest.yaml：
 - 动作 check：缺少 command
 - 动作 fix：缺少 command
 - 动作 recover：缺少 command
@@ -278,14 +278,14 @@ $ dotnet test src\Swpj.slnx
 
 **根因（校验与执行层自相矛盾）**：
 
-- `src/Swpj.Core/Manifest/ManifestValidation.cs:78`
+- `src/AllTool.Core/Manifest/ManifestValidation.cs:78`
   ```csharp
   if (string.IsNullOrWhiteSpace(action.Command))
   {
       errors.Add($"{where}：缺少 command");
   }
   ```
-- `src/Swpj.Core/Execution/ArgvBuilder.cs:28`
+- `src/AllTool.Core/Execution/ArgvBuilder.cs:28`
   ```csharp
   if (!string.IsNullOrEmpty(action.Command))   // ← 执行层本来就支持空命令
   {
@@ -352,12 +352,12 @@ Windows 自带命令的版本在 exe 的文件版本资源里（例如 `ping.exe
 
 `D13`（要不要实现 `requiresAdmin`）实际**已经落地**：
 
-- `src/Swpj.Core/Manifest/ManifestModel.cs:123` → `ManifestAction.RequiresAdmin`（`bool?`）
+- `src/AllTool.Core/Manifest/ManifestModel.cs:123` → `ManifestAction.RequiresAdmin`（`bool?`）
 - `ManifestModel.cs:126` → `RequiresAdminEffective(packageDefault)`（动作级覆盖工具包级）
-- `src/Swpj.App/MainWindow.xaml.cs:1147` → 选中动作时在描述里加"⚠ 这个动作通常需要管理员权限…"，
+- `src/AllTool.App/MainWindow.xaml.cs:1147` → 选中动作时在描述里加"⚠ 这个动作通常需要管理员权限…"，
   已是管理员则显示"✔ 已是管理员"
-- `src/Swpj.App/MainWindow.xaml.cs:1996` → 执行前如果非管理员，在输出区加一行提示
-- `src/Swpj.Core.Tests/RequiresAdminTests.cs` → 4 个测试覆盖动作级/包级组合
+- `src/AllTool.App/MainWindow.xaml.cs:1996` → 执行前如果非管理员，在输出区加一行提示
+- `src/AllTool.Core.Tests/RequiresAdminTests.cs` → 4 个测试覆盖动作级/包级组合
 
 **但规范文档说它"尚未实现"**：`docs/spec/manifest-v1.md` §2.4 的表格里写着
 "`requiresAdmin`｜**宿主尚未实现**（既不提示也不拦截）"。**这一条已经过期，应当更新**。
@@ -425,7 +425,7 @@ Windows 自带命令的版本在 exe 的文件版本资源里（例如 `ping.exe
 6. 对照写清单：只写官方文档里有的开关；冲突时以官方为准
 7. 校验：uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py
 8. 冒烟：把新命令加进 scripts/smoke-win-cmds.ps1 的只读白名单与红线清单
-9. dotnet test src\Swpj.slnx（注意 §7.1 的阻塞项）
+9. dotnet test src\AllTool.slnx（注意 §7.1 的阻塞项）
 ```
 
 **先做这 12 个的理由**：它们是 Windows 上"用户最可能想点一下"的诊断与维护命令 ——

@@ -4,8 +4,8 @@
 #
 # 参数知识来源：
 #   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tracert
-#      离线快照 docs/reference/win-docs/tracert.html
-#   2) 本机 `tracert /?` 的真实输出：docs/reference/win-help/tracert.txt（不入库，见 .gitignore）
+#      离线快照 Microsoft Learn 官方文档（见各动作的 sources）/tracert.html
+#   2) 本机 `tracert /?` 的真实输出：本机帮助快照（**未入库**，可用下列命令重新抓取）/tracert.txt（不入库，见 .gitignore）
 #
 # 版本：Windows 自带命令没有 --version 开关，故不写 versionArgs/versionPattern（R1）。
 # 编码：实测原始字节为 OEM 代码页 936，见 NOTES.md §5。
@@ -25,9 +25,9 @@ sources:
     url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tracert
     retrieved: "2026-09-27"
     appliesTo: Windows 10/11
-    note: 离线快照 docs/reference/win-docs/tracert.html。参数表在 #parameters，含 /d /h /j /w /R /S /4 /6。
+    note: 离线快照 Microsoft Learn 官方文档（见各动作的 sources）/tracert.html。参数表在 #parameters，含 /d /h /j /w /R /S /4 /6。
   - title: 本机 `tracert /?` 的真实输出快照
-    url: file:///D:/AI/swpj/docs/reference/win-help/tracert.txt
+    url: file:///D:/AI/All Tool/本机帮助快照（**未入库**，可用下列命令重新抓取）/tracert.txt
     retrieved: "2026-09-27"
     appliesTo: Windows 11 26200 / TRACERT.EXE 文件版本 10.0.26100.8115
     note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。本清单的每个开关都对着这份输出核对过。
@@ -66,11 +66,11 @@ actions:
     description: 最常用的一条：逐跳显示到目标主机所经过的路由器与每跳的往返时间。
     command: ""
     sources:
-      - title: tracert 官方参考 —— 语法与 /h /w 参数
-        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tracert#parameters
+      - title: tracert 官方参考（Microsoft Learn）
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tracert
         retrieved: "2026-09-27"
         appliesTo: Windows 10/11
-        note: 本机 /? 快照 docs/reference/win-help/tracert.txt（用法行与选项一节）
+        note: "开关以本机 `tracert /?` 的输出核对过；/ ? 快照不入库（见 .gitignore）"
     fields:
       - id: target
         label: 目标主机

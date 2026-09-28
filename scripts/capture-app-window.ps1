@@ -1,4 +1,4 @@
-# 截取 swpj 宿主窗口的画面，用于界面验收。
+# 截取 All Tool 宿主窗口的画面，用于界面验收。
 #
 # 为什么需要它：这个项目的界面改动无法靠单元测试验收，必须"运行 + 看画面"。
 # 而且必须**只截应用窗口**——截全屏会把桌面上其它窗口（浏览器、聊天工具）一起带进来，
@@ -10,7 +10,7 @@
 #   pwsh -File scripts/capture-app-window.ps1 -KeepRunning        # 截完不关，留着手动操作
 [CmdletBinding()]
 param(
-    [string]$Exe = (Join-Path $PSScriptRoot '..\src\Swpj.App\bin\Debug\net10.0-windows10.0.26100.0\Swpj.App.exe'),
+    [string]$Exe = (Join-Path $PSScriptRoot '..\src\AllTool.App\bin\Debug\net10.0-windows10.0.26100.0\AllTool.App.exe'),
     [string]$Out = (Join-Path $PSScriptRoot '..\spike\app-window.png'),
     [int]$ActionIndex = -1,
     [int]$WaitSeconds = 6,
@@ -22,16 +22,16 @@ $ErrorActionPreference = 'Stop'
 
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 
-if (-not ('SwpjWin32' -as [type])) {
+if (-not ('AllToolWin32' -as [type])) {
     Add-Type @'
 using System;
 using System.Runtime.InteropServices;
 
-public struct SwpjRect { public int Left, Top, Right, Bottom; }
+public struct AllToolRect { public int Left, Top, Right, Bottom; }
 
-public static class SwpjWin32
+public static class AllToolWin32
 {
-    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out SwpjRect rect);
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out AllToolRect rect);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
@@ -46,28 +46,28 @@ public static class SwpjWin32
 '@
 }
 
-$SwpjPwRenderFullContent = 2
-$SwpjSwpShowWindow = 0x0040
-$SwpjHwndTop = [IntPtr]::Zero
+$AllToolPwRenderFullContent = 2
+$AllToolSwpShowWindow = 0x0040
+$AllToolHwndTop = [IntPtr]::Zero
 
 $Exe = [IO.Path]::GetFullPath($Exe)
 $Out = [IO.Path]::GetFullPath($Out)
 
 if (-not (Test-Path $Exe)) {
-    throw "找不到可执行文件：$Exe`n先运行：dotnet build src\Swpj.App\Swpj.App.csproj"
+    throw "找不到可执行文件：$Exe`n先运行：dotnet build src\AllTool.App\AllTool.App.csproj"
 }
 
-$process = Get-Process -Name 'Swpj.App' -ErrorAction SilentlyContinue | Select-Object -First 1
+$process = Get-Process -Name 'AllTool.App' -ErrorAction SilentlyContinue | Select-Object -First 1
 $started = $false
 
 if (-not $process) {
     if ($ActionIndex -ge 0) {
-        $env:SWPJ_SELECT_ACTION = "$ActionIndex"
+        $env:ALLTOOL_SELECT_ACTION = "$ActionIndex"
     }
 
     $process = Start-Process -FilePath $Exe -PassThru
     $started = $true
-    Remove-Item Env:\SWPJ_SELECT_ACTION -ErrorAction SilentlyContinue
+    Remove-Item Env:\ALLTOOL_SELECT_ACTION -ErrorAction SilentlyContinue
     Write-Host "已启动：PID $($process.Id)"
 }
 
@@ -87,14 +87,14 @@ Write-Host "窗口标题：$($process.MainWindowTitle)"
 
 # 先把窗口挪到左上角并置顶。SetWindowPos 不受 SetForegroundWindow 的前台限制，
 # 这一步是给 PrintWindow 失败时的兜底（屏幕抓取）创造干净的条件。
-[void][SwpjWin32]::ShowWindow($process.MainWindowHandle, 9)   # SW_RESTORE
-[void][SwpjWin32]::SetWindowPos($process.MainWindowHandle, $SwpjHwndTop, 0, 0, 1440, 900,
-    [uint32]($SwpjSwpShowWindow))
-[void][SwpjWin32]::SetForegroundWindow($process.MainWindowHandle)
+[void][AllToolWin32]::ShowWindow($process.MainWindowHandle, 9)   # SW_RESTORE
+[void][AllToolWin32]::SetWindowPos($process.MainWindowHandle, $AllToolHwndTop, 0, 0, 1440, 900,
+    [uint32]($AllToolSwpShowWindow))
+[void][AllToolWin32]::SetForegroundWindow($process.MainWindowHandle)
 Start-Sleep -Milliseconds 1000
 
-$rect = New-Object SwpjRect
-if (-not [SwpjWin32]::GetWindowRect($process.MainWindowHandle, [ref]$rect)) {
+$rect = New-Object AllToolRect
+if (-not [AllToolWin32]::GetWindowRect($process.MainWindowHandle, [ref]$rect)) {
     throw "GetWindowRect 失败"
 }
 
@@ -109,7 +109,7 @@ if ($width -le 0 -or $height -le 0) {
 $bitmap = New-Object System.Drawing.Bitmap $width, $height
 $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
 $hdc = $graphics.GetHdc()
-$printed = [SwpjWin32]::PrintWindow($process.MainWindowHandle, $hdc, $SwpjPwRenderFullContent)
+$printed = [AllToolWin32]::PrintWindow($process.MainWindowHandle, $hdc, $AllToolPwRenderFullContent)
 $graphics.ReleaseHdc($hdc)
 
 # 采样几个点判断是不是全黑（WinUI 在某些情况下 PrintWindow 会返回黑图）

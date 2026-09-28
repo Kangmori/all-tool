@@ -82,7 +82,7 @@ project-state   │
 |---|---|
 | OS | Windows 11 专业工作站版，`10.0.26200`，x64 |
 | 用户 | `KANGMORI\Steve`，**非管理员** |
-| 工作区 | `D:\AI\swpj`（NTFS，已授予当前用户完全控制；此前 ACL 缺失曾导致沙箱无法写） |
+| 工作区 | `D:\AI\All Tool`（NTFS，已授予当前用户完全控制；此前 ACL 缺失曾导致沙箱无法写） |
 | 开发者模式 | 已开启（WinUI 打包应用调试需要） |
 | 长路径 | 已开启 |
 
@@ -223,7 +223,7 @@ uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py
 | P8 | `-v`（分卷）只能用于 `a` 命令 | 同上 | 同上 |
 | P9 | `x` / `e` 默认解压到**当前目录** | 7z 的行为 | 这两个动作用 `workingDirectory: outputDir` 覆盖 |
 | P10 | 目录里 clone 的 git 仓库被当成 gitlink 提交，别人克隆后拿不到内容 | git 把含 `.git` 的子目录视作内嵌仓库 | 提交前删掉内层 `.git`，或改用 submodule |
-| P11 | 沙箱无法给工作区授写权限，所有命令被拦 | `D:\AI\swpj` 的 ACL 缺显式 WRITE_DAC | `icacls "D:\AI\swpj" /grant "Steve:(OI)(CI)F"`（已修复） |
+| P11 | 沙箱无法给工作区授写权限，所有命令被拦 | `D:\AI\All Tool` 的 ACL 缺显式 WRITE_DAC | `icacls "D:\AI\All Tool" /grant "Steve:(OI)(CI)F"`（已修复） |
 | P12 | VS 工作负载 id 看起来像 UWP | 历史改名，id 未变 | 认 id `Microsoft.VisualStudio.Workload.Universal` |
 | P13 | 脚本拿到了"另一个同名文件"的内容，逻辑却看不出错 | **PowerShell 变量名大小写不敏感**：局部变量 `$stateFile` 会覆盖参数 `$StateFile` | 局部变量加前缀区分（`$vsStateFile`）；关键路径用 Write-Host 打印出来，出错时一眼可见 |
 | P14 | 错误被静默吞掉，只看到下游的空值判断走了 else 分支 | 脚本开头设了 `$ErrorActionPreference = 'SilentlyContinue'` | 探测脚本需要容错，但当"期望有值却为空"时要把实际路径/来源打印出来，否则排查成本极高 |
@@ -232,12 +232,12 @@ uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py
 | P17 | 截图里混进了桌面上别的窗口（浏览器、聊天工具） | 全屏截取，或 `SetForegroundWindow` 被前台限制挡下导致目标窗口仍在底层 | 用 `PrintWindow(..., PW_RENDERFULLCONTENT)` 让窗口画自己（`scripts/capture-app-window.ps1`）；并约定 `spike/*.png` 不入库 |
 | P18 | 测试偶发失败（同一段代码时过时不过） | 测试里用了 `System.Progress<T>`，它把回调投递到同步上下文/线程池，断言时可能还没落地 | 测试用同步收集器（`SyncProgress<T>`）；`Progress<T>` 只留给有 DispatcherQueue 的界面层 |
 | P19 | **ConPTY（伪控制台）路径拿不到任何子进程输出**（已解决，根因值得记住） | 根因：**子进程的标准句柄是从父进程复制过去的**——即使 `bInheritHandles = FALSE`，句柄"值"照样被填进子进程的标准句柄槽，而 ConPTY 只负责提供控制台、**不会覆盖**这些继承来的句柄。于是构成三种截然不同的表现：父进程是控制台程序 → 子进程直接写到父进程的控制台（绕过 ConPTY）；父进程的 stdout 被重定向（如 `dotnet test`）→ 子进程写到那个看不见的管道；父进程是无控制台的 GUI 程序（真实的 WinUI 宿主）→ 没有可继承的句柄，ConPTY 正常工作 | 修法：创建子进程时加 `STARTF_USESTDHANDLES`，并把三个标准句柄显式置为 NULL（见 `ConPtyProcessRunner`）。定位过程同样值得记：先逐一排除 8 项假设（结构体尺寸 / 继承标志 / 管道安全属性 / PTY 句柄关闭时机 / `ResizePseudoConsole` / 渲染时机 / 读循环吞异常 / 字段错位），再用**独立 GUI 子系统探针**（`spike/conpty-probe`）复现出"无控制台父进程下 ConPTY 正常"，最后用 `GetFileType` 在子进程内部确认句柄类型，才锁定"继承"这一条 |
-| P20 | 代码改了、也"构建成功"了，但运行的程序行为没变 | 两个原因各踩过一次：① 项目声明了 `<Platforms>x64</Platforms>`，**经解决方案构建**的产物落在 `bin\x64\Debug\` 而不是 `bin\Debug\`，脚本与启动器却指向后者（旧 exe 一直在被启动）；② `Swpj.App` 曾经不在 `src/Swpj.slnx` 里，于是 `dotnet build src\Swpj.slnx` **从不重建宿主**，清单加了新字段后宿主还在用旧版 `Swpj.Core`，表现为"载入工具包失败：Property 'xxx' not found on type ..." | 已修：加 `<AppendPlatformToOutputPath>false</AppendPlatformToOutputPath>` 固定输出路径，并把 `Swpj.App` 加进解决方案。**通用做法**：改完代码后确认产物时间戳变了再测；"构建成功"不等于"跑的是新代码" |
+| P20 | 代码改了、也"构建成功"了，但运行的程序行为没变 | 两个原因各踩过一次：① 项目声明了 `<Platforms>x64</Platforms>`，**经解决方案构建**的产物落在 `bin\x64\Debug\` 而不是 `bin\Debug\`，脚本与启动器却指向后者（旧 exe 一直在被启动）；② `AllTool.App` 曾经不在 `src/AllTool.slnx` 里，于是 `dotnet build src\AllTool.slnx` **从不重建宿主**，清单加了新字段后宿主还在用旧版 `AllTool.Core`，表现为"载入工具包失败：Property 'xxx' not found on type ..." | 已修：加 `<AppendPlatformToOutputPath>false</AppendPlatformToOutputPath>` 固定输出路径，并把 `AllTool.App` 加进解决方案。**通用做法**：改完代码后确认产物时间戳变了再测；"构建成功"不等于"跑的是新代码" |
 | P21 | 界面上填了多个值，命令行里却只出现一个参数 | **WinUI 的 `TextBox` 用 `\r` 表示换行**（不是 `\r\n`，也不是 `\n`）。所有"按行拆成多个值"的地方如果只按 `\n` 拆，整段文本会被当成一行，多值就退化成一个参数（实测：给 7z 的「分卷大小」填三行，生成的是 `"-v10k15k2m"` 一个被引号包住的参数） | 拆分一律写成 `text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)`。`ArgvBuilder` 的 `perLine` 与宿主的三个多值取值器都已按此修，并有专门的单测（`positional_perLine_也能处理只用回车换行的文本`） |
-| P22 | `dotnet publish` 出来的程序**启动即崩**（0xC000027B） | publish 的输出**漏掉了 `Swpj.App.pri` 与 `*.xbf`**（编译后的 XAML 资源），XAML 初始化必然失败。WER 会指向 `Microsoft.UI.Xaml.dll` + `combase.dll` 0x80004005(E_FAIL)，看起来像运行时缺件，其实只是资源没拷 | **已在 `Swpj.App.csproj` 里用 `CopyXamlResourcesToPublish` 目标补齐**（发布后把 `$(TargetDir)` 下的 `*.pri`/`*.xbf` 拷进 `$(PublishDir)`）。补上之后**独立发布也能用了**：`--self-contained true -p:WindowsAppSDKSelfContained=true` 出来的目录不依赖目标机器预装任何运行时，`scripts/publish-app.ps1` 默认就走这条路。排查这类"构建能跑、发布不能跑"的问题时，**先 diff 两个目录的文件清单**，比猜运行时依赖快得多 |
+| P22 | `dotnet publish` 出来的程序**启动即崩**（0xC000027B） | publish 的输出**漏掉了 `AllTool.App.pri` 与 `*.xbf`**（编译后的 XAML 资源），XAML 初始化必然失败。WER 会指向 `Microsoft.UI.Xaml.dll` + `combase.dll` 0x80004005(E_FAIL)，看起来像运行时缺件，其实只是资源没拷 | **已在 `AllTool.App.csproj` 里用 `CopyXamlResourcesToPublish` 目标补齐**（发布后把 `$(TargetDir)` 下的 `*.pri`/`*.xbf` 拷进 `$(PublishDir)`）。补上之后**独立发布也能用了**：`--self-contained true -p:WindowsAppSDKSelfContained=true` 出来的目录不依赖目标机器预装任何运行时，`scripts/publish-app.ps1` 默认就走这条路。排查这类"构建能跑、发布不能跑"的问题时，**先 diff 两个目录的文件清单**，比猜运行时依赖快得多 |
 | P23 | 执行完之后按输出做判断（如"推荐下一步"）却什么都没匹配到 | 界面上的输出行是 `Progress<T>` **异步投递**到 UI 线程的；跑到 `await RunAsync` 之后，最后几行可能还没落进 `OutputBox.Text`，拿它去匹配就会漏判（实测：scoop status 明明有更新，界面却什么也不推荐）。`System.Progress<T>` 在测试里同样会造成偶发失败 | 判断一律用**执行结果里权威的输出行**（`result.Lines`），不要读控件文本；测试里用同步的 `SyncProgress<T>` |
 | P24 | 点"取消"界面显示"正在取消…"，任务却照样跑完 | 两个坑叠加：① `OnCancelClicked` 原来**无条件**打"正在取消…"，`_cancellation` 为 null 时也这么说，把失败掩盖了；② 一次执行**没有防重入**——第二次进入会 new 一个新 CTS 覆盖字段，而真正在跑的任务持有的是旧 token，于是取消取消的是另一个对象 | ① 状态提示如实报告（没有任务 / 已发取消 / 取消出错）；② `OnRunClicked` 用 `_running` 防重入；③ 补了一条**用真实命令**的取消回归测试（`CancelRealCommandTests`：scoop shim 的 7z 压 48 MB 不可压缩数据，2 秒后取消），原先只有 `cmd + powershell` 的单测，覆盖不到真实被包装程序 |
-| P25 | 界面加了一个输入框，界面冒烟脚本就失灵 | 脚本原来按**序号**取控件（`$edits[0]`）；新增"筛选框"之后所有序号错位。同理，宿主"恢复上次选中的工具包"会让 `SWPJ_SELECT_ACTION` 的序号套到别的包上 | 脚本改成按 `AutomationId` 取（排除 `FilterBox` / `CommandLineBox` / `OutputBox`），并新增 `SWPJ_SELECT_PACKAGE` 显式钉住工具包。**凡是自动化脚本，都不要依赖控件序号或"最后一个输入框"这类位置假设** |
+| P25 | 界面加了一个输入框，界面冒烟脚本就失灵 | 脚本原来按**序号**取控件（`$edits[0]`）；新增"筛选框"之后所有序号错位。同理，宿主"恢复上次选中的工具包"会让 `ALLTOOL_SELECT_ACTION` 的序号套到别的包上 | 脚本改成按 `AutomationId` 取（排除 `FilterBox` / `CommandLineBox` / `OutputBox`），并新增 `ALLTOOL_SELECT_PACKAGE` 显式钉住工具包。**凡是自动化脚本，都不要依赖控件序号或"最后一个输入框"这类位置假设** |
 | P26 | 有些交互"没法自动化验证"，于是**做出来了但其实不能用**也没人发现 | 典型是**鼠标拖动**：UIA 读不到 ContextFlyout；合成的鼠标右键又因为 `SetForegroundWindow` 从非前台进程调用会被系统拒绝而落空（实测模拟右键落在了别的窗口上）。结果是"拖动改分组"实现了两轮、用户两次反馈拖不动，而我这边一次都没真正验证过 | ① **别把关键操作只挂在没法自动验证的交互上**——同一个功能要有一条"能自动点通"的入口（工具包分组因此补了「分组…」按钮，并有 `scripts/ui-verify-grouping.ps1` 作为回归）。② 把**判定逻辑**抽到 Core 用单测钉死：拖文件填路径 → `PathDropLogic`；安装/卸载 → `PackageInstaller`（11 个测试）；推荐下一步 → `NextStepMatcher`。③ 交互本身若确实没法验证，就**诚实地标注"未经自动化验证"**，不要当成"已完成" |
 | P27 | 测试偶发失败（"单独跑必过、全量跑偶尔红"） | 两个原因叠加：① 用**固定延时**去触发取消/超时——机器一快，被测任务在你取消之前就结束了，断言随之偶发失败（`CancelRealCommandTests` 踩过：固定等 2 秒，而 7z 有时不到 2 秒就压完了）；② 会真启动进程／真压文件的测试默认并行跑，互相抢资源 | ① 不要用固定延时，**等到可观察的信号**（例如"收到第一行输出"）再触发；断言里带上诊断信息（耗时／退出码／已收行数），好区分"任务已跑完"与"取消没生效"；② 把真实进程测试放进同一个 `[CollectionDefinition(DisableParallelization = true)]` 集合 |
 | P28 | 选中一个条目后，它所在的分组"迅速折叠又展开"（视觉闪烁） | 选中时为了换高亮把**整个列表重建**了一遍：`Children.Clear()` + 新建 Expander。新建的 Expander 会从 0 高度播放展开动画，看起来就是一缩一放 | **选中态原地更新，不要重建控件**：把每个条目的（按钮 + 高亮标记）登记到字典里，选中时只改这两个属性。验证方法很直接：**比较控件的 UIA RuntimeId**——控件被重建时它必然变化，没变就说明没有动画可播 |
@@ -312,7 +312,7 @@ uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py
 Token 额度重置、会话中断、换机器之后，照这个顺序，15 分钟内可重建完整上下文：
 
 ```
-1. cd D:\AI\swpj && git pull                    # 取最新状态
+1. cd D:\AI\All Tool && git pull                    # 取最新状态
 2. 读 AGENTS.md                                  # 硬规则（1 分钟）
 3. pwsh -File scripts/check-env.ps1              # 环境漂移报告；有 DRIFT 就先处理
 4. 读 docs/ai/project-state.json                 # 已有产物、未决问题、下一步

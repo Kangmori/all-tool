@@ -4,8 +4,8 @@
 #
 # 参数知识来源（两类，都可离线复核）：
 #   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ping
-#      离线快照 docs/reference/win-docs/ping.html（抓取脚本见 docs/reference/README.md）
-#   2) 本机 `ping /?` 的真实输出：docs/reference/win-help/ping.txt
+#      离线快照 Microsoft Learn 官方文档（见各动作的 sources）/ping.html（抓取脚本见 本机帮助快照（**未入库**，可用下列命令重新抓取）.md）
+#   2) 本机 `ping /?` 的真实输出：本机帮助快照（**未入库**，可用下列命令重新抓取）/ping.txt
 #      （该目录已加入 .gitignore：这些是微软的文本，本项目转公开仓库后不能发布）
 #
 # 关于版本：Windows 自带命令**没有统一的 --version 开关**，`ping /?` 是帮助而不是版本输出。
@@ -30,9 +30,9 @@ sources:
     url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ping
     retrieved: "2026-09-27"
     appliesTo: Windows 10/11
-    note: 离线快照 docs/reference/win-docs/ping.html。参数表在页面 #parameters 小节，逐行列出 /t /a /n /l /f /i /v /r /s /j /k /w /R /S /4 /6。
+    note: 离线快照 Microsoft Learn 官方文档（见各动作的 sources）/ping.html。参数表在页面 #parameters 小节，逐行列出 /t /a /n /l /f /i /v /r /s /j /k /w /R /S /4 /6。
   - title: 本机 `ping /?` 的真实输出快照
-    url: file:///D:/AI/swpj/docs/reference/win-help/ping.txt
+    url: file:///D:/AI/All Tool/本机帮助快照（**未入库**，可用下列命令重新抓取）/ping.txt
     retrieved: "2026-09-27"
     appliesTo: Windows 11 26200 / PING.EXE 文件版本 10.0.26100.8115
     note: 由 scripts/fetch-win-help.ps1 抓取。**不入库**（微软文本，公开仓库不发布），见 .gitignore 与 NOTES.md §3。本清单每个开关都对着这份输出核对过。
@@ -78,11 +78,11 @@ actions:
     description: 向目标主机发送若干个 ICMP 回显请求，统计丢包率与往返时间。最常用的一条。
     command: ""
     sources:
-      - title: ping 官方参考 —— 语法与 /n /l /w 参数
-        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ping#parameters
+      - title: ping 官方参考（Microsoft Learn）
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ping
         retrieved: "2026-09-27"
         appliesTo: Windows 10/11
-        note: 本机 /? 快照 docs/reference/win-help/ping.txt（用法行与"选项"一节）
+        note: "开关以本机 `ping /?` 的输出核对过；/ ? 快照不入库（见 .gitignore）"
     fields:
       - id: target
         label: 目标主机
@@ -168,11 +168,11 @@ actions:
     command: ""
     danger: none
     sources:
-      - title: ping 官方参考 —— /t 参数
-        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ping#parameters
+      - title: ping 官方参考（Microsoft Learn）
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ping
         retrieved: "2026-09-27"
         appliesTo: Windows 10/11
-        note: 本机 /? 快照 docs/reference/win-help/ping.txt 的 -t 一行
+        note: "开关以本机 `ping /?` 的输出核对过；/ ? 快照不入库（见 .gitignore）"
     fields:
       - id: target
         label: 目标主机
@@ -202,11 +202,11 @@ actions:
     description: 使用 IPv6 路由扩展头，让回显请求沿原路返回，用于双向路径诊断。
     command: ""
     sources:
-      - title: ping 官方参考 —— /R 与 /S 参数
-        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ping#parameters
+      - title: ping 官方参考（Microsoft Learn）
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ping
         retrieved: "2026-09-27"
         appliesTo: Windows 10/11
-        note: 本机 /? 快照 docs/reference/win-help/ping.txt 的 -R 与 -S 两行
+        note: "开关以本机 `ping /?` 的输出核对过；/ ? 快照不入库（见 .gitignore）"
     fields:
       - id: target
         label: 目标主机（IPv6）

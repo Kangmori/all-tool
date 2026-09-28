@@ -204,7 +204,7 @@ CHANGELOG 形态:          success=True  group1=[0.5.3]
 4. **`encoding` 是单值，且语义里不含"宿主该不该动子进程的编码"**。实测同一份 scoop 输出，宿主改不改子进程输出编码会得到 GBK 或 UTF-8 两种字节。规范只说"按 runtime.encoding 解码"，没说"不要给子进程设置输出编码"。建议在规范里写明宿主的责任，或允许声明 `childEncoding: utf-8`（即由宿主强制）。
 5. **无法表达交互式输入**。`scoop create` 用 `Read-Host` 问应用名与版本、`scoop shim alter` 用 `$Host.UI.PromptForChoice` 选来源（源码 `libexec/scoop-create.ps1:52`、`libexec/scoop-shim.ps1:200`）。v1 刻意不做交互（规范 §8），但清单里也**没有地方标记"这个动作是交互式的、宿主别放出来"**，只能整包禁用或写进 `help` 文本。建议加 `interactive: true`（宿主默认不展示，或提示需要 stdin）。
 6. **表达不了"选一个工作目录，且不产生 argv token"**。`scoop create` 就是这种：它把 JSON 写到进程当前目录，而命令行没有任何参数能指定目录。
-   规范里 `workingDirectory: userSelected` 的语义没有定义；已实现的宿主把它解析为"取名为 `workingDir` 或 `outputDir` 的**字段**的值"（`src/Swpj.App/MainWindow.xaml.cs:688`），而**任何字段都会展开成 argv token**（`src/Swpj.Core/Execution/ArgvBuilder.cs`），所以对"不接受目录参数却要选目录"的命令根本无法表达。
+   规范里 `workingDirectory: userSelected` 的语义没有定义；已实现的宿主把它解析为"取名为 `workingDir` 或 `outputDir` 的**字段**的值"（`src/AllTool.App/MainWindow.xaml.cs:688`），而**任何字段都会展开成 argv token**（`src/AllTool.Core/Execution/ArgvBuilder.cs`），所以对"不接受目录参数却要选目录"的命令根本无法表达。
    本清单因此对 `create` 用默认的 `inherit`，把限制写进字段 `help`。建议：规范定义 `userSelected` 的语义，并允许一个"只作为宿主输入、不参与 argv"的字段（例如 `argStyle: none` / `hostOnly: true`）。
 7. **无法表达 shell 重定向**。`scoop export` 的用法行是 `scoop export > scoopfile.json`，而 v1 刻意不含重定向/管道。所以"导出到文件"只能由宿主提供（本清单用 `output.mode: capture` + `resultNote` 说明）。
 8. **`versionPattern` 只有一个，取不到时的处置也没定义**。scoop 的版本号在 `--version` 输出的第二行自由文本里（两种形态），正则一旦失配，宿主就只能"判不出 minVersion"，而规范没写这时该禁用还是放行。建议允许 `versionPattern` 是数组，并定义"全部失配"时的策略。
@@ -329,7 +329,7 @@ CHANGELOG 形态:          success=True  group1=[0.5.3]
 
 ## 13. 与已实现的宿主核对（本清单不是纸上设计）
 
-写这份清单的过程中，仓库里已经有了可用的 WinUI 3 宿主与 `Swpj.Core`。因此额外做了一次"清单 vs 真实实现"的核对，逐条确认本清单用的写法宿主真的支持：
+写这份清单的过程中，仓库里已经有了可用的 WinUI 3 宿主与 `AllTool.Core`。因此额外做了一次"清单 vs 真实实现"的核对，逐条确认本清单用的写法宿主真的支持：
 
 | 清单里的写法 | 宿主实现 | 核对结果 |
 |---|---|---|
@@ -349,6 +349,6 @@ CHANGELOG 形态:          success=True  group1=[0.5.3]
 本清单因此对 14 个自由多值字段用了 `multiselect`（与 7zip 的 `exclude` / `includeOnly` 一致），多应用安装/卸载在界面上才真的可用。
 建议宿主让 `repeatable: true` 对 `text` / `textarea` 也渲染成多值（每行一项），这样规范里的 `repeatable` 才名副其实；这条同时记进 `project-state.json` 的 `openDecisions` 更合适（属于宿主实现取舍，不是 scoop 特有的问题）。
 
-整合验证：`dotnet test src\Swpj.slnx` → **69/69 通过**。其中的 `RealManifestTests` 会调用 `ManifestLoader.LoadAll("plugins")` 遍历加载**所有**工具包（含本清单），因此"清单能被真实加载器反序列化并通过 `ManifestValidation`"是被测试覆盖的，不只是 python 校验器认可。
+整合验证：`dotnet test src\AllTool.slnx` → **69/69 通过**。其中的 `RealManifestTests` 会调用 `ManifestLoader.LoadAll("plugins")` 遍历加载**所有**工具包（含本清单），因此"清单能被真实加载器反序列化并通过 `ManifestValidation`"是被测试覆盖的，不只是 python 校验器认可。
 
 一个反向结论：`workingDirectory: userSelected` 在已实现的宿主里等于"取名为 `workingDir` 或 `outputDir` 的字段值"（`MainWindow.xaml.cs:688`）。`scoop create` 不接受任何目录参数，而**任何**字段都会展开成 argv token，所以给它声明 `userSelected` 是无效的 —— 这就是本清单没有用这个值、并把它记成规范缺口的原因（§8 第 6 条）。

@@ -4,8 +4,8 @@
 #
 # 参数知识来源：
 #   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/robocopy
-#      离线快照 docs/reference/win-docs/robocopy.html（参数表 117 行 + #exit-return-codes 小节）
-#   2) 本机 `robocopy /?` 的真实输出：docs/reference/win-help/robocopy.txt（不入库，见 .gitignore）
+#      离线快照 Microsoft Learn 官方文档（见各动作的 sources）/robocopy.html（参数表 117 行 + #exit-return-codes 小节）
+#   2) 本机 `robocopy /?` 的真实输出：本机帮助快照（**未入库**，可用下列命令重新抓取）/robocopy.txt（不入库，见 .gitignore）
 #      本机帮助有 8524 字节，把开关分成"复制选项 / 复制文件限制选项 / 文件选择选项 / 重试选项 /
 #      日志记录选项 / 作业选项"六类，比官方网页更好读。
 #
@@ -39,9 +39,9 @@ sources:
     url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/robocopy
     retrieved: "2026-09-27"
     appliesTo: Windows 10/11
-    note: 离线快照 docs/reference/win-docs/robocopy.html。语法行：robocopy <source> <destination> [<file>[ ...]] [<options>]；#parameters 是 117 行的开关大表；#exit-return-codes 给出退出码语义。
+    note: 离线快照 Microsoft Learn 官方文档（见各动作的 sources）/robocopy.html。语法行：robocopy <source> <destination> [<file>[ ...]] [<options>]；#parameters 是 117 行的开关大表；#exit-return-codes 给出退出码语义。
   - title: 本机 `robocopy /?` 的真实输出快照
-    url: file:///D:/AI/swpj/docs/reference/win-help/robocopy.txt
+    url: file:///D:/AI/All Tool/本机帮助快照（**未入库**，可用下列命令重新抓取）/robocopy.txt
     retrieved: "2026-09-27"
     appliesTo: Windows 11 26200 / Robocopy.exe 文件版本 10.0.26100.8521
     note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。注意：**`robocopy /?` 的退出码是 16**，因为它的 /? 实际是"参数不全时的用法输出"，走的是错误路径。

@@ -3,8 +3,8 @@
 # 7-Zip 命令行版本（7z.exe）工具包 —— 第一个样板。
 #
 # 参数知识来源：7-zip.chm (7-Zip 26.03) 的 "Command Line Version" 章节。
-# 该 CHM 已被反编译并转成 Markdown（见 docs/reference/README.md），
-# 并且每个命令的"可用开关白名单"已提取为 docs/reference/7zip-switch-matrix.json。
+# 该 CHM 已被反编译并转成 Markdown（见 本机帮助快照（**未入库**，可用下列命令重新抓取）.md），
+# 并且每个命令的"可用开关白名单"已提取为 本机帮助快照（**未入库**，可用下列命令重新抓取）.json。
 # CI 会用那份白名单校验本文件里的开关，例如把 -o 挂到 a 命令上会被直接拦下。
 #
 # 约定：本文件里出现的每个开关，都能在 CHM 中找到出处；没有出处的参数一律不写。
@@ -29,7 +29,7 @@ sources:
     url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
     retrieved: "2026-09-27"
     appliesTo: "26.03"
-    note: 所有字段均以此文档为准；离线转换文本位于 docs/reference/7zip-md/。
+    note: 所有字段均以此文档为准；离线转换文本位于 7-Zip 自带 CHM 的离线转换文本（未入库）/。
 
 locate:
   executable: 7z

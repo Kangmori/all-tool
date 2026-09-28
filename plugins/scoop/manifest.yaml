@@ -3,9 +3,9 @@
 # Scoop 工具包（第二个样板，用来检验 manifest v1 能否表达 28 个命令、子命令与需要提权的操作）。
 #
 # 参数知识来源（全部在本仓库里，可离线复核）：
-#   1. docs/reference/scoop-help/*.txt   —— 本机 scoop 0.5.3 的 28 个命令的结构化帮助
+#   1. 本机帮助快照（**未入库**，可用下列命令重新抓取）/*.txt   —— 本机 scoop 0.5.3 的 28 个命令的结构化帮助
 #                                            （由 scripts/fetch-scoop-help.ps1 生成，_meta.json 记了版本与日期）
-#   2. docs/reference/scoop-wiki/*.md    —— 官方 wiki 全站克隆
+#   2. Scoop 官方 wiki（对应页面见各动作的 sources）/*.md    —— 官方 wiki 全站克隆
 # 本文件里出现的每个命令、开关、位置参数都能在上面两处指出出处；没有出处的一律不写。
 #
 # 实测决定的三件事（详见 NOTES.md）：
@@ -33,12 +33,12 @@ quickActions:
 
 sources:
   - title: "scoop 0.5.3 本机帮助快照（28 个命令的结构化帮助输出）"
-    url: file:///D:/AI/swpj/docs/reference/scoop-help/index.json
+    url: https://github.com/ScoopInstaller/Scoop/wiki
     retrieved: "2026-09-27"
     appliesTo: "0.5.3"
     note: "由 scripts/fetch-scoop-help.ps1 生成本机安装版本的帮助；每个命令一个 <command>.txt，本文件逐动作引用。"
   - title: "Scoop 官方 wiki（整站克隆）"
-    url: file:///D:/AI/swpj/docs/reference/scoop-wiki/Home.md
+    url: https://github.com/ScoopInstaller/Scoop/wiki/Home
     retrieved: "2026-09-27"
     appliesTo: "wiki 快照 2026-09-27"
     note: "补充全局语义：Buckets / Global-Installs / Persistent-data / Dependencies / FAQ / Scoop-Folder-Layout / Using-Scoop-behind-a-proxy。"
@@ -70,7 +70,7 @@ runtime:
   timeoutSeconds: 0
   preventConcurrentRuns: false
 
-# 来源：docs/reference/scoop-help/virustotal.txt 的 "Exit codes" 一节（唯一有退出码文档的命令），
+# 来源：本机帮助快照（**未入库**，可用下列命令重新抓取）/virustotal.txt 的 "Exit codes" 一节（唯一有退出码文档的命令），
 #       外加实跑核对：scoop 的顶层分发用 `& $cmd_path`（lib/commands.ps1:38）且 bin/scoop.ps1 不传播 $LASTEXITCODE，
 #       所以除"顶层命令名不认识"外，失败路径实测也返回 0。宿主不能只靠退出码判断成败。
 exitCodes:
@@ -91,12 +91,12 @@ actions:
     command: help
     sources:
       - title: "scoop help help（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/help.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "文件全文只有一行用法：Usage: scoop help <command>；'不带参数列出全部命令' 见 wiki 的 Commands.md 与 Quick-Start.md"
       - title: "Scoop wiki —— Commands（帮助界面说明）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/Commands.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/Commands
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "scoop help 列出命令；scoop help <command> 显示单个命令的详细帮助。"
@@ -107,7 +107,7 @@ actions:
         style: positional
         placeholder: "alias / install / config / 留空"
         help: "留空 = 列出全部 28 个命令及一句话说明；填命令名 = 显示该命令的完整帮助。"
-        doc: scoop-help/help.txt
+        doc: scoop help help
     output:
       mode: capture
       showCommandLine: true
@@ -124,7 +124,7 @@ actions:
     commandArgs: ["list"]
     sources:
       - title: "scoop help alias（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/alias.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "子命令 add / rm / list 与 -v, --verbose（works only for \"list\"）均出自此文件。"
@@ -136,7 +136,7 @@ actions:
         prefix: "--verbose"
         default: false
         help: "等价于 -v。显示别名的描述与表头（仅对 list 子命令有效）。"
-        doc: scoop-help/alias.txt
+        doc: scoop help alias
     output:
       mode: capture
       showCommandLine: true
@@ -151,7 +151,7 @@ actions:
     commandArgs: ["add"]
     sources:
       - title: "scoop help alias（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/alias.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop alias add <name> <command> [<description>]；示例见文件里的两条 alias add。"
@@ -162,7 +162,7 @@ actions:
         style: positional
         required: true
         placeholder: "例如 rm / upgrade"
-        doc: scoop-help/alias.txt
+        doc: scoop help alias
       - id: body
         label: 要执行的命令
         type: textarea
@@ -170,13 +170,13 @@ actions:
         required: true
         placeholder: "scoop uninstall $args[0]"
         help: "原样写命令文本（不要加 PowerShell 的引号，它们会被当成命令的一部分）。文档示例：scoop uninstall $args[0]；scoop update *。因为本机走 scoop.cmd（经 cmd.exe）转发，文本里的 %NAME% 会被环境变量展开，请避开。"
-        doc: scoop-help/alias.txt
+        doc: scoop help alias
       - id: description
         label: 描述
         type: text
         style: positional
         placeholder: "Uninstall an app"
-        doc: scoop-help/alias.txt
+        doc: scoop help alias
     output:
       mode: stream
       showCommandLine: true
@@ -191,7 +191,7 @@ actions:
     confirmText: "将删除该别名对应的 scoop-<name>.ps1 与配置记录，无法撤销。"
     sources:
       - title: "scoop help alias（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/alias.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop alias rm <name>"
@@ -201,7 +201,7 @@ actions:
         type: text
         style: positional
         required: true
-        doc: scoop-help/alias.txt
+        doc: scoop help alias
     output:
       mode: stream
       showCommandLine: true
@@ -215,12 +215,12 @@ actions:
     commandArgs: ["list"]
     sources:
       - title: "scoop help bucket（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/bucket.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法行：scoop bucket add|list|known|rm [<args>]"
       - title: "Scoop wiki —— Buckets（bucket list 的用途）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/Buckets.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/Buckets
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "scoop bucket list 用来确认 bucket 是否已添加；bucket 是装着应用清单的 git 仓库。"
@@ -239,12 +239,12 @@ actions:
     commandArgs: ["known"]
     sources:
       - title: "scoop help bucket（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/bucket.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "To list all known buckets, use: scoop bucket known"
       - title: "Scoop wiki —— Buckets（known buckets）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/Buckets.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/Buckets
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "已知 bucket 列表来自 buckets.json，用 scoop bucket known 查看。"
@@ -263,12 +263,12 @@ actions:
     commandArgs: ["add"]
     sources:
       - title: "scoop help bucket（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/bucket.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop bucket add <name> [<repo>]；已知 bucket（如 extras）可省略 <repo>。"
       - title: "Scoop wiki —— Buckets（添加 bucket）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/Buckets.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/Buckets
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "scoop bucket add <name-of-bucket> <location-of-git-repo>；extras 这类已知 bucket 只需名字。"
@@ -279,14 +279,14 @@ actions:
         style: positional
         required: true
         placeholder: "例如 extras"
-        doc: scoop-help/bucket.txt
+        doc: scoop help bucket
       - id: repo
         label: 仓库地址
         type: text
         style: positional
         placeholder: "https://github.com/ScoopInstaller/Extras.git"
         help: "只能是已知 bucket（main / extras / versions …）时才可留空。"
-        doc: scoop-help/bucket.txt
+        doc: scoop help bucket
     output:
       mode: stream
       showCommandLine: true
@@ -301,7 +301,7 @@ actions:
     confirmText: "将递归删除该 bucket 的本地目录（%USERPROFILE%\\scoop\\buckets\\<name>），无法撤销。"
     sources:
       - title: "scoop help bucket（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/bucket.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法行含 rm 子命令；scoop bucket rm <name> 的用法字符串来自命令实现自身的 usage 文本。"
@@ -311,7 +311,7 @@ actions:
         type: text
         style: positional
         required: true
-        doc: scoop-help/bucket.txt
+        doc: scoop help bucket
     output:
       mode: stream
       showCommandLine: true
@@ -325,7 +325,7 @@ actions:
     commandArgs: ["show"]
     sources:
       - title: "scoop help cache（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/cache.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop cache show|rm [app(s)]；scoop cache show 显示缓存内容。"
@@ -337,7 +337,7 @@ actions:
         repeatable: true
         placeholder: "应用名，可填多个；留空 = 全部"
         help: "文档里 '*' 表示全部。"
-        doc: scoop-help/cache.txt
+        doc: scoop help cache
     output:
       mode: capture
       showCommandLine: true
@@ -354,7 +354,7 @@ actions:
     confirmText: "将删除下载缓存文件（或整个缓存目录下的文件），无法撤销；相关应用重装时需要重新下载。"
     sources:
       - title: "scoop help cache（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/cache.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "scoop cache rm <app> 删除指定应用的下载；scoop cache rm * 清空；也可用 -a/--all 代替 *。"
@@ -366,14 +366,14 @@ actions:
         prefix: "--all"
         default: false
         help: "等价于文档里的 scoop cache rm *。与下面的应用名二选一；同时给出时 scoop 以清空全部处理。"
-        doc: scoop-help/cache.txt
+        doc: scoop help cache
       - id: apps
         label: 要删除缓存的应用
         type: multiselect
         style: positional
         repeatable: true
         placeholder: "应用名，可填多个"
-        doc: scoop-help/cache.txt
+        doc: scoop help cache
     output:
       mode: stream
       showCommandLine: true
@@ -386,7 +386,7 @@ actions:
     command: cat
     sources:
       - title: "scoop help cat（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/cat.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop cat <app>；若配置了 cat_style，会用 bat 美化输出（见 scoop help config）。"
@@ -397,7 +397,7 @@ actions:
         style: positional
         required: true
         placeholder: "例如 7zip"
-        doc: scoop-help/cat.txt
+        doc: scoop help cat
     output:
       mode: capture
       showCommandLine: true
@@ -416,7 +416,7 @@ actions:
     command: checkup
     sources:
       - title: "scoop help checkup（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/checkup.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop checkup；'Performs a series of diagnostic tests to try to identify things that may cause problems with Scoop.'"
@@ -437,12 +437,12 @@ actions:
     confirmText: "将永久删除该应用保留下来的旧版本目录（以及可选的过期下载缓存），无法撤销。"
     sources:
       - title: "scoop help cleanup（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/cleanup.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop cleanup <app> [options]；-a/--all、-g/--global、-k/--cache 均出自此文件。"
       - title: "Scoop wiki —— FAQ（旧版本的保留与清理）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/FAQ.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/FAQ
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "更新应用后旧版本会保留，直到用 scoop cleanup 删除。"
@@ -454,14 +454,14 @@ actions:
         prefix: "--all"
         default: false
         help: "等价于文档里的 scoop cleanup *。"
-        doc: scoop-help/cleanup.txt
+        doc: scoop help cleanup
       - id: app
         label: 应用
         type: multiselect
         style: positional
         repeatable: true
         placeholder: "应用名；用 --all 时可留空"
-        doc: scoop-help/cleanup.txt
+        doc: scoop help cleanup
       - id: global
         label: 全局安装
         type: bool
@@ -471,7 +471,7 @@ actions:
         group: 高级
         advanced: true
         help: "清理全局安装的应用（-g）。全局安装需要管理员权限。"
-        doc: scoop-help/cleanup.txt
+        doc: scoop help cleanup
       - id: cache
         label: 同时删除过期缓存
         type: bool
@@ -481,7 +481,7 @@ actions:
         group: 高级
         advanced: true
         help: "等价于 -k：顺带删掉过期的下载缓存。"
-        doc: scoop-help/cleanup.txt
+        doc: scoop help cleanup
     output:
       mode: stream
       showCommandLine: true
@@ -494,12 +494,12 @@ actions:
     command: config
     sources:
       - title: "scoop help config（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/config.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop config [rm] name [value]；不带参数打印全部设置，带 name 打印单项。下面枚举的取值名全部来自该文件的 Settings 一节。"
       - title: "Scoop wiki —— Using Scoop behind a proxy（config 读写的实例）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/Using-Scoop-behind-a-proxy.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/Using-Scoop-behind-a-proxy
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "scoop config proxy <值> / scoop config rm proxy 的用法与转义注意事项。"
@@ -509,7 +509,7 @@ actions:
         type: enum
         style: positional
         placeholder: "留空 = 打印全部配置"
-        doc: scoop-help/config.txt
+        doc: scoop help config
         values:
           - { value: "", label: "全部配置（不带参数）", isDefault: true }
           - { value: use_external_7zip, label: "use_external_7zip —— 用 PATH 里的外部 7zip 解包" }
@@ -560,12 +560,12 @@ actions:
     danger: overwrite
     sources:
       - title: "scoop help config（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/config.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "To set a configuration setting: scoop config <name> <value>；每个配置项的类型与取值见 Settings 一节。"
       - title: "Scoop wiki —— Using Scoop behind a proxy（写配置的真实示例）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/Using-Scoop-behind-a-proxy.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/Using-Scoop-behind-a-proxy
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "示例：scoop config proxy currentuser@default、scoop config proxy 'username:p\\@ssword@proxy.example.org:8080'。"
@@ -575,7 +575,7 @@ actions:
         type: enum
         style: positional
         required: true
-        doc: scoop-help/config.txt
+        doc: scoop help config
         values:
           - { value: use_external_7zip, label: "use_external_7zip（$true|$false）" }
           - { value: use_lessmsi, label: "use_lessmsi（$true|$false）" }
@@ -616,7 +616,7 @@ actions:
         required: true
         placeholder: "$true / 64bit / currentuser@default"
         help: "布尔项写 $true 或 $false（文档里的原始写法）。含 @ 或 : 的值文档给的做法是用反斜杠转义，例如 'username:p\\@ssword@proxy.example.org:8080' 去掉外层引号后写：username:p\\@ssword@proxy.example.org:8080。"
-        doc: scoop-help/config.txt
+        doc: scoop help config
     output:
       mode: stream
       showCommandLine: true
@@ -631,12 +631,12 @@ actions:
     confirmText: "将删除该配置项（例如 proxy、scoop_branch），无法撤销。"
     sources:
       - title: "scoop help config（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/config.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "To remove a configuration setting: scoop config rm <name>"
       - title: "Scoop wiki —— Using Scoop behind a proxy（scoop config rm proxy）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/Using-Scoop-behind-a-proxy.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/Using-Scoop-behind-a-proxy
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "Bypassing the proxy configured in Internet Options：scoop config rm proxy。"
@@ -646,7 +646,7 @@ actions:
         type: enum
         style: positional
         required: true
-        doc: scoop-help/config.txt
+        doc: scoop help config
         values:
           - { value: use_external_7zip, label: "use_external_7zip" }
           - { value: use_lessmsi, label: "use_lessmsi" }
@@ -694,12 +694,12 @@ actions:
     confirmText: "会在进程当前目录写出 <应用名>.json；同名文件会被覆盖。"
     sources:
       - title: "scoop help create（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/create.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop create <url>；Create your own custom app manifest。"
       - title: "Scoop wiki —— Creating an app manifest"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/Creating-an-app-manifest.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/Creating-an-app-manifest
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "说明应用清单是 JSON，放在 bucket 目录里；scoop create 用来起一个骨架。"
@@ -711,7 +711,7 @@ actions:
         required: true
         placeholder: "https://example.com/app-1.0.zip"
         help: "注意两点：(1) 本命令在生成过程中会用 Read-Host 询问应用名与版本，属于交互式向导，宿主如果拿不到 stdin，进程会一直等输入；在宿主实现交互式输入之前不要把本动作当成可用功能。(2) 清单无法让用户选输出目录——scoop create 不接受任何目录参数，而任何字段都会变成一个 argv token（见 NOTES.md 的规范缺口）。生成的文件会落在宿主进程的当前目录。"
-        doc: scoop-help/create.txt
+        doc: scoop help create
     output:
       mode: stream
       showCommandLine: true
@@ -724,12 +724,12 @@ actions:
     command: depends
     sources:
       - title: "scoop help depends（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/depends.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop depends <app>；概要：List dependencies for an app, in the order they'll be installed。"
       - title: "Scoop wiki —— Dependencies（依赖语义）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/Dependencies.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/Dependencies
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "运行时依赖由清单的 depends 指定；安装期依赖按 url 的扩展名推断。"
@@ -740,7 +740,7 @@ actions:
         style: positional
         required: true
         placeholder: "例如 rust"
-        doc: scoop-help/depends.txt
+        doc: scoop help depends
     output:
       mode: capture
       showCommandLine: true
@@ -756,12 +756,12 @@ actions:
     danger: overwrite
     sources:
       - title: "scoop help download（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/download.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop download <app> [options]；-f/--force、-s/--skip-hash-check、-u/--no-update-scoop、-a/--arch 均出自此文件。"
       - title: "Scoop wiki —— Quick Start（install/update/download/virustotal 会顺带更新 scoop）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/Quick-Start.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/Quick-Start
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "scoop install / update <app> / download / virustotal 会在必要时自动先更新 scoop 自身——这就是 -u/--no-update-scoop 存在的原因。"
@@ -774,14 +774,14 @@ actions:
         repeatable: true
         placeholder: "应用名、应用@版本、清单 URL 或本地 json 路径"
         help: "文档给的四种写法：git；gh@2.7.0；https://…/runat.json；path\\to\\app.json"
-        doc: scoop-help/download.txt
+        doc: scoop help download
       - id: arch
         label: 架构
         type: enum
         style: separate
         prefix: "--arch"
         help: "等价于 -a <32bit|64bit|arm64>。只在该应用支持指定架构时有意义。"
-        doc: scoop-help/download.txt
+        doc: scoop help download
         values:
           - { value: "", label: "默认（按系统与 default_architecture）", isDefault: true }
           - { value: 32bit, label: "32bit" }
@@ -794,7 +794,7 @@ actions:
         prefix: "--force"
         default: false
         help: "等价于 -f：覆盖缓存中已有的下载。"
-        doc: scoop-help/download.txt
+        doc: scoop help download
       - id: skipHashCheck
         label: 跳过哈希校验
         type: bool
@@ -804,7 +804,7 @@ actions:
         group: 高级
         advanced: true
         help: "等价于 -s。文档原文：use with caution!"
-        doc: scoop-help/download.txt
+        doc: scoop help download
       - id: noUpdateScoop
         label: 不先更新 scoop
         type: bool
@@ -814,7 +814,7 @@ actions:
         group: 高级
         advanced: true
         help: "等价于 -u：scoop 过期时不先自动更新。"
-        doc: scoop-help/download.txt
+        doc: scoop help download
     output:
       mode: stream
       showCommandLine: true
@@ -827,12 +827,12 @@ actions:
     command: export
     sources:
       - title: "scoop help export（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/export.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop export > scoopfile.json；选项 -c, --config（把配置一起导出）。"
       - title: "Scoop wiki —— Uninstalling Scoop / Quick Start（scoopfile 的用途）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/Quick-Start.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/Quick-Start
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "导出结果可配合 scoop import 在别的机器上复刻安装。"
@@ -844,7 +844,7 @@ actions:
         prefix: "--config"
         default: false
         help: "等价于 -c。会把 gh_token / virustotal_api_key 之类的配置一并打进输出。"
-        doc: scoop-help/export.txt
+        doc: scoop help export
     output:
       mode: capture
       showCommandLine: true
@@ -862,12 +862,12 @@ actions:
     danger: overwrite
     sources:
       - title: "scoop help hold（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/hold.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop hold <apps>；-g, --global 用于全局安装的应用。"
       - title: "Scoop wiki —— Global-Installs（--global 的语义与前置条件）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/Global-Installs.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/Global-Installs
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "全局安装需要管理员权限，因为写到 %ProgramData%\\scoop 并设置系统环境变量。"
@@ -878,7 +878,7 @@ actions:
         style: positional
         required: true
         repeatable: true
-        doc: scoop-help/hold.txt
+        doc: scoop help hold
       - id: global
         label: 全局安装的应用
         type: bool
@@ -886,7 +886,7 @@ actions:
         prefix: "--global"
         default: false
         help: "等价于 -g。需要管理员权限。"
-        doc: scoop-help/hold.txt
+        doc: scoop help hold
     output:
       mode: stream
       showCommandLine: true
@@ -899,12 +899,12 @@ actions:
     danger: overwrite
     sources:
       - title: "scoop help unhold（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/unhold.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop unhold <app>；-g, --global 用于全局安装的应用。"
       - title: "Scoop wiki —— Global-Installs（--global 的语义与前置条件）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/Global-Installs.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/Global-Installs
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "全局安装需要管理员权限。"
@@ -915,7 +915,7 @@ actions:
         style: positional
         required: true
         repeatable: true
-        doc: scoop-help/unhold.txt
+        doc: scoop help unhold
       - id: global
         label: 全局安装的应用
         type: bool
@@ -923,7 +923,7 @@ actions:
         prefix: "--global"
         default: false
         help: "等价于 -g。需要管理员权限。"
-        doc: scoop-help/unhold.txt
+        doc: scoop help unhold
     output:
       mode: stream
       showCommandLine: true
@@ -936,7 +936,7 @@ actions:
     command: home
     sources:
       - title: "scoop help home（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/home.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop home <app>；Opens the app homepage。"
@@ -946,7 +946,7 @@ actions:
         type: text
         style: positional
         required: true
-        doc: scoop-help/home.txt
+        doc: scoop help home
     output:
       mode: stream
       showCommandLine: true
@@ -960,12 +960,12 @@ actions:
     danger: overwrite
     sources:
       - title: "scoop help import（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/import.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop import <path/url to scoopfile.json>；Imports apps, buckets and configs。"
       - title: "Scoop wiki —— Uninstalling Scoop（scoopfile 的来历）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/Uninstalling-Scoop.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/Uninstalling-Scoop
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "scoop uninstall scoop 会告知将要做什么并等待确认；import 是其反向操作，用来复刻整套安装。"
@@ -978,7 +978,7 @@ actions:
         accept: [.json]
         placeholder: "Desktop\\scoopfile.json 或 https://…/scoopfile.json"
         help: "会覆盖同名配置项、添加缺失的 bucket，并安装清单里的应用。"
-        doc: scoop-help/import.txt
+        doc: scoop help import
     output:
       mode: stream
       showCommandLine: true
@@ -991,12 +991,12 @@ actions:
     command: info
     sources:
       - title: "scoop help info（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/info.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop info <app> [options]；-v, --verbose（Show full paths and URLs）。"
       - title: "Scoop wiki —— FAQ（info 能看到同一应用的多个已装版本）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/FAQ.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/FAQ
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "scoop list 只显示最新版本；scoop info <app> 才能看到该应用安装过的全部版本。"
@@ -1007,7 +1007,7 @@ actions:
         style: positional
         required: true
         placeholder: "例如 7zip"
-        doc: scoop-help/info.txt
+        doc: scoop help info
       - id: verbose
         label: 显示完整路径与 URL
         type: bool
@@ -1015,7 +1015,7 @@ actions:
         prefix: "--verbose"
         default: false
         help: "等价于 -v。实测：该模式下 scoop 会顺带统计目录大小，遇到损坏的链接会把 PowerShell 错误记录写到 stderr。"
-        doc: scoop-help/info.txt
+        doc: scoop help info
     output:
       mode: capture
       showCommandLine: true
@@ -1032,17 +1032,17 @@ actions:
     danger: overwrite
     sources:
       - title: "scoop help install（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/install.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop install <app> [options]；-g、-i、-k、-s、-u、-a/--arch 均出自此文件；四种 app 写法（名字、名字@版本、清单 URL、本地 json）也出自此文件。"
       - title: "Scoop wiki —— Global-Installs（-g/--global 需要管理员）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/Global-Installs.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/Global-Installs
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "Global installs require admin permissions，因为安装到 %ProgramData%\\scoop 并设置系统环境变量。"
       - title: "Scoop wiki —— FAQ（安装指定版本）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/FAQ.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/FAQ
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "scoop install [app]@[version]，例如 scoop install git@2.23.0.windows.1；同一应用可以并存多个版本。"
@@ -1055,14 +1055,14 @@ actions:
         repeatable: true
         placeholder: "git / gh@2.7.0 / https://…/runat.json / D:\\path\\app.json"
         help: "文档给出的四种写法都支持；安装指定版本用 应用@版本。"
-        doc: scoop-help/install.txt
+        doc: scoop help install
       - id: arch
         label: 架构
         type: enum
         style: separate
         prefix: "--arch"
         help: "等价于 -a <32bit|64bit|arm64>。"
-        doc: scoop-help/install.txt
+        doc: scoop help install
         values:
           - { value: "", label: "默认（按系统与 default_architecture）", isDefault: true }
           - { value: 32bit, label: "32bit" }
@@ -1075,7 +1075,7 @@ actions:
         prefix: "--global"
         default: false
         help: "等价于 -g。需要管理员权限；本机当前用户不是管理员，勾选会失败。"
-        doc: scoop-help/install.txt
+        doc: scoop help install
       - id: independent
         label: 不自动安装依赖
         type: bool
@@ -1085,7 +1085,7 @@ actions:
         group: 高级
         advanced: true
         help: "等价于 -i。"
-        doc: scoop-help/install.txt
+        doc: scoop help install
       - id: noCache
         label: 不使用下载缓存
         type: bool
@@ -1095,7 +1095,7 @@ actions:
         group: 高级
         advanced: true
         help: "等价于 -k。"
-        doc: scoop-help/install.txt
+        doc: scoop help install
       - id: skipHashCheck
         label: 跳过哈希校验
         type: bool
@@ -1105,7 +1105,7 @@ actions:
         group: 高级
         advanced: true
         help: "等价于 -s。文档原文：use with caution!"
-        doc: scoop-help/install.txt
+        doc: scoop help install
       - id: noUpdateScoop
         label: 不先更新 scoop
         type: bool
@@ -1115,7 +1115,7 @@ actions:
         group: 高级
         advanced: true
         help: "等价于 -u。"
-        doc: scoop-help/install.txt
+        doc: scoop help install
     output:
       mode: stream
       showCommandLine: true
@@ -1132,12 +1132,12 @@ actions:
     command: list
     sources:
       - title: "scoop help list（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/list.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop list [query]；Lists all installed apps, or the apps matching the supplied query。"
       - title: "Scoop wiki —— FAQ（list 只显示最新版本）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/FAQ.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/FAQ
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "scoop list 显示的是最新安装的版本，不是全部版本。"
@@ -1147,7 +1147,7 @@ actions:
         type: text
         style: positional
         placeholder: "留空 = 全部"
-        doc: scoop-help/list.txt
+        doc: scoop help list
     output:
       mode: capture
       showCommandLine: true
@@ -1162,12 +1162,12 @@ actions:
     command: prefix
     sources:
       - title: "scoop help prefix（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/prefix.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop prefix <app>；Returns the path to the specified app。"
       - title: "Scoop wiki —— The 'Current' Version Alias（路径是 current 别名）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/The-'Current'-Version-Alias.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/The-'Current'-Version-Alias
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "应用目录下的 current 是指向当前版本的目录联接（junction）。"
@@ -1178,7 +1178,7 @@ actions:
         style: positional
         required: true
         placeholder: "例如 7zip"
-        doc: scoop-help/prefix.txt
+        doc: scoop help prefix
     output:
       mode: capture
       showCommandLine: true
@@ -1194,12 +1194,12 @@ actions:
     danger: overwrite
     sources:
       - title: "scoop help reset（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/reset.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop reset <app>；可用 '*' 或 -a/--all 重置全部。"
       - title: "Scoop wiki —— FAQ（用 reset 切换已安装版本）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/FAQ.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/FAQ
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "scoop reset [app]@[version] 切换激活版本，且只在已安装的版本之间切换；不带版本则以最新已装版本为准。"
@@ -1211,7 +1211,7 @@ actions:
         repeatable: true
         placeholder: "terraform / terraform@0.11.14"
         help: "文档给的形式：scoop reset [app]@[version]；不带版本时用最新已安装版本。"
-        doc: scoop-help/reset.txt
+        doc: scoop help reset
       - id: all
         label: 重置全部应用
         type: bool
@@ -1219,7 +1219,7 @@ actions:
         prefix: "--all"
         default: false
         help: "等价于文档里的 scoop reset *。"
-        doc: scoop-help/reset.txt
+        doc: scoop help reset
     output:
       mode: stream
       showCommandLine: true
@@ -1232,12 +1232,12 @@ actions:
     command: search
     sources:
       - title: "scoop help search（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/search.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop search <query>；不带 query 时列出全部可用应用；query 的匹配规则取决于 use_sqlite_cache（见文件里两行说明）。"
       - title: "Scoop wiki —— Quick Start（按命令名搜索）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/Quick-Start.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/Quick-Start
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "scoop search ssh → openssh；scoop search hg → mercurial（可以按应用包含的命令名搜到）。"
@@ -1248,7 +1248,7 @@ actions:
         style: positional
         placeholder: "应用名或命令名；留空 = 全部"
         help: "开启 use_sqlite_cache 时按应用名/二进制名/快捷方式做部分匹配；未开启时 query 按正则匹配应用名与二进制名。"
-        doc: scoop-help/search.txt
+        doc: scoop help search
     output:
       mode: capture
       showCommandLine: true
@@ -1265,7 +1265,7 @@ actions:
     commandArgs: ["list"]
     sources:
       - title: "scoop help shim（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/shim.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop shim list [<regex_pattern>...]；-g/--global 选项出自 Options 一节。"
@@ -1276,7 +1276,7 @@ actions:
         style: positional
         repeatable: true
         placeholder: "留空 = 全部"
-        doc: scoop-help/shim.txt
+        doc: scoop help shim
       - id: global
         label: 全局 shim
         type: bool
@@ -1286,7 +1286,7 @@ actions:
         group: 高级
         advanced: true
         help: "等价于 -g。"
-        doc: scoop-help/shim.txt
+        doc: scoop help shim
     output:
       mode: capture
       showCommandLine: true
@@ -1301,7 +1301,7 @@ actions:
     commandArgs: ["info"]
     sources:
       - title: "scoop help shim（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/shim.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop shim info <shim_name>；-g/--global 出自 Options 一节。"
@@ -1312,7 +1312,7 @@ actions:
         style: positional
         required: true
         placeholder: "例如 7z"
-        doc: scoop-help/shim.txt
+        doc: scoop help shim
       - id: global
         label: 全局 shim
         type: bool
@@ -1322,7 +1322,7 @@ actions:
         group: 高级
         advanced: true
         help: "等价于 -g。"
-        doc: scoop-help/shim.txt
+        doc: scoop help shim
     output:
       mode: capture
       showCommandLine: true
@@ -1339,7 +1339,7 @@ actions:
     danger: overwrite
     sources:
       - title: "scoop help shim（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/shim.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop shim add <shim_name> <command_path> [<args>...]；另有 -g/--global 与关于 '--' 终止符的 HINT。"
@@ -1349,14 +1349,14 @@ actions:
         type: text
         style: positional
         required: true
-        doc: scoop-help/shim.txt
+        doc: scoop help shim
       - id: commandPath
         label: 目标程序
         type: file
         style: positional
         required: true
         placeholder: "D:\\path\\myapp.exe 或已有 shim 名"
-        doc: scoop-help/shim.txt
+        doc: scoop help shim
       - id: global
         label: 全局 shim
         type: bool
@@ -1364,7 +1364,7 @@ actions:
         prefix: "--global"
         default: false
         help: "等价于 -g。需要管理员权限。"
-        doc: scoop-help/shim.txt
+        doc: scoop help shim
       - id: terminator
         label: 插入 '--' 终止符
         type: bool
@@ -1374,7 +1374,7 @@ actions:
         group: 高级
         advanced: true
         help: "帮助里的 HINT：第一个 '--' 会被当成 POSIX 选项终止符且不进入参数；要把 -g、--global 这类参数传给被 shim 的程序，必须在它们前面放 '--'。勾选后，下面\"传给程序的参数\"会原样透传（不再被 scoop 解析）。"
-        doc: scoop-help/shim.txt
+        doc: scoop help shim
       - id: shimArgs
         label: 传给程序的参数
         type: multiselect
@@ -1383,7 +1383,7 @@ actions:
         group: 高级
         advanced: true
         help: "对应用法里的 [<args>...]。以 - 开头的值需要先勾上上面的终止符，否则会被 scoop 自己当成选项。"
-        doc: scoop-help/shim.txt
+        doc: scoop help shim
     output:
       mode: stream
       showCommandLine: true
@@ -1397,7 +1397,7 @@ actions:
     danger: overwrite
     sources:
       - title: "scoop help shim（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/shim.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop shim alter <shim_name>；To alternate a shim's target source。"
@@ -1408,7 +1408,7 @@ actions:
         style: positional
         required: true
         help: "注意：本命令会用交互式选择框询问用哪个来源，选项无法从命令行指定。宿主提供不了交互式选择时，本动作不可用（详见 NOTES.md 的规范缺口）。"
-        doc: scoop-help/shim.txt
+        doc: scoop help shim
       - id: global
         label: 全局 shim
         type: bool
@@ -1418,7 +1418,7 @@ actions:
         group: 高级
         advanced: true
         help: "等价于 -g。"
-        doc: scoop-help/shim.txt
+        doc: scoop help shim
     output:
       mode: stream
       showCommandLine: true
@@ -1433,7 +1433,7 @@ actions:
     confirmText: "将删除指定的 shim 文件。文档警告这可能删掉应用清单添加的 shim，导致命令不可用；无法撤销（可用 scoop reset <应用> 重建）。"
     sources:
       - title: "scoop help shim（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/shim.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop shim rm <shim_name> [<shim_name>...]；原文 CAUTION: this could remove shims added by an app manifest。"
@@ -1444,7 +1444,7 @@ actions:
         style: positional
         required: true
         repeatable: true
-        doc: scoop-help/shim.txt
+        doc: scoop help shim
       - id: global
         label: 全局 shim
         type: bool
@@ -1452,7 +1452,7 @@ actions:
         prefix: "--global"
         default: false
         help: "等价于 -g。需要管理员权限。"
-        doc: scoop-help/shim.txt
+        doc: scoop help shim
     output:
       mode: stream
       showCommandLine: true
@@ -1481,12 +1481,12 @@ actions:
     command: status
     sources:
       - title: "scoop help status（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/status.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop status；-l, --local（只看本地已安装应用，不做远端抓取）。"
       - title: "Scoop wiki —— App Manifest Autoupdate（status 依赖本地 bucket 的新旧）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/App-Manifest-Autoupdate.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/App-Manifest-Autoupdate
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "scoop status 是拿已装版本与本机 bucket/仓库副本比较；副本不新会给出过时的版本信息，建议先 scoop update。"
@@ -1498,7 +1498,7 @@ actions:
         prefix: "--local"
         default: true
         help: "等价于 -l：不做远端抓取。不勾选时 scoop 会对 scoop 自身与每个 bucket 执行 git fetch（会写入 .git 的远端跟踪引用）。"
-        doc: scoop-help/status.txt
+        doc: scoop help status
     output:
       mode: capture
       showCommandLine: true
@@ -1516,17 +1516,17 @@ actions:
     confirmText: "将卸载应用并删除其安装目录与 shim；勾选 --purge 还会永久删除持久化数据（persist）。无法撤销。"
     sources:
       - title: "scoop help uninstall（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/uninstall.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop uninstall <app> [options]；-g/--global、-p/--purge 出自此文件。"
       - title: "Scoop wiki —— Persistent data（-p/--purge 会删掉持久化数据）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/Persistent-data.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/Persistent-data
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "默认卸载会保留 ~/scoop/persist/<app>；scoop uninstall -p nodejs 才会把持久化数据一起删掉。"
       - title: "Scoop wiki —— Uninstalling Scoop（卸载 scoop 自身会二次确认）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/Uninstalling-Scoop.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/Uninstalling-Scoop
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "scoop uninstall scoop 会先说明将要发生什么并等待输入 y 确认；本工具包不提供交互输入，请自行确认。"
@@ -1537,7 +1537,7 @@ actions:
         style: positional
         required: true
         repeatable: true
-        doc: scoop-help/uninstall.txt
+        doc: scoop help uninstall
       - id: global
         label: 全局安装的应用
         type: bool
@@ -1545,7 +1545,7 @@ actions:
         prefix: "--global"
         default: false
         help: "等价于 -g。需要管理员权限。"
-        doc: scoop-help/uninstall.txt
+        doc: scoop help uninstall
       - id: purge
         label: 同时删除持久化数据
         type: bool
@@ -1553,7 +1553,7 @@ actions:
         prefix: "--purge"
         default: false
         help: "等价于 -p：把 persist 数据一起删掉（默认会保留）。"
-        doc: scoop-help/uninstall.txt
+        doc: scoop help uninstall
     output:
       mode: stream
       showCommandLine: true
@@ -1567,17 +1567,17 @@ actions:
     danger: overwrite
     sources:
       - title: "scoop help update（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/update.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop update <app> [options]；-f、-g、-i、-k、-s、-q、-a/--all 均出自此文件；不带 <app> 时更新 scoop 自身。"
       - title: "Scoop wiki —— FAQ（更新全部应用用 *）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/FAQ.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/FAQ
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "scoop update 更新 scoop 与清单；scoop update * 更新全部应用。"
       - title: "Scoop wiki —— Global-Installs（--global 需要管理员）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/Global-Installs.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/Global-Installs
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "更新全局安装的应用同样需要管理员权限，例如 sudo scoop update git -g。"
@@ -1589,7 +1589,7 @@ actions:
         repeatable: true
         placeholder: "留空 = 更新 scoop 自身"
         help: "文档：scoop update 更新 scoop；scoop update <app> 更新该应用；可用 * 表示全部应用（等价于 --all）。"
-        doc: scoop-help/update.txt
+        doc: scoop help update
       - id: all
         label: 更新全部应用
         type: bool
@@ -1597,7 +1597,7 @@ actions:
         prefix: "--all"
         default: false
         help: "等价于 -a，也等价于文档里的 *。"
-        doc: scoop-help/update.txt
+        doc: scoop help update
       - id: force
         label: 强制更新
         type: bool
@@ -1605,7 +1605,7 @@ actions:
         prefix: "--force"
         default: false
         help: "等价于 -f：即使没有更新版本也强制更新。"
-        doc: scoop-help/update.txt
+        doc: scoop help update
       - id: quiet
         label: 安静模式
         type: bool
@@ -1613,7 +1613,7 @@ actions:
         prefix: "--quiet"
         default: false
         help: "等价于 -q：隐藏多余信息。"
-        doc: scoop-help/update.txt
+        doc: scoop help update
       - id: global
         label: 全局安装的应用
         type: bool
@@ -1623,7 +1623,7 @@ actions:
         group: 高级
         advanced: true
         help: "等价于 -g。需要管理员权限。"
-        doc: scoop-help/update.txt
+        doc: scoop help update
       - id: independent
         label: 不自动安装依赖
         type: bool
@@ -1633,7 +1633,7 @@ actions:
         group: 高级
         advanced: true
         help: "等价于 -i。"
-        doc: scoop-help/update.txt
+        doc: scoop help update
       - id: noCache
         label: 不使用下载缓存
         type: bool
@@ -1643,7 +1643,7 @@ actions:
         group: 高级
         advanced: true
         help: "等价于 -k。"
-        doc: scoop-help/update.txt
+        doc: scoop help update
       - id: skipHashCheck
         label: 跳过哈希校验
         type: bool
@@ -1653,7 +1653,7 @@ actions:
         group: 高级
         advanced: true
         help: "等价于 -s。文档原文：use with caution!"
-        doc: scoop-help/update.txt
+        doc: scoop help update
     output:
       mode: stream
       showCommandLine: true
@@ -1666,12 +1666,12 @@ actions:
     command: virustotal
     sources:
       - title: "scoop help virustotal（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/virustotal.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop virustotal [* | app1 app2 ...] [options]；-a/-s/-n/-u/-p 与 Exit codes 一节均出自此文件。"
       - title: "Scoop wiki —— Quick Start（virustotal 会顺带更新 scoop）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/Quick-Start.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/Quick-Start
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "scoop virustotal 与 install / update / download 一样，会在必要时先更新 scoop 自身——这就是 -u/--no-update-scoop 的用途。"
@@ -1683,14 +1683,14 @@ actions:
         repeatable: true
         placeholder: "应用名；用 --all 时可留空"
         help: "文档：单个 '*' 或 -a/--all 表示检查全部已安装应用。"
-        doc: scoop-help/virustotal.txt
+        doc: scoop help virustotal
       - id: all
         label: 检查全部已安装应用
         type: bool
         style: flag
         prefix: "--all"
         default: false
-        doc: scoop-help/virustotal.txt
+        doc: scoop help virustotal
       - id: scan
         label: 提交下载 URL 分析
         type: bool
@@ -1700,7 +1700,7 @@ actions:
         group: 高级
         advanced: true
         help: "VirusTotal 上没有信息的包，把下载 URL 送去分析（需要已配置 API key）。"
-        doc: scoop-help/virustotal.txt
+        doc: scoop help virustotal
       - id: noDepends
         label: 不检查依赖
         type: bool
@@ -1710,7 +1710,7 @@ actions:
         group: 高级
         advanced: true
         help: "默认会连依赖一起检查，勾选后只查指定的包。"
-        doc: scoop-help/virustotal.txt
+        doc: scoop help virustotal
       - id: noUpdateScoop
         label: 不先更新 scoop
         type: bool
@@ -1719,7 +1719,7 @@ actions:
         default: false
         group: 高级
         advanced: true
-        doc: scoop-help/virustotal.txt
+        doc: scoop help virustotal
     output:
       mode: stream
       showCommandLine: true
@@ -1733,12 +1733,12 @@ actions:
     command: which
     sources:
       - title: "scoop help which（本机 0.5.3 的结构化帮助输出）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-help/which.txt
+        url: https://github.com/ScoopInstaller/Scoop/wiki
         retrieved: "2026-09-27"
         appliesTo: "0.5.3"
         note: "用法：scoop which <command>；Locate the path to a shim/executable that was installed with Scoop。"
       - title: "Scoop wiki —— SSH on Windows（用 which 判断实际生效的程序）"
-        url: file:///D:/AI/swpj/docs/reference/scoop-wiki/SSH-on-Windows.md
+        url: https://github.com/ScoopInstaller/Scoop/wiki/SSH-on-Windows
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
         note: "可以用 scoop which ssh 看当前生效的是系统自带还是 scoop 装的 ssh。"
@@ -1749,7 +1749,7 @@ actions:
         style: positional
         required: true
         placeholder: "例如 7z / ssh"
-        doc: scoop-help/which.txt
+        doc: scoop help which
     output:
       mode: capture
       showCommandLine: true

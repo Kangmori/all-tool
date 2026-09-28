@@ -4,8 +4,8 @@
 #
 # 参数知识来源：
 #   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/systeminfo
-#      离线快照 docs/reference/win-docs/systeminfo.html
-#   2) 本机 `systeminfo /?` 的真实输出：docs/reference/win-help/systeminfo.txt（不入库，见 .gitignore）
+#      离线快照 Microsoft Learn 官方文档（见各动作的 sources）/systeminfo.html
+#   2) 本机 `systeminfo /?` 的真实输出：本机帮助快照（**未入库**，可用下列命令重新抓取）/systeminfo.txt（不入库，见 .gitignore）
 #
 # **刻意不做 /s /u /p**（连远程机器并换账号）：会把明文密码带进界面，见 tasklist 清单头部的同一说明。
 #
@@ -30,9 +30,9 @@ sources:
     url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/systeminfo
     retrieved: "2026-09-27"
     appliesTo: Windows 10/11
-    note: 离线快照 docs/reference/win-docs/systeminfo.html。语法行：systeminfo [/s <computer> [/u …]] [/fo {TABLE | LIST | CSV}] [/nh]；参数只有 /s /u /p /fo /nh 五个。
+    note: 离线快照 Microsoft Learn 官方文档（见各动作的 sources）/systeminfo.html。语法行：systeminfo [/s <computer> [/u …]] [/fo {TABLE | LIST | CSV}] [/nh]；参数只有 /s /u /p /fo /nh 五个。
   - title: 本机 `systeminfo /?` 的真实输出快照
-    url: file:///D:/AI/swpj/docs/reference/win-help/systeminfo.txt
+    url: file:///D:/AI/All Tool/本机帮助快照（**未入库**，可用下列命令重新抓取）/systeminfo.txt
     retrieved: "2026-09-27"
     appliesTo: Windows 11 26200 / systeminfo.exe 文件版本 10.0.26100.4202
     note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。与官方页面内容一致（参数表 + 举例）。
@@ -71,11 +71,11 @@ actions:
     description: 以人读的表格显示系统概览。实测本机耗时约 4.5 秒。
     command: ""
     sources:
-      - title: systeminfo 官方参考 —— 语法与 /fo 参数
-        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/systeminfo#parameters
+      - title: systeminfo 官方参考（Microsoft Learn）
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/systeminfo
         retrieved: "2026-09-27"
         appliesTo: Windows 10/11
-        note: 本机 /? 快照 docs/reference/win-help/systeminfo.txt 的 Examples（SYSTEMINFO / SYSTEMINFO /FO CSV / SYSTEMINFO /S system /FO LIST …）
+        note: "开关以本机 `systeminfo /?` 的输出核对过；/ ? 快照不入库（见 .gitignore）"
     fields:
       - id: format
         label: 输出格式

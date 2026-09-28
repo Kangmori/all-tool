@@ -137,41 +137,57 @@ def doc_coverage(manifest: dict) -> tuple[int, int]:
     return documented, total
 
 
-def load_reference_corpus(plugin_id: str) -> tuple[str, int]:
-    """把该工具包的参考文档快照拼成一份语料。
+def load_reference_corpus(plugin_id: str, manifest: dict) -> tuple[str, int]:
+    """把该工具包的参考文档快照拼成一份语料（用于 R1 的启发式检查）。
 
-    约定：`docs/reference/` 下**目录名以工具包 id 开头**的都算它的文档
-    （例如 7zip → 7zip-md、scoop → scoop-help/scoop-wiki、uv → uv-help/uv-docs）。
-    这样不必维护一张映射表，加新工具包时只要按约定命名即可。
+    语料来源有三类，**都必须是仓库里真实存在的东西**：
 
-    例外：`win-*` 是**一批 Windows 自带命令共用的**语料（它们各自太小，不值得每包一份快照），
-    所以对所有工具包都并入。语料变大只会让这个启发式检查更宽松（它本来就不阻断构建），
-    而 Windows 命令包正是最需要这层检查的——它们全部用 `/xxx` 形式的开关。
+    1. `docs/reference/<以工具包 id 开头>/` —— 该工具包自己的文档快照目录；
+    2. `docs/reference/<以工具包 id 开头的文件>` —— 我们**自己提取的派生物**
+       （例如 `7zip-switch-matrix.json`：从官方 CHM 提取的"命令 × 可用开关"矩阵。
+       它是事实性数据、是我们自己的成果，转公开时保留）；
+    3. `docs/reference/win-*/` —— **只给那些出处指向 Microsoft Learn 的工具包**用
+       （12 个 Windows 自带命令包各自太小，不值得每包一份快照）。
+       不能无条件共享：早先无条件并入时，7-Zip 的开关被拿去和 Windows 开关清单比对，
+       一下冒出 185 条假告警。
+
+    第三方文档快照在转公开前会被清掉，那之后没有语料的包会直接跳过这层检查
+    （它是启发式、不阻断构建），**不要**为了让报告好看而伪造语料。
     """
     reference = ROOT / "docs" / "reference"
     if not reference.exists():
         return "", 0
 
+    text = json.dumps(manifest, ensure_ascii=False)
+    uses_learn = "learn.microsoft.com" in text
+
     chunks: list[str] = []
     files = 0
 
-    for directory in sorted(reference.iterdir()):
-        if not directory.is_dir():
-            continue
-
-        name = directory.name.lower()
-        shared = name.startswith("win-")
-
-        if not shared and not name.startswith(plugin_id.lower()):
-            continue
-
-        for path in sorted(directory.rglob("*")):
-            if path.is_file() and path.suffix.lower() in {".md", ".txt", ".json", ".html"}:
+    def collect(path: pathlib.Path) -> None:
+        nonlocal files
+        if path.is_file():
+            candidates = [path]
+        else:
+            candidates = [f for f in sorted(path.rglob("*")) if f.is_file()]
+        for candidate in candidates:
+            if candidate.suffix.lower() in {".md", ".txt", ".json", ".html"}:
                 try:
-                    chunks.append(path.read_text(encoding="utf-8", errors="ignore"))
+                    chunks.append(candidate.read_text(encoding="utf-8", errors="ignore"))
                     files += 1
                 except OSError:
                     continue
+
+    prefix = plugin_id.lower()
+
+    for entry in sorted(reference.iterdir()):
+        name = entry.name.lower()
+
+        if entry.is_dir():
+            if name.startswith(prefix) or (uses_learn and name.startswith("win-")):
+                collect(entry)
+        elif name.startswith(prefix):
+            collect(entry)
 
     return "\n".join(chunks), files
 
@@ -183,7 +199,7 @@ def switch_source_report(manifest: dict) -> tuple[list[str], int, int]:
     短开关（-n）也容易在正文里偶然命中。它的价值是"给审阅者一个信号"，
     而不是"自动判作者有罪"。真正的门禁是 7z 那种从官方文档逐命令提取出的白名单。
     """
-    corpus, files = load_reference_corpus(str(manifest.get("id", "")))
+    corpus, files = load_reference_corpus(str(manifest.get("id", "")), manifest)
     if not corpus:
         return [], 0, 0
 

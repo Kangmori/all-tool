@@ -57,8 +57,8 @@ pwsh -File scripts/capture-app-window.ps1 -ActionIndex 1   # 只截应用窗口
 pwsh -File scripts/publish-app.ps1
 
 # 编译 WinUI 3（不需要打开 Visual Studio）
-& dotnet build src\Swpj.slnx
-& dotnet build src\Swpj.App\Swpj.App.csproj
+& dotnet build src\AllTool.slnx
+& dotnet build src\AllTool.App\AllTool.App.csproj
 ```
 
 ## 4. 环境三条要点（细节见 development.md §4）

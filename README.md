@@ -1,54 +1,67 @@
-# swpj
+# All Tool
 
-把本机已安装的命令行软件变成可点击的界面。一个软件对应一个"工具包"（插件），
-工具包是纯声明式的清单，不含任何代码。
+**把 Windows 上已安装的命令行软件，变成可以点的界面。**
 
-> 项目代号 `swpj` 是临时占位，正式名称待定。
+不用记参数、不用翻文档：选一个工具包 → 选一个动作 → 表单填好 → 点执行。
+工具包是**纯声明式的 YAML 清单，不含任何代码**，宿主只按声明调用你机器上已装的程序。
 
-## 现在有什么
+> 目标平台：Windows 10 / 11（x64）。
 
-- **规范**：`docs/spec/manifest-v1.md` + `manifest-v1.schema.json`
-  —— 描述如何把官方文档里的参数知识变成"能自动生成表单、能自动拼出 argv"的结构化数据。
-- **第一个工具包**：`plugins/7zip/manifest.yaml`
-  —— 7-Zip 的 11 个命令、64 个字段，全部标注了官方 CHM 里的出处，已通过 schema 与开关白名单校验。
-- **文档流水线**：`scripts/` + `docs/reference/`
-  —— 把官方文档抓下来、转成可检索文本、提取出机器可校验的事实。
-- **技术栈决定**：`docs/adr/0001-宿主技术栈.md`（.NET 10 + WinUI 3，已做编译与启动冒烟验证）。
-- **AI 协作文档**：`AGENTS.md` + `docs/ai/`
-  —— 入口规则、开发文档、工具包开发手册、清单模板、机器可读状态文件、环境漂移核对脚本。
-  设计目标是：**任何一个不了解本项目的 AI 智能体，读完就能安全地继续开发**（含上下文丢失后的恢复流程）。
+---
 
-宿主程序（WinUI 3 应用）**尚未开始编写**。
+## 快速开始
 
-## 目录结构
+### 方式一：下载发布包（不需要装任何东西）
 
-```
-AGENTS.md        AI 智能体入口：硬规则、必读顺序、命令速查
-docs/
-  ai/            AI 专用文档：开发文档、工具包手册、模板、项目状态（机读）
-  spec/          规范与 JSON Schema
-  adr/           架构决策记录
-  reference/     官方文档快照与提取出的事实（含生成方法说明）
-plugins/         工具包；一个子目录一个软件
-scripts/         文档抓取、事实提取、清单校验、环境核对
-spike/           一次性验证项目（WinUI 3 环境冒烟测试）
-src/             宿主程序源码（待开始）
-```
+到 [Releases](https://github.com/Kangmori/all-tool/releases) 下载最新的开发测试版 zip，解压后双击 `AllTool.exe`。
+发布包是**独立版**：目标机器不需要预装 .NET，也不需要 Windows App Runtime。
 
-## 常用命令
+### 方式二：从源码构建
 
 ```powershell
-# 校验所有工具包（本地与 CI 共用同一入口）
-uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py
-
-# 重新抓取参考文档
-pwsh -File scripts/fetch-scoop-help.ps1
-pwsh -File scripts/extract-7zip-matrix.ps1
+git clone https://github.com/Kangmori/all-tool
+cd all-tool
+dotnet build src\AllTool.slnx
+# 产出可交付目录（默认独立模式，零预装）
+pwsh -File scripts/publish-app.ps1
 ```
 
-## 设计上的两条底线
+## 已经带的工具包
 
-1. **不发明参数**：清单里出现的每个开关与位置参数，都必须能在官方文档里指出出处；
-   CI 会统计出处覆盖率，并把开关和官方逐命令白名单做交叉校验。
-2. **不把命令藏起来**：每次执行前都展示将要运行的完整命令行。
-   这个工具的价值是把命令**摆明白**，而不是让用户再也看不懂自己在做什么。
+| 工具包 | 动作数 | 说明 |
+|---|---|---|
+| 7-Zip | 11 | 压缩 / 解压 / 查看 / 校验 / 哈希 / 维护归档 |
+| Scoop | 40 | 应用、桶、缓存、Shim、配置、别名的查询与管理 |
+| uv | 26 | Python 项目、环境、包、版本、全局工具 |
+| **Windows 自带命令 12 个** | 70 | ping、ipconfig、tracert、nslookup、netstat、tasklist、systeminfo、chkdsk、sfc、robocopy、cleanmgr、powercfg |
+
+合计 **147 个动作 / 419 个参数字段**，每个字段都标注了官方文档出处（覆盖率 100%）。
+
+## 它做了哪些"应该有的"事
+
+- **执行前一定显示完整命令行**（只读、可复制）——不存在"背着你跑什么"的情况
+- **危险动作会二次确认**（覆盖 / 删除 / 不可逆操作都有标记）
+- **需要管理员权限的动作会提前标出来**，并提供「文件 → 以管理员身份重新启动」
+- **拖文件到输入框即填路径**（多值字段会自动一行一项）
+- **执行完给出下一步建议**并支持一键执行（例如 `scoop status` 之后可以一键更新）
+- **记住上次输入**、工具包可分组、动作可筛选
+
+## 工具包（插件）
+
+一个软件一个工具包，放在 `plugins/<id>/manifest.yaml`。工具包只能**声明**，不能执行代码——
+这是刻意的安全边界：你随时可以打开清单，看清每个动作到底会跑什么命令。
+
+- 规范：[`docs/spec/manifest-v1.md`](docs/spec/manifest-v1.md)
+- 开发手册（怎么给一个软件做工具包）：[`docs/ai/playbook-tool-package.md`](docs/ai/playbook-tool-package.md)
+- 界面里可直接把工具包文件夹拖进「工具包」区域安装；右键可卸载（移到 `plugins/.trash`，不是删除）
+
+## 给 AI 智能体看的文档
+
+本仓库的**唯一入口是 [`AGENTS.md`](AGENTS.md)**：硬规则、接手顺序、文档地图。
+机器可读状态在 [`docs/ai/project-state.json`](docs/ai/project-state.json)，
+已知陷阱（P1–P28）在 [`docs/ai/development.md`](docs/ai/development.md)。
+设计目标是：**任何一个不了解本项目的 AI 智能体，读完就能安全地继续开发。**
+
+## 许可
+
+MIT，见 [`LICENSE`](LICENSE)。作者：Kangmori。

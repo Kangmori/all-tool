@@ -1,0 +1,2157 @@
+{
+  "chkdsk": {
+    "file": "chkdsk.html",
+    "headings": [
+      {
+        "level": 2,
+        "id": "ms--in-this-article",
+        "text": "In this article"
+      },
+      {
+        "level": 2,
+        "id": "syntax",
+        "text": "Syntax"
+      },
+      {
+        "level": 3,
+        "id": "parameters",
+        "text": "Parameters"
+      },
+      {
+        "level": 2,
+        "id": "remarks",
+        "text": "Remarks"
+      },
+      {
+        "level": 2,
+        "id": "how-chkdsk-performs-on-different-media",
+        "text": "How chkdsk performs on different media"
+      },
+      {
+        "level": 2,
+        "id": "understanding-exit-codes",
+        "text": "Understanding exit codes"
+      },
+      {
+        "level": 2,
+        "id": "examples",
+        "text": "Examples"
+      },
+      {
+        "level": 2,
+        "id": "viewing-chkdsk-logs",
+        "text": "Viewing chkdsk logs"
+      },
+      {
+        "level": 2,
+        "id": "related-links",
+        "text": "Related links"
+      },
+      {
+        "level": 2,
+        "id": "ms--feedback",
+        "text": "Feedback"
+      },
+      {
+        "level": 2,
+        "id": "ms--additional-resources-mobile-heading",
+        "text": "Additional resources"
+      }
+    ],
+    "tableRows": [
+      {
+        "switch": "Parameter",
+        "meaning": "Description"
+      },
+      {
+        "switch": "<volume>",
+        "meaning": "Specifies the drive letter (followed by a colon), mount point, or volume name."
+      },
+      {
+        "switch": "[<path>]<filename>",
+        "meaning": "Use with file allocation table (FAT) and FAT32 only. Specifies the location and name of a file or set of files that you want chkdsk to check for fragmentation. You can use the wildcard characters ? and * to specify multiple files."
+      },
+      {
+        "switch": "/f",
+        "meaning": "Fixes errors on the disk. The disk must be locked. If chkdsk can't lock the drive, a message appears that asks you if you want to check the drive the next time you restart the computer."
+      },
+      {
+        "switch": "/v",
+        "meaning": "Displays the name of each file in every directory as the disk is checked."
+      },
+      {
+        "switch": "/r",
+        "meaning": "Locates bad sectors and recovers readable information. The disk must be locked. /r includes the functionality of /f, with the additional analysis of physical disk errors."
+      },
+      {
+        "switch": "/x",
+        "meaning": "Forces the volume to dismount first, if necessary. All open handles to the drive are invalidated. /x also includes the functionality of /f."
+      },
+      {
+        "switch": "/i",
+        "meaning": "Use with NTFS only. Performs a less vigorous check of index entries, which reduces the amount of time required to run chkdsk."
+      },
+      {
+        "switch": "/c",
+        "meaning": "Use with NTFS only. Doesn't check cycles within the folder structure, which reduces the amount of time required to run chkdsk."
+      },
+      {
+        "switch": "/l[:<size>]",
+        "meaning": "Use with NTFS only. Changes the log file size to the size you type. If you omit the size parameter, /l displays the current size."
+      },
+      {
+        "switch": "/b",
+        "meaning": "Use with NTFS only. Clears the list of bad clusters on the volume and rescans all allocated and free clusters for errors. /b includes the functionality of /r. Use this parameter after imaging a volume to a new hard disk drive."
+      },
+      {
+        "switch": "/scan",
+        "meaning": "Use with NTFS only. Runs an online scan on the volume."
+      },
+      {
+        "switch": "/forceofflinefix",
+        "meaning": "Use with NTFS only (must be used with /scan). Bypass all online repair; all defects found are queued for offline repair (for example, chkdsk /spotfix)."
+      },
+      {
+        "switch": "/perf",
+        "meaning": "Use with NTFS only (must be used with /scan). Uses more system resources to complete a scan as fast as possible. This might have a negative performance impact on other tasks running on the system."
+      },
+      {
+        "switch": "/spotfix",
+        "meaning": "Use with NTFS only. Runs spot fixing on the volume."
+      },
+      {
+        "switch": "/sdcleanup",
+        "meaning": "Use with NTFS only. Garbage collect unneeded security descriptor data (implies /f)."
+      },
+      {
+        "switch": "/offlinescanandfix",
+        "meaning": "Runs an offline scan and fix on the volume."
+      },
+      {
+        "switch": "/freeorphanedchains",
+        "meaning": "Use with FAT/FAT32/exFAT only. Frees any orphaned cluster chains instead of recovering their contents."
+      },
+      {
+        "switch": "/markclean",
+        "meaning": "Use with FAT/FAT32/exFAT only. Marks the volume clean if no corruption was detected, even if /f wasn't specified."
+      },
+      {
+        "switch": "/?",
+        "meaning": "Displays help at the command prompt."
+      },
+      {
+        "switch": "Exit code",
+        "meaning": "Description"
+      },
+      {
+        "switch": "0",
+        "meaning": "No errors were found."
+      },
+      {
+        "switch": "1",
+        "meaning": "Errors were found and fixed."
+      },
+      {
+        "switch": "2",
+        "meaning": "Performed disk cleanup (such as garbage collection) or didn't perform cleanup because /f was not specified."
+      },
+      {
+        "switch": "3",
+        "meaning": "Could not check the disk, errors could not be fixed, or errors were not fixed because /f was not specified."
+      }
+    ],
+    "syntax": [
+      "chkdsk [<volume>[[<path>]<filename>]] [/f] [/v] [/r] [/x] [/i] [/c] [/l[:<size>]] [/b] [/scan] [/forceofflinefix] [/perf] [/spotfix] [/sdcleanup] [/offlinescanandfix] [/freeorphanedchains] [/markclean] [/?]",
+      "Chkdsk cannot run because the volume is in use by another process. Would you like to schedule this volume to be checked the next time the system restarts? (Y/N)",
+      "10 lost allocation units found in 3 chains. Convert lost chains to files?",
+      "chkdsk d: /f",
+      "chkdsk *.*",
+      "get-winevent -FilterHashTable @{logname=\"Application\"} | ?{$_.providername -match \"chkdsk\"} | fl timecreated, message",
+      "get-winevent -FilterHashTable @{logname=\"Application\"} | ?{$_.providername -match \"wininit\"} | fl timecreated, message",
+      "get-winevent -FilterHashTable @{logname=\"Application\"} | ?{$_.providername -match \"chkdsk\"} | fl timecreated, message | out-file \"C:\\Users\\Administrator\\Desktop\\Chkdsk_Log.txt\"",
+      "get-winevent -FilterHashTable @{logname=\"Application\"} | ?{$_.providername -match \"wininit\"} | fl timecreated, message | out-file \"C:\\Users\\Administrator\\Desktop\\Wininit_Log.txt\""
+    ]
+  },
+  "cleanmgr-aux": {
+    "file": "cleanmgr-aux.html",
+    "headings": [
+      {
+        "level": 2,
+        "id": "ms--in-this-article",
+        "text": "In this article"
+      },
+      {
+        "level": 2,
+        "id": "command-line-switches",
+        "text": "Command-line switches"
+      },
+      {
+        "level": 2,
+        "id": "registry-key-information",
+        "text": "Registry key information"
+      },
+      {
+        "level": 2,
+        "id": "additional-information",
+        "text": "Additional information"
+      },
+      {
+        "level": 2,
+        "id": "ms--feedback",
+        "text": "Feedback"
+      },
+      {
+        "level": 2,
+        "id": "ms--additional-resources-mobile-heading",
+        "text": "Additional resources"
+      }
+    ],
+    "tableRows": [],
+    "syntax": []
+  },
+  "cleanmgr": {
+    "file": "cleanmgr.html",
+    "headings": [
+      {
+        "level": 2,
+        "id": "ms--in-this-article",
+        "text": "In this article"
+      },
+      {
+        "level": 2,
+        "id": "syntax",
+        "text": "Syntax"
+      },
+      {
+        "level": 3,
+        "id": "parameters",
+        "text": "Parameters"
+      },
+      {
+        "level": 2,
+        "id": "examples",
+        "text": "Examples"
+      },
+      {
+        "level": 2,
+        "id": "related-links",
+        "text": "Related links"
+      },
+      {
+        "level": 2,
+        "id": "ms--feedback",
+        "text": "Feedback"
+      },
+      {
+        "level": 2,
+        "id": "ms--additional-resources-mobile-heading",
+        "text": "Additional resources"
+      }
+    ],
+    "tableRows": [
+      {
+        "switch": "Parameter",
+        "meaning": "Description"
+      },
+      {
+        "switch": "/d <driveletter>",
+        "meaning": "Specifies the drive that you want Disk Cleanup to clean.NOTE: The /d option isn't utilized with /sagerun:n."
+      },
+      {
+        "switch": "/sageset:n",
+        "meaning": "Displays the Disk Cleanup Settings dialog box and also creates a registry key to store the settings that you select. The n value, which is stored in the registry, allows you to specify tasks for Disk Cleanup to run. The n value can be any integer value from 0 to 9999. For more information, see Registry key information."
+      },
+      {
+        "switch": "/sagerun:n",
+        "meaning": "Runs the specified tasks that are assigned to the n value if you use the /sageset option. All drives on the computer are enumerated and the selected profile runs against each drive."
+      },
+      {
+        "switch": "/tuneup:n",
+        "meaning": "Run /sageset and /sagerun for the same n."
+      },
+      {
+        "switch": "/lowdisk",
+        "meaning": "Run with the default settings."
+      },
+      {
+        "switch": "/verylowdisk",
+        "meaning": "Run with the default settings, no user prompts."
+      },
+      {
+        "switch": "/autoclean",
+        "meaning": "Automatically deletes the files that are left behind after you upgrade Windows."
+      },
+      {
+        "switch": "/?",
+        "meaning": "Displays help at the command prompt."
+      }
+    ],
+    "syntax": [
+      "cleanmgr [/d <driveletter>] [/sageset:n] [/sagerun:n] [/TUNEUP:n] [/LOWDISK] [/VERYLOWDISK]",
+      "cleanmgr /sageset:1",
+      "cleanmgr /sagerun:1",
+      "cleanmgr /tuneup:1"
+    ]
+  },
+  "ipconfig": {
+    "file": "ipconfig.html",
+    "headings": [
+      {
+        "level": 2,
+        "id": "ms--in-this-article",
+        "text": "In this article"
+      },
+      {
+        "level": 2,
+        "id": "syntax",
+        "text": "Syntax"
+      },
+      {
+        "level": 3,
+        "id": "parameters",
+        "text": "Parameters"
+      },
+      {
+        "level": 3,
+        "id": "examples",
+        "text": "Examples"
+      },
+      {
+        "level": 2,
+        "id": "related-links",
+        "text": "Related links"
+      },
+      {
+        "level": 2,
+        "id": "ms--feedback",
+        "text": "Feedback"
+      },
+      {
+        "level": 2,
+        "id": "ms--additional-resources-mobile-heading",
+        "text": "Additional resources"
+      }
+    ],
+    "tableRows": [
+      {
+        "switch": "Parameter",
+        "meaning": "Description"
+      },
+      {
+        "switch": "/all",
+        "meaning": "Displays the full TCP/IP configuration for all adapters. Adapters can represent physical interfaces, such as installed network adapters, or logical interfaces, such as dial-up connections."
+      },
+      {
+        "switch": "/displaydns",
+        "meaning": "Displays the contents of the DNS client resolver cache, which includes both entries preloaded from the local Hosts file and any recently obtained resource records for name queries resolved by the computer. The DNS Client service uses this information to resolve frequently queried names quickly, before querying its configured DNS servers."
+      },
+      {
+        "switch": "/flushdns",
+        "meaning": "Flushes and resets the contents of the DNS client resolver cache. During DNS troubleshooting, you can use this procedure to discard negative cache entries from the cache, as well as any other entries that have been added dynamically."
+      },
+      {
+        "switch": "/registerdns",
+        "meaning": "Initiates manual dynamic registration for the DNS names and IP addresses that are configured at a computer. You can use this parameter to troubleshoot a failed DNS name registration or resolve a dynamic update problem between a client and the DNS server without rebooting the client computer. The DNS settings in the advanced properties of the TCP/IP protocol determine which names are registered in DNS."
+      },
+      {
+        "switch": "/release [<adapter>]",
+        "meaning": "Sends a DHCPRELEASE message to the DHCP server to release the current DHCP configuration and discard the IP address configuration for either all adapters (if an adapter is not specified) or for a specific adapter if the adapter parameter is included. This parameter disables TCP/IP for adapters configured to obtain an IP address automatically. To specify an adapter name, type the adapter name that appears when you use ipconfig without parameters."
+      },
+      {
+        "switch": "/release6[<adapter>]",
+        "meaning": "Sends a DHCPRELEASE message to the DHCPv6 server to release the current DHCP configuration and discard the IPv6 address configuration for either all adapters (if an adapter is not specified) or for a specific adapter if the adapter parameter is included. This parameter disables TCP/IP for adapters configured to obtain an IP address automatically. To specify an adapter name, type the adapter name that appears when you use ipconfig without parameters."
+      },
+      {
+        "switch": "/renew [<adapter>]",
+        "meaning": "Renews DHCP configuration for all adapters (if an adapter is not specified) or for a specific adapter if the adapter parameter is included. This parameter is available only on computers with adapters that are configured to obtain an IP address automatically. To specify an adapter name, type the adapter name that appears when you use ipconfig without parameters."
+      },
+      {
+        "switch": "/renew6 [<adapter>]",
+        "meaning": "Renews DHCPv6 configuration for all adapters (if an adapter is not specified) or for a specific adapter if the adapter parameter is included. This parameter is available only on computers with adapters that are configured to obtain an IPv6 address automatically. To specify an adapter name, type the adapter name that appears when you use ipconfig without parameters."
+      },
+      {
+        "switch": "/setclassid <adapter>[<classID>]",
+        "meaning": "Configures the DHCP class ID for a specified adapter. To set the DHCP class ID for all adapters, use the asterisk (*) wildcard character in place of adapter. This parameter is available only on computers with adapters that are configured to obtain an IP address automatically. If a DHCP class ID is not specified, the current class ID is removed."
+      },
+      {
+        "switch": "/showclassid <adapter>",
+        "meaning": "Displays the DHCP class ID for a specified adapter. To see the DHCP class ID for all adapters, use the asterisk (*) wildcard character in place of adapter. This parameter is available only on computers with adapters that are configured to obtain an IP address automatically."
+      },
+      {
+        "switch": "/?",
+        "meaning": "Displays Help at the command prompt."
+      }
+    ],
+    "syntax": [
+      "ipconfig [/allcompartments] [/all] [/renew [<adapter>]] [/release [<adapter>]] [/renew6[<adapter>]] [/release6 [<adapter>]] [/flushdns] [/displaydns] [/registerdns] [/showclassid <adapter>] [/setclassid <adapter> [<classID>]]",
+      "ipconfig",
+      "ipconfig /all",
+      "ipconfig /renew Local Area Connection",
+      "ipconfig /flushdns",
+      "ipconfig /showclassid Local*",
+      "ipconfig /setclassid Local Area Connection TEST"
+    ]
+  },
+  "netstat": {
+    "file": "netstat.html",
+    "headings": [
+      {
+        "level": 2,
+        "id": "ms--in-this-article",
+        "text": "In this article"
+      },
+      {
+        "level": 2,
+        "id": "syntax",
+        "text": "Syntax"
+      },
+      {
+        "level": 3,
+        "id": "parameters",
+        "text": "Parameters"
+      },
+      {
+        "level": 3,
+        "id": "examples",
+        "text": "Examples"
+      },
+      {
+        "level": 2,
+        "id": "related-links",
+        "text": "Related links"
+      },
+      {
+        "level": 2,
+        "id": "ms--feedback",
+        "text": "Feedback"
+      },
+      {
+        "level": 2,
+        "id": "ms--additional-resources-mobile-heading",
+        "text": "Additional resources"
+      }
+    ],
+    "tableRows": [
+      {
+        "switch": "Parameter",
+        "meaning": "Description"
+      },
+      {
+        "switch": "-a",
+        "meaning": "Displays all active TCP connections and the TCP and UDP ports on which the computer is listening."
+      },
+      {
+        "switch": "-b",
+        "meaning": "Displays the executable involved in creating each connection or listening port. In some cases well-known executables host multiple independent components, and in these cases the sequence of components involved in creating the connection or listening port is displayed. In this case the executable name is in [] at the bottom, on top is the component it called, and so forth until TCP/IP was reached. Note that this option can be time-consuming and will fail unless you have sufficient permissions."
+      },
+      {
+        "switch": "-e",
+        "meaning": "Displays Ethernet statistics, such as the number of bytes and packets sent and received. This parameter can be combined with -s."
+      },
+      {
+        "switch": "-n",
+        "meaning": "Displays active TCP connections, however, addresses and port numbers are expressed numerically and no attempt is made to determine names."
+      },
+      {
+        "switch": "-o",
+        "meaning": "Displays active TCP connections and includes the process ID (PID) for each connection. You can find the application based on the PID on the Processes tab in Windows Task Manager. This parameter can be combined with -a, -n, and -p."
+      },
+      {
+        "switch": "-p <Protocol>",
+        "meaning": "Shows connections for the protocol specified by Protocol. In this case, the Protocol can be tcp, udp, tcpv6, or udpv6. If this parameter is used with -s to display statistics by protocol, Protocol can be tcp, udp, icmp, ip, tcpv6, udpv6, icmpv6, or ipv6."
+      },
+      {
+        "switch": "-q",
+        "meaning": "Displays all connections, listening ports, and bound nonlistening TCP ports. Bound nonlistening ports may or may not be associated with an active connection."
+      },
+      {
+        "switch": "-s",
+        "meaning": "Displays statistics by protocol. By default, statistics are shown for the TCP, UDP, ICMP, and IP protocols. If the IPv6 protocol is installed, statistics are shown for the TCP over IPv6, UDP over IPv6, ICMPv6, and IPv6 protocols. The -p parameter can be used to specify a set of protocols."
+      },
+      {
+        "switch": "-r",
+        "meaning": "Displays the contents of the IP routing table. This is equivalent to the route print command."
+      },
+      {
+        "switch": "<interval>",
+        "meaning": "Redisplays the selected information every interval seconds. Press CTRL+C to stop the redisplay. If this parameter is omitted, this command prints the selected information only once."
+      },
+      {
+        "switch": "/?",
+        "meaning": "Displays help at the command prompt."
+      },
+      {
+        "switch": "Parameter",
+        "meaning": "Description"
+      },
+      {
+        "switch": "Proto",
+        "meaning": "The name of the protocol (TCP or UDP)."
+      },
+      {
+        "switch": "Local address",
+        "meaning": "The IP address of the local computer and the port number being used. The name of the local computer that corresponds to the IP address and the name of the port is shown unless the -n parameter is specified. If the port is not yet established, the port number is shown as an asterisk (*)."
+      },
+      {
+        "switch": "Foreign address",
+        "meaning": "The IP address and port number of the remote computer to which the socket is connected. The names that corresponds to the IP address and the port are shown unless the -n parameter is specified. If the port is not yet established, the port number is shown as an asterisk (*)."
+      },
+      {
+        "switch": "State",
+        "meaning": "Indicates the state of a TCP connection, including:CLOSE_WAITCLOSEDESTABLISHEDFIN_WAIT_1FIN_WAIT_2LAST_ACKLISTENSYN_RECEIVEDSYN_SENDTIMED_WAIT"
+      }
+    ],
+    "syntax": [
+      "netstat [-a] [-b] [-e] [-n] [-o] [-p <Protocol>] [-q] [-r] [-s] [<interval>]",
+      "netstat -e -s",
+      "netstat -s -p tcp udp",
+      "netstat -o 5",
+      "netstat -n -o",
+      "netstat -anobq"
+    ]
+  },
+  "nslookup": {
+    "file": "nslookup.html",
+    "headings": [
+      {
+        "level": 2,
+        "id": "ms--in-this-article",
+        "text": "In this article"
+      },
+      {
+        "level": 2,
+        "id": "syntax",
+        "text": "Syntax"
+      },
+      {
+        "level": 3,
+        "id": "parameters",
+        "text": "Parameters"
+      },
+      {
+        "level": 3,
+        "id": "remarks",
+        "text": "Remarks"
+      },
+      {
+        "level": 2,
+        "id": "examples",
+        "text": "Examples"
+      },
+      {
+        "level": 3,
+        "id": "noninteractive-mode",
+        "text": "Noninteractive mode"
+      },
+      {
+        "level": 3,
+        "id": "interactive-mode",
+        "text": "Interactive mode"
+      },
+      {
+        "level": 2,
+        "id": "related-links",
+        "text": "Related links"
+      },
+      {
+        "level": 2,
+        "id": "ms--feedback",
+        "text": "Feedback"
+      },
+      {
+        "level": 2,
+        "id": "ms--additional-resources-mobile-heading",
+        "text": "Additional resources"
+      }
+    ],
+    "tableRows": [
+      {
+        "switch": "Parameter",
+        "meaning": "Description"
+      },
+      {
+        "switch": "nslookup exit",
+        "meaning": "Exits the nslookup command-line tool."
+      },
+      {
+        "switch": "nslookup finger",
+        "meaning": "Connects with the finger server on the current computer."
+      },
+      {
+        "switch": "nslookup help",
+        "meaning": "Displays a short summary of subcommands."
+      },
+      {
+        "switch": "nslookup ls",
+        "meaning": "Lists information for a DNS domain."
+      },
+      {
+        "switch": "nslookup lserver",
+        "meaning": "Changes the default server to the specified DNS domain."
+      },
+      {
+        "switch": "nslookup root",
+        "meaning": "Changes the default server to the server for the root of the DNS domain name space."
+      },
+      {
+        "switch": "nslookup server",
+        "meaning": "Changes the default server to the specified DNS domain."
+      },
+      {
+        "switch": "nslookup set",
+        "meaning": "Changes configuration settings that affect how lookups function."
+      },
+      {
+        "switch": "nslookup set all",
+        "meaning": "Prints the current values of the configuration settings."
+      },
+      {
+        "switch": "nslookup set class",
+        "meaning": "Changes the query class. The class specifies the protocol group of the information."
+      },
+      {
+        "switch": "nslookup set d2",
+        "meaning": "Turns exhaustive Debugging mode on or off. All fields of every packet are printed."
+      },
+      {
+        "switch": "nslookup set debug",
+        "meaning": "Turns Debugging mode on or off."
+      },
+      {
+        "switch": "nslookup set domain",
+        "meaning": "Changes the default DNS domain name to the name specified."
+      },
+      {
+        "switch": "nslookup set port",
+        "meaning": "Changes the default TCP/UDP DNS name server port to the value specified."
+      },
+      {
+        "switch": "nslookup set querytype",
+        "meaning": "Changes the resource record type for the query."
+      },
+      {
+        "switch": "nslookup set recurse",
+        "meaning": "Tells the DNS name server to query other servers if it doesn't have the information."
+      },
+      {
+        "switch": "nslookup set retry",
+        "meaning": "Sets the number of retries."
+      },
+      {
+        "switch": "nslookup set root",
+        "meaning": "Changes the name of the root server used for queries."
+      },
+      {
+        "switch": "nslookup set search",
+        "meaning": "Appends the DNS domain names in the DNS domain search list to the request until an answer is received. This applies when the set and the lookup request contain at least one period, but do not end with a trailing period."
+      },
+      {
+        "switch": "nslookup set srchlist",
+        "meaning": "Changes the default DNS domain name and search list."
+      },
+      {
+        "switch": "nslookup set timeout",
+        "meaning": "Changes the initial number of seconds to wait for a reply to a request."
+      },
+      {
+        "switch": "nslookup set type",
+        "meaning": "Changes the resource record type for the query."
+      },
+      {
+        "switch": "nslookup set vc",
+        "meaning": "Specifies to use or not use a virtual circuit when sending requests to the server."
+      },
+      {
+        "switch": "nslookup view",
+        "meaning": "Sorts and lists the output of the previous ls subcommand or commands."
+      },
+      {
+        "switch": "Error message",
+        "meaning": "Description"
+      },
+      {
+        "switch": "timed out",
+        "meaning": "The server didn't respond to a request after a certain amount of time and a certain number of retries. You can set the time-out period with the nslookup set timeout command. You can set the number of retries with the nslookup set retry command."
+      },
+      {
+        "switch": "No response from server",
+        "meaning": "No DNS name server is running on the server computer."
+      },
+      {
+        "switch": "No records",
+        "meaning": "The DNS name server doesn't have resource records of the current query type for the computer, although the computer name is valid. The query type is specified with the nslookup set querytype command."
+      },
+      {
+        "switch": "Nonexistent domain",
+        "meaning": "The computer or DNS domain name doesn't exist."
+      },
+      {
+        "switch": "Connection refused or Network is unreachable",
+        "meaning": "The connection to the DNS name server or finger server couldn't be made. This error commonly occurs with the ls and finger requests."
+      },
+      {
+        "switch": "Server failure",
+        "meaning": "The DNS name server found an internal inconsistency in its database and couldn't return a valid answer."
+      },
+      {
+        "switch": "Refused",
+        "meaning": "The DNS name server refused to service the request."
+      },
+      {
+        "switch": "format error",
+        "meaning": "The DNS name server found that the request packet wasn't in the proper format. It may indicate an error in nslookup."
+      }
+    ],
+    "syntax": [
+      "nslookup [exit | finger | help | ls | lserver | root | server | set | view] [options]",
+      "nslookup mydomain.com 1.1.1.1",
+      "nslookup 4.4.4.4",
+      "nslookup -debug mydomain.com",
+      "nslookup -type=AAAA mydomain.com",
+      "nslookup -debug -type=A+AAAA -nosearch -recurse mydomain.com 1.1.1.1",
+      "nslookup - 1.1.1.1",
+      "set all",
+      "mydomain.com",
+      "server 4.4.4.4",
+      "set type=HINFO",
+      "exit"
+    ]
+  },
+  "ping": {
+    "file": "ping.html",
+    "headings": [
+      {
+        "level": 2,
+        "id": "ms--in-this-article",
+        "text": "In this article"
+      },
+      {
+        "level": 2,
+        "id": "syntax",
+        "text": "Syntax"
+      },
+      {
+        "level": 3,
+        "id": "parameters",
+        "text": "Parameters"
+      },
+      {
+        "level": 3,
+        "id": "example-of-the-ping-command-output",
+        "text": "Example of the ping command output"
+      },
+      {
+        "level": 3,
+        "id": "examples",
+        "text": "Examples"
+      },
+      {
+        "level": 2,
+        "id": "related-links",
+        "text": "Related links"
+      },
+      {
+        "level": 2,
+        "id": "ms--feedback",
+        "text": "Feedback"
+      },
+      {
+        "level": 2,
+        "id": "ms--additional-resources-mobile-heading",
+        "text": "Additional resources"
+      }
+    ],
+    "tableRows": [
+      {
+        "switch": "Parameter",
+        "meaning": "Description"
+      },
+      {
+        "switch": "/t",
+        "meaning": "Specifies ping continue sending echo Request messages to the destination until interrupted. To interrupt and display statistics, press CTRL+BREAK. To interrupt and quit this command, press CTRL+C."
+      },
+      {
+        "switch": "/a",
+        "meaning": "Specifies reverse name resolution be performed on the destination IP address. If this operation is successful, ping displays the corresponding host name."
+      },
+      {
+        "switch": "/n <count>",
+        "meaning": "Specifies the number of echo Request messages be sent. The default is 4."
+      },
+      {
+        "switch": "/l <size>",
+        "meaning": "Specifies the length, in bytes, of the Data field in the echo Request messages. The default is 32. The maximum size is 65,500."
+      },
+      {
+        "switch": "/f",
+        "meaning": "Specifies that echo Request messages are sent with the Do not Fragment flag in the IP header set to 1 (available on IPv4 only). The echo Request message can't be fragmented by routers in the path to the destination. This parameter is useful for troubleshooting path Maximum Transmission Unit (PMTU) problems."
+      },
+      {
+        "switch": "/i <TTL>",
+        "meaning": "Specifies the value of the Time To Live (TTL) field in the IP header for echo Request messages sent. The default is the default TTL value for the host. The maximum TTL is 255."
+      },
+      {
+        "switch": "/v <TOS>",
+        "meaning": "Specifies the value of the Type Of Service (TOS) field in the IP header for echo Request messages sent (available on IPv4 only). The default is 0. TOS is specified as a decimal value from 0 through 255."
+      },
+      {
+        "switch": "/r <count>",
+        "meaning": "Specifies the Record Route option in the IP header is used to record the path taken by the echo Request message and corresponding echo Reply message (available on IPv4 only). Each hop in the path uses an entry in the Record Route option. If possible, specify a count equal to or greater than the number of hops between the source and destination. The count must be a minimum of 1 and a maximum of 9."
+      },
+      {
+        "switch": "/s <count>",
+        "meaning": "Specifies that the Internet timestamp option in the IP header is used to record the time of arrival for the echo Request message and corresponding echo Reply message for each hop. The count must be a minimum of 1 and a maximum of 4. This parameter is required for link-local destination addresses."
+      },
+      {
+        "switch": "/j <hostlist>",
+        "meaning": "Specifies the echo Request messages use the Loose Source Route option in the IP header with the set of intermediate destinations specified in hostlist (available on IPv4 only). With loose source routing, successive intermediate destinations can be separated by one or multiple routers. The maximum number of addresses or names in the host list is 9. The host list is a series of IP addresses (in dotted decimal notation) separated by spaces."
+      },
+      {
+        "switch": "/k <hostlist>",
+        "meaning": "Specifies the echo Request messages use the Strict Source Route option in the IP header with the set of intermediate destinations specified in hostlist (available on IPv4 only). With strict source routing, the next intermediate destination must be directly reachable (it must be a neighbor on an interface of the router). The maximum number of addresses or names in the host list is 9. The host list is a series of IP addresses (in dotted decimal notation) separated by spaces."
+      },
+      {
+        "switch": "/w <timeout>",
+        "meaning": "Specifies the amount of time, in milliseconds, to wait for the echo Reply message corresponding to a given echo Request message. If the echo Reply message isn't received within the time-out, the \"Request timed out\" error message is displayed. The default time-out is 4000 (4 seconds)."
+      },
+      {
+        "switch": "/R",
+        "meaning": "Specifies the round-trip path is traced (available on IPv6 only)."
+      },
+      {
+        "switch": "/S <Srcaddr>",
+        "meaning": "Specifies the source address to use (available on IPv6 only)."
+      },
+      {
+        "switch": "/4",
+        "meaning": "Specifies IPv4 used to ping. This parameter isn't required to identify the target host with an IPv4 address. It's only required to identify the target host by name."
+      },
+      {
+        "switch": "/6",
+        "meaning": "Specifies IPv6 used to ping. This parameter isn't required to identify the target host with an IPv6 address. It's only required to identify the target host by name."
+      },
+      {
+        "switch": "<targetname>",
+        "meaning": "Specifies the host name or IP address of the destination."
+      },
+      {
+        "switch": "/?",
+        "meaning": "Displays help at the command prompt."
+      }
+    ],
+    "syntax": [
+      "ping [/t] [/a] [/n <count>] [/l <size>] [/f] [/I <TTL>] [/v <TOS>] [/r <count>] [/s <count>] [{/j <hostlist> | /k <hostlist>}] [/w <timeout>] [/R] [/S <Srcaddr>] [/4] [/6] <targetname>",
+      "C:\\>ping example.microsoft.com pinging example.microsoft.com [192.168.239.132] with 32 bytes of data: Reply from 192.168.239.132: bytes=32 time=101ms TTL=124 Reply from 192.168.239.132: bytes=32 time=100ms TTL=124 Reply from 192.168.239.132: bytes=32 time=120ms TTL=124 Reply from 192.168.239.132: bytes=32 time=120ms TTL=124",
+      "ping /a 10.0.99.221",
+      "ping /n 10 /l 1000 10.0.99.221",
+      "ping /r 4 10.0.99.221",
+      "ping /j 10.12.0.1 10.29.3.1 10.1.44.1 10.0.99.221"
+    ]
+  },
+  "powercfg": {
+    "file": "powercfg.html",
+    "headings": [
+      {
+        "level": 2,
+        "id": "ms--in-this-article",
+        "text": "In this article"
+      },
+      {
+        "level": 2,
+        "id": "syntax",
+        "text": "Syntax"
+      },
+      {
+        "level": 2,
+        "id": "command-line-options",
+        "text": "Command-line options"
+      },
+      {
+        "level": 2,
+        "id": "command-line-option-descriptions",
+        "text": "Command-line option descriptions"
+      },
+      {
+        "level": 3,
+        "id": "-help-or-",
+        "text": "-help or /?"
+      },
+      {
+        "level": 3,
+        "id": "list-or-l",
+        "text": "/list or /L"
+      },
+      {
+        "level": 3,
+        "id": "-query-or-q-",
+        "text": "/query or /Q"
+      },
+      {
+        "level": 3,
+        "id": "change-or-x",
+        "text": "/change or /X"
+      },
+      {
+        "level": 3,
+        "id": "changename",
+        "text": "/changename"
+      },
+      {
+        "level": 3,
+        "id": "duplicatescheme",
+        "text": "/duplicatescheme"
+      },
+      {
+        "level": 3,
+        "id": "delete-or-d",
+        "text": "/delete or /D"
+      },
+      {
+        "level": 3,
+        "id": "deletesetting",
+        "text": "/deletesetting"
+      },
+      {
+        "level": 3,
+        "id": "setactive-or-s",
+        "text": "/setactive or /S"
+      },
+      {
+        "level": 3,
+        "id": "getactivescheme",
+        "text": "/getactivescheme"
+      },
+      {
+        "level": 3,
+        "id": "setacvalueindex",
+        "text": "/setacvalueindex"
+      },
+      {
+        "level": 3,
+        "id": "setdcvalueindex",
+        "text": "/setdcvalueindex"
+      },
+      {
+        "level": 3,
+        "id": "import",
+        "text": "/import"
+      },
+      {
+        "level": 3,
+        "id": "export",
+        "text": "/export"
+      },
+      {
+        "level": 3,
+        "id": "aliases",
+        "text": "/aliases"
+      },
+      {
+        "level": 3,
+        "id": "getsecuritydescriptor",
+        "text": "/getsecuritydescriptor"
+      },
+      {
+        "level": 3,
+        "id": "setsecuritydescriptor",
+        "text": "/setsecuritydescriptor"
+      },
+      {
+        "level": 3,
+        "id": "hibernate-or-h",
+        "text": "/hibernate or /H"
+      },
+      {
+        "level": 3,
+        "id": "availablesleepstates-or-a",
+        "text": "/availablesleepstates or /A"
+      },
+      {
+        "level": 3,
+        "id": "devicequery",
+        "text": "/devicequery"
+      },
+      {
+        "level": 3,
+        "id": "deviceenableawake",
+        "text": "/deviceenableawake"
+      },
+      {
+        "level": 3,
+        "id": "devicedisablewake",
+        "text": "/devicedisablewake"
+      },
+      {
+        "level": 3,
+        "id": "lastwake",
+        "text": "/lastwake"
+      },
+      {
+        "level": 3,
+        "id": "waketimers",
+        "text": "/waketimers"
+      },
+      {
+        "level": 3,
+        "id": "requests",
+        "text": "/requests"
+      },
+      {
+        "level": 3,
+        "id": "requestsoverride",
+        "text": "/requestsoverride"
+      },
+      {
+        "level": 3,
+        "id": "energy",
+        "text": "/energy"
+      },
+      {
+        "level": 3,
+        "id": "batteryreport",
+        "text": "/batteryreport"
+      },
+      {
+        "level": 3,
+        "id": "sleepstudy",
+        "text": "/sleepstudy"
+      },
+      {
+        "level": 3,
+        "id": "srumutil",
+        "text": "/srumutil"
+      },
+      {
+        "level": 3,
+        "id": "systemsleepdiagnostics",
+        "text": "/systemsleepdiagnostics"
+      },
+      {
+        "level": 3,
+        "id": "systempowerreport-or-spr",
+        "text": "/systempowerreport or /spr"
+      },
+      {
+        "level": 2,
+        "id": "overlay-scheme-and-ppm-profile-support",
+        "text": "Overlay Scheme and PPM Profile Support"
+      },
+      {
+        "level": 3,
+        "id": "reading-from-overlay-schemes",
+        "text": "Reading from overlay schemes"
+      },
+      {
+        "level": 3,
+        "id": "writing-to-overlay-schemes",
+        "text": "Writing to overlay schemes"
+      },
+      {
+        "level": 3,
+        "id": "reading-from-ppm-profile",
+        "text": "Reading from PPM profile"
+      },
+      {
+        "level": 3,
+        "id": "writing-to-ppm-profile",
+        "text": "Writing to PPM profile"
+      },
+      {
+        "level": 3,
+        "id": "enumerating-non-empty-ppm-profiles",
+        "text": "Enumerating non-empty PPM Profiles"
+      },
+      {
+        "level": 2,
+        "id": "provisioning-xml-generation-support",
+        "text": "Provisioning XML Generation Support"
+      },
+      {
+        "level": 2,
+        "id": "ms--additional-resources-mobile-heading",
+        "text": "Additional resources"
+      }
+    ],
+    "tableRows": [
+      {
+        "switch": "Option",
+        "meaning": "Description"
+      },
+      {
+        "switch": "/?, -help",
+        "meaning": "Displays information about command-line parameters."
+      },
+      {
+        "switch": "/list, /L",
+        "meaning": "Lists all power schemes."
+      },
+      {
+        "switch": "/query, /Q",
+        "meaning": "Displays the contents of a power scheme."
+      },
+      {
+        "switch": "/change, /X",
+        "meaning": "Modifies a setting value in the current power scheme."
+      },
+      {
+        "switch": "/changename",
+        "meaning": "Modifies the name and description of a power scheme."
+      },
+      {
+        "switch": "/duplicatescheme",
+        "meaning": "Duplicates a power scheme."
+      },
+      {
+        "switch": "/delete, /D",
+        "meaning": "Deletes a power scheme."
+      },
+      {
+        "switch": "/deletesetting",
+        "meaning": "Deletes a power setting."
+      },
+      {
+        "switch": "/setactive, /S",
+        "meaning": "Makes a power scheme active on the system."
+      },
+      {
+        "switch": "/getactivescheme",
+        "meaning": "Retrieves the currently active power scheme."
+      },
+      {
+        "switch": "/setacvalueindex",
+        "meaning": "Sets the value associated with a power setting while the system is powered by AC power."
+      },
+      {
+        "switch": "/setdcvalueindex",
+        "meaning": "Sets the value associated with a power setting while the system is powered by DC power."
+      },
+      {
+        "switch": "/import",
+        "meaning": "Imports all power settings from a file."
+      },
+      {
+        "switch": "/export",
+        "meaning": "Exports a power scheme to a file."
+      },
+      {
+        "switch": "/aliases",
+        "meaning": "Displays all aliases and their corresponding GUIDs."
+      },
+      {
+        "switch": "/getsecuritydescriptor",
+        "meaning": "Gets a security descriptor associated with a specified power setting, power scheme, or action."
+      },
+      {
+        "switch": "/setsecuritydescriptor",
+        "meaning": "Sets a security descriptor associated with a power setting, power scheme, or action."
+      },
+      {
+        "switch": "/hibernate, /H",
+        "meaning": "Enables and disables the hibernate feature."
+      },
+      {
+        "switch": "/availablesleepstates, /A",
+        "meaning": "Reports the sleep states available on the system."
+      },
+      {
+        "switch": "/devicequery",
+        "meaning": "Returns a list of devices that meet specified criteria."
+      },
+      {
+        "switch": "/deviceenableawake",
+        "meaning": "Enables a device to wake the system from a sleep state."
+      },
+      {
+        "switch": "/devicedisablewake",
+        "meaning": "Disables a device from waking the system from a sleep state."
+      },
+      {
+        "switch": "/lastwake",
+        "meaning": "Reports information about what woke the system from the last sleep transition."
+      },
+      {
+        "switch": "/waketimers",
+        "meaning": "Enumerates active wake timers."
+      },
+      {
+        "switch": "/requests",
+        "meaning": "Enumerates application and driver Power Requests."
+      },
+      {
+        "switch": "/requestsoverride",
+        "meaning": "Sets a Power Request override for a particular Process, Service, or Driver."
+      },
+      {
+        "switch": "/energy",
+        "meaning": "Analyzes the system for common energy-efficiency and battery life problems."
+      },
+      {
+        "switch": "/batteryreport",
+        "meaning": "Generates a report of battery usage."
+      },
+      {
+        "switch": "/sleepstudy",
+        "meaning": "Generates a diagnostic system power transition report."
+      },
+      {
+        "switch": "/srumutil",
+        "meaning": "Dumps Energy Estimation data from System Resource Usage Monitor (SRUM)."
+      },
+      {
+        "switch": "/systemsleepdiagnostics",
+        "meaning": "Generates a diagnostic report of system sleep transitions."
+      },
+      {
+        "switch": "/systempowerreport",
+        "meaning": "Generates a diagnostic system power transition report."
+      }
+    ],
+    "syntax": [
+      "powercfg /query powercfg /query 381b4222-f694-41f0-9685-ff5bb260df2e 238c9fa8-0aad-41ed-83f4-97be242c8f20",
+      "powercfg /change monitor-timeout-ac 5",
+      "powercfg /changename 381b4222-f694-41f0-9685-ff5bb260df2e \"Customized Balanced\"",
+      "powercfg /duplicatescheme 381b4222-f694-41f0-9685-ff5bb260df2e",
+      "powercfg /delete 381b4222-f694-41f0-9685-ff5bb260df2e",
+      "powercfg /deletesetting 238c9fa8-0aad-41ed-83f4-97be242c8f20 29f6c1db-86da-48c5-9fdb-f2b67b1f44da",
+      "powercfg /setactive 381b4222-f694-41f0-9685-ff5bb260df2e",
+      "powercfg /setacvalueindex 381b4222-f694-41f0-9685-ff5bb260df2e 238c9fa8-0aad-41ed-83f4-97be242c8f20 29f6c1db-86da-48c5-9fdb-f2b67b1f44da 0",
+      "powercfg /setdcvalueindex 381b4222-f694-41f0-9685-ff5bb260df2e 238c9fa8-0aad-41ed-83f4-97be242c8f20 29f6c1db-86da-48c5-9fdb-f2b67b1f44da 300",
+      "powercfg /import c:\\scheme.pow",
+      "powercfg /export c:\\scheme.pow 381b4222-f694-41f0-9685-ff5bb260df2e",
+      "powercfg /getsecuritydescriptor 381b4222-f694-41f0-9685-ff5bb260df2e<br /> powercfg /getsecuritydescriptor ActionSetActive",
+      "powercfg /setsecuritydescriptor 381b4222-f694-41f0-9685-ff5bb260df2e O:BAG:SYD:P(A;CI;KRKW;;;BU)(A;CI;KA;;;BA)(A;CI;KA;;;SY)(A;CI;KA;;;CO)<br /> powercfg /setsecuritydescriptor ActionSetActive O:BAG:SYD:P(A;CI;KR;;;BU)(A;CI;KA;;;BA)(A;CI;KA;;;SY)(A;CI;KA;;;CO)",
+      "powercfg /hibernate off<br /> powercfg /hibernate /size 100<br /> powercfg /hibernate /type reduced",
+      "powercfg /devicequery wake_armed",
+      "powercfg /deviceenableawake \"Microsoft USB IntelliMouse Optical\"",
+      "powercfg /devicedisablewake \"Microsoft USB IntelliMouse Optical\"",
+      "powercfg /requestsoverride process wmplayer.exe display system",
+      "powercfg /energy<br /> powercfg /energy /output \"longtrace.html\" /duration 120",
+      "powercfg /batteryreport /output \"batteryreport.html\"<br /> powercfg /batteryreport /duration 4",
+      "powercfg /sleepstudy /output \"sleepstudy.html\"<br /> powercfg /sleepstudy /duration 7",
+      "powercfg /batteryreport /output \"srumreport.xml\" /xml",
+      "powercfg /systemsleepdiagnostics<br/> powercfg /systemsleepdiagnostics /output \"system-sleep-diagnostics.html\"<br/> powercfg /systemsleepdiagnostics /output \"system-sleep-diagnostics.xml\" /XML<br/> powercfg /systemsleepdiagnostics /transformxml \"system-sleep-diagnostics.xml\"",
+      "powercfg /systempowerreport<br/> powercfg /systempowerreport /output \"sleepstudy.html\"<br/> powercfg /systempowerreport /output \"sleepstudy.xml\" /XML<br/> powercfg /systempowerreport /transformxml \"sleepstudy.xml\""
+    ]
+  },
+  "robocopy": {
+    "file": "robocopy.html",
+    "headings": [
+      {
+        "level": 2,
+        "id": "ms--in-this-article",
+        "text": "In this article"
+      },
+      {
+        "level": 2,
+        "id": "syntax",
+        "text": "Syntax"
+      },
+      {
+        "level": 3,
+        "id": "parameters",
+        "text": "Parameters"
+      },
+      {
+        "level": 3,
+        "id": "exit-return-codes",
+        "text": "Exit (return) codes"
+      },
+      {
+        "level": 2,
+        "id": "examples",
+        "text": "Examples"
+      },
+      {
+        "level": 2,
+        "id": "related-links",
+        "text": "Related links"
+      },
+      {
+        "level": 2,
+        "id": "ms--feedback",
+        "text": "Feedback"
+      },
+      {
+        "level": 2,
+        "id": "ms--additional-resources-mobile-heading",
+        "text": "Additional resources"
+      }
+    ],
+    "tableRows": [
+      {
+        "switch": "Parameter",
+        "meaning": "Description"
+      },
+      {
+        "switch": "<source>",
+        "meaning": "Specifies the path to the source directory."
+      },
+      {
+        "switch": "<destination>",
+        "meaning": "Specifies the path to the destination directory."
+      },
+      {
+        "switch": "<file>",
+        "meaning": "Specifies the file or files to be copied. Wildcard characters (* or ?) are supported. If you don't specify this parameter, *.* is used as the default value."
+      },
+      {
+        "switch": "<options>",
+        "meaning": "Specifies the options to use with the robocopy command, including copy, file, retry, logging, and job options."
+      },
+      {
+        "switch": "Option",
+        "meaning": "Description"
+      },
+      {
+        "switch": "/s",
+        "meaning": "Copies subdirectories. This option automatically excludes empty directories."
+      },
+      {
+        "switch": "/e",
+        "meaning": "Copies subdirectories. This option automatically includes empty directories."
+      },
+      {
+        "switch": "/lev:<n>",
+        "meaning": "Copies only the top n levels of the source directory tree."
+      },
+      {
+        "switch": "/z",
+        "meaning": "Copies files in restartable mode. In restartable mode, should a file copy be interrupted, robocopy can pick up where it left off rather than recopying the entire file."
+      },
+      {
+        "switch": "/b",
+        "meaning": "Copies files in backup mode. In backup mode, robocopy overrides file and folder permission settings (ACLs), which might otherwise block access."
+      },
+      {
+        "switch": "/zb",
+        "meaning": "Copies files in restartable mode. If file access is denied, switches to backup mode."
+      },
+      {
+        "switch": "/j",
+        "meaning": "Copies using unbuffered I/O (recommended for large files)."
+      },
+      {
+        "switch": "/efsraw",
+        "meaning": "Copies all encrypted files in EFS RAW mode."
+      },
+      {
+        "switch": "/copy:<copyflags>",
+        "meaning": "Specifies which file properties to copy. The valid values for this option are:D - DataA - AttributesT - Time stampsX - Skip alt data streamsS - NTFS access control list (ACL)O - Owner informationU - Auditing informationThe default value for the /COPY option is DAT (data, attributes, and time stamps). The X flag is ignored if either /B or /ZB is used."
+      },
+      {
+        "switch": "/dcopy:<copyflags>",
+        "meaning": "Specifies what to copy in directories. The valid values for this option are:D - DataA - AttributesT - Time stampsE - Extended attributeX - Skip alt data streamsThe default value for this option is DA (data and attributes)."
+      },
+      {
+        "switch": "/sec",
+        "meaning": "Copies files with security (equivalent to /copy:DATS)."
+      },
+      {
+        "switch": "/copyall",
+        "meaning": "Copies all file information (equivalent to /copy:DATSOU)."
+      },
+      {
+        "switch": "/nocopy",
+        "meaning": "Copies no file information (useful with /purge)."
+      },
+      {
+        "switch": "/secfix",
+        "meaning": "Fixes file security on all files, even skipped ones."
+      },
+      {
+        "switch": "/timfix",
+        "meaning": "Fixes file times on all files, even skipped ones."
+      },
+      {
+        "switch": "/purge",
+        "meaning": "Deletes destination files and directories that no longer exist in the source. Using this option with the /e option and a destination directory, allows the destination directory security settings to not be overwritten."
+      },
+      {
+        "switch": "/mir",
+        "meaning": "Mirrors a directory tree (equivalent to /e plus /purge). Using this option with the /e option and a destination directory, overwrites the destination directory security settings."
+      },
+      {
+        "switch": "/mov",
+        "meaning": "Moves files, and deletes them from the source after they're copied."
+      },
+      {
+        "switch": "/move",
+        "meaning": "Moves files and directories, and deletes them from the source after they're copied."
+      },
+      {
+        "switch": "/a+:[RASHCNET]",
+        "meaning": "Adds the specified attributes to copied files. The valid values for this option are: R - Read onlyA - ArchiveS - SystemH - HiddenC - CompressedN - Not content indexedE - EncryptedT - Temporary"
+      },
+      {
+        "switch": "/a-:[RASHCNETO]",
+        "meaning": "Removes the specified attributes from copied files. The valid values for this option are: R - Read onlyA - ArchiveS - SystemH - HiddenC - CompressedN - Not content indexedE - EncryptedT - TemporaryO - Offline"
+      },
+      {
+        "switch": "/create",
+        "meaning": "Creates a directory tree and zero-length files only."
+      },
+      {
+        "switch": "/fat",
+        "meaning": "Creates destination files by using 8.3 character-length FAT file names only."
+      },
+      {
+        "switch": "/256",
+        "meaning": "Turns off support for paths longer than 256 characters."
+      },
+      {
+        "switch": "/mon:<n>",
+        "meaning": "Monitors the source and runs again when more than n changes are detected."
+      },
+      {
+        "switch": "/mot:<m>",
+        "meaning": "Monitors the source and runs again in m minutes if changes are detected."
+      },
+      {
+        "switch": "/rh:hhmm-hhmm",
+        "meaning": "Specifies run times when new copies can be started."
+      },
+      {
+        "switch": "/pf",
+        "meaning": "Checks run times on a per file (not per-pass) basis."
+      },
+      {
+        "switch": "/ipg:<n>",
+        "meaning": "Specifies the inter-packet gap to free bandwidth on slow lines."
+      },
+      {
+        "switch": "/sj",
+        "meaning": "Copies junctions (soft-links) to the destination path instead of link targets."
+      },
+      {
+        "switch": "/sl",
+        "meaning": "Don't follow symbolic links and instead create a copy of the link."
+      },
+      {
+        "switch": "/mt:<n>",
+        "meaning": "Creates multi-threaded copies with n threads. n must be an integer between 1 and 128. The default value for n is 8. For better performance, redirect your output using /log option.The /mt parameter can't be used with the /ipg and /efsraw parameters."
+      },
+      {
+        "switch": "/nodcopy",
+        "meaning": "Copies no directory info (the default /dcopy:DA is done)."
+      },
+      {
+        "switch": "/nooffload",
+        "meaning": "Copies files without using the Windows Copy Offload mechanism."
+      },
+      {
+        "switch": "/compress",
+        "meaning": "Requests network compression during file transfer, if applicable."
+      },
+      {
+        "switch": "/sparse:<y|n>",
+        "meaning": "Enables or disables retaining the sparse state of files during copy process. If no option is selected, it defaults to yes (enabled)."
+      },
+      {
+        "switch": "/noclone",
+        "meaning": "Doesn't attempt block cloning as an optimization."
+      },
+      {
+        "switch": "Option",
+        "meaning": "Description"
+      },
+      {
+        "switch": "/iomaxsize:<n>[kmg]",
+        "meaning": "The requested max i/o size per read/write cycle in n kilobytes, megabytes, or gigabytes."
+      },
+      {
+        "switch": "/iorate:<n>[kmg]",
+        "meaning": "The requested i/o rate in n kilobytes megabytes, or gigabytes per second."
+      },
+      {
+        "switch": "/threshold:<n>[kmg]",
+        "meaning": "The file size threshold for throttling in n kilobytes, megabytes, or gigabytes (see Remarks)."
+      },
+      {
+        "switch": "Option",
+        "meaning": "Description"
+      },
+      {
+        "switch": "/a",
+        "meaning": "Copies only files for which the Archive attribute is set."
+      },
+      {
+        "switch": "/m",
+        "meaning": "Copies only files for which the Archive attribute is set, and resets the Archive attribute."
+      },
+      {
+        "switch": "/ia:[RASHCNETO]",
+        "meaning": "Includes only files for which any of the specified attributes are set. The valid values for this option are: R - Read onlyA - ArchiveS - SystemH - HiddenC - CompressedN - Not content indexedE - EncryptedT - TemporaryO - Offline"
+      },
+      {
+        "switch": "/xa:[RASHCNETO]",
+        "meaning": "Excludes files for which any of the specified attributes are set. The valid values for this option are: R - Read onlyA - ArchiveS - SystemH - HiddenC - CompressedN - Not content indexedE - EncryptedT - TemporaryO - Offline"
+      },
+      {
+        "switch": "/xf <filename>[ ...]",
+        "meaning": "Excludes files that match the specified names or paths. Wildcard characters (* and ?) are supported."
+      },
+      {
+        "switch": "/xd <directory>[ ...]",
+        "meaning": "Excludes directories that match the specified names and paths."
+      },
+      {
+        "switch": "/xc",
+        "meaning": "Excludes existing files with the same timestamp, but different file sizes."
+      },
+      {
+        "switch": "/xn",
+        "meaning": "Source directory files newer than the destination are excluded from the copy."
+      },
+      {
+        "switch": "/xo",
+        "meaning": "Source directory files older than the destination are excluded from the copy."
+      },
+      {
+        "switch": "/xx",
+        "meaning": "Excludes extra files and directories present in the destination but not the source. Excluding extra files doesn't delete files from the destination."
+      },
+      {
+        "switch": "/xl",
+        "meaning": "Excludes \"lonely\" files and directories present in the source but not the destination. Excluding lonely files prevents any new files from being added to the destination."
+      },
+      {
+        "switch": "/im",
+        "meaning": "Include modified files (differing change times)."
+      },
+      {
+        "switch": "/is",
+        "meaning": "Includes the same files. Same files are identical in name, size, times, and all attributes."
+      },
+      {
+        "switch": "/it",
+        "meaning": "Includes \"tweaked\" files. Tweaked files have the same name, size, and times, but different attributes."
+      },
+      {
+        "switch": "/max:<n>",
+        "meaning": "Specifies the maximum file size (to exclude files bigger than n bytes)."
+      },
+      {
+        "switch": "/min:<n>",
+        "meaning": "Specifies the minimum file size (to exclude files smaller than n bytes)."
+      },
+      {
+        "switch": "/maxage:<n>",
+        "meaning": "Specifies the maximum file age to exclude files older than n days or a date based on when the files were last modified."
+      },
+      {
+        "switch": "/minage:<n>",
+        "meaning": "Specifies the minimum file age to exclude files newer than n days or a date based on when the files were last modified."
+      },
+      {
+        "switch": "/maxlad:<n>",
+        "meaning": "Specifies the maximum last access date (excludes files unused since n)."
+      },
+      {
+        "switch": "/minlad:<n>",
+        "meaning": "Specifies the minimum last access date (excludes files used since n) If n is less than 1900, n specifies the number of days. Otherwise, n specifies a date in the format YYYYMMDD."
+      },
+      {
+        "switch": "/xj",
+        "meaning": "Excludes junction points, which are normally included by default."
+      },
+      {
+        "switch": "/fft",
+        "meaning": "Assumes FAT file times (two-second precision)."
+      },
+      {
+        "switch": "/dst",
+        "meaning": "Compensates for one-hour DST time differences."
+      },
+      {
+        "switch": "/xjd",
+        "meaning": "Excludes junction points for directories."
+      },
+      {
+        "switch": "/xjf",
+        "meaning": "Excludes junction points for files."
+      },
+      {
+        "switch": "Option",
+        "meaning": "Description"
+      },
+      {
+        "switch": "/r:<n>",
+        "meaning": "Specifies the number of retries on failed copies. The default value of n is 1,000,000 (one million retries)."
+      },
+      {
+        "switch": "/w:<n>",
+        "meaning": "Specifies the wait time between retries, in seconds. The default value of n is 30 (wait time 30 seconds)."
+      },
+      {
+        "switch": "/reg",
+        "meaning": "Saves the values specified in the /r and /w options as default settings in the registry."
+      },
+      {
+        "switch": "/tbd",
+        "meaning": "Specifies that the system waits for share names to be defined (retry error 67)."
+      },
+      {
+        "switch": "/lfsm",
+        "meaning": "Operate in low free space mode that enables copy, pause, and resume (see Remarks)."
+      },
+      {
+        "switch": "/lfsm:<n>[kmg]",
+        "meaning": "Specifies the floor size in n kilobytes, megabytes, or gigabytes."
+      },
+      {
+        "switch": "Option",
+        "meaning": "Description"
+      },
+      {
+        "switch": "/l",
+        "meaning": "Specifies that files are to be listed only (and not copied, deleted, or time stamped)."
+      },
+      {
+        "switch": "/x",
+        "meaning": "Reports all extra files, not just the ones that are selected."
+      },
+      {
+        "switch": "/v",
+        "meaning": "Produces verbose output, and shows all skipped files."
+      },
+      {
+        "switch": "/ts",
+        "meaning": "Includes source file time stamps in the output."
+      },
+      {
+        "switch": "/fp",
+        "meaning": "Includes the full path names of the files in the output."
+      },
+      {
+        "switch": "/bytes",
+        "meaning": "Prints sizes as bytes."
+      },
+      {
+        "switch": "/ns",
+        "meaning": "Specifies that file sizes aren't to be logged."
+      },
+      {
+        "switch": "/nc",
+        "meaning": "Specifies that file classes aren't to be logged."
+      },
+      {
+        "switch": "/nfl",
+        "meaning": "Specifies that file names aren't to be logged."
+      },
+      {
+        "switch": "/ndl",
+        "meaning": "Specifies that directory names aren't to be logged."
+      },
+      {
+        "switch": "/np",
+        "meaning": "Specifies to not display the progress of the copying operation (the number of files or directories copied so far)."
+      },
+      {
+        "switch": "/eta",
+        "meaning": "Shows the estimated time of arrival (ETA) of the copied files."
+      },
+      {
+        "switch": "/log:<logfile>",
+        "meaning": "Writes the status output to the log file (overwrites the existing log file)."
+      },
+      {
+        "switch": "/log+:<logfile>",
+        "meaning": "Writes the status output to the log file (appends the output to the existing log file)."
+      },
+      {
+        "switch": "/unilog:<logfile>",
+        "meaning": "Writes the status output to the log file as unicode text (overwrites the existing log file)."
+      },
+      {
+        "switch": "/unilog+:<logfile>",
+        "meaning": "Writes the status output to the log file as Unicode text (appends the output to the existing log file)."
+      },
+      {
+        "switch": "/tee",
+        "meaning": "Writes the status output to the console window, and to the log file."
+      },
+      {
+        "switch": "/njh",
+        "meaning": "Specifies that there's no job header."
+      },
+      {
+        "switch": "/njs",
+        "meaning": "Specifies that there's no job summary."
+      },
+      {
+        "switch": "/unicode",
+        "meaning": "Displays the status output as unicode text."
+      },
+      {
+        "switch": "Option",
+        "meaning": "Description"
+      },
+      {
+        "switch": "/job:<jobname>",
+        "meaning": "Specifies that parameters are to be derived from the named job file. To run /job:jobname, you must first run the /save:jobname parameter to create the job file."
+      },
+      {
+        "switch": "/save:<jobname>",
+        "meaning": "Specifies that parameters are to be saved to the named job file. This must be ran before running /job:jobname. All copy, retry, and logging options must be specified before this parameter."
+      },
+      {
+        "switch": "/quit",
+        "meaning": "Quits after processing command line (to view parameters)."
+      },
+      {
+        "switch": "/nosd",
+        "meaning": "Indicates that no source directory is specified."
+      },
+      {
+        "switch": "/nodd",
+        "meaning": "Indicates that no destination directory is specified."
+      },
+      {
+        "switch": "/if",
+        "meaning": "Includes the specified files."
+      },
+      {
+        "switch": "Value",
+        "meaning": "Description"
+      },
+      {
+        "switch": "0",
+        "meaning": "No files were copied. No failure was encountered. No files were mismatched. The files already exist in the destination directory; therefore, the copy operation was skipped."
+      },
+      {
+        "switch": "1",
+        "meaning": "All files were copied successfully."
+      },
+      {
+        "switch": "2",
+        "meaning": "There are some additional files in the destination directory that aren't present in the source directory. No files were copied."
+      },
+      {
+        "switch": "3",
+        "meaning": "Some files were copied. Additional files were present. No failure was encountered."
+      },
+      {
+        "switch": "5",
+        "meaning": "Some files were copied. Some files were mismatched. No failure was encountered."
+      },
+      {
+        "switch": "6",
+        "meaning": "Additional files and mismatched files exist. No files were copied and no failures were encountered meaning that the files already exist in the destination directory."
+      },
+      {
+        "switch": "7",
+        "meaning": "Files were copied, a file mismatch was present, and additional files were present."
+      },
+      {
+        "switch": "8",
+        "meaning": "Several files didn't copy."
+      }
+    ],
+    "syntax": [
+      "robocopy <source> <destination> [<file>[ ...]] [<options>]",
+      "robocopy c:\\reports \"\\\\marketing\\videos\" yearly-report.mov /mt /z",
+      "robocopy C:\\Users\\Admin\\Records D:\\Backup /E /ZB /LOG:C:\\Logs\\Backup.log",
+      "robocopy C:\\Users\\Admin\\Records D:\\Backup /MIR /R:2 /W:5 /LOG:C:\\Logs\\Backup.log",
+      "robocopy C:\\Users\\Admin\\Records D:\\Backup /S /E /COPY:DAT /MT:16 /LOG:C:\\Logs\\Backup.log",
+      "robocopy C:\\Users\\Admin\\Records D:\\Backup /S /MAXAGE:7 /MOV /LOG:C:\\Logs\\Backup.log",
+      "robocopy C:\\Users\\Admin\\Records D:\\Backup /ETA /PURGE /LOG:C:\\Logs\\Backup.log",
+      "robocopy C:\\Records D:\\Backup /iorate:1m",
+      "robocopy C:\\Source C:\\Destination /XC /XN /XO"
+    ]
+  },
+  "sfc": {
+    "file": "sfc.html",
+    "headings": [
+      {
+        "level": 2,
+        "id": "ms--in-this-article",
+        "text": "In this article"
+      },
+      {
+        "level": 2,
+        "id": "syntax",
+        "text": "Syntax"
+      },
+      {
+        "level": 3,
+        "id": "parameters",
+        "text": "Parameters"
+      },
+      {
+        "level": 2,
+        "id": "examples",
+        "text": "Examples"
+      },
+      {
+        "level": 2,
+        "id": "related-links",
+        "text": "Related links"
+      },
+      {
+        "level": 2,
+        "id": "ms--feedback",
+        "text": "Feedback"
+      },
+      {
+        "level": 2,
+        "id": "ms--additional-resources-mobile-heading",
+        "text": "Additional resources"
+      }
+    ],
+    "tableRows": [
+      {
+        "switch": "Parameter",
+        "meaning": "Description"
+      },
+      {
+        "switch": "/scannow",
+        "meaning": "Scans the integrity of all protected system files and repairs files with problems when possible."
+      },
+      {
+        "switch": "/verifyonly",
+        "meaning": "Scans the integrity of all protected system files, without performing repairs."
+      },
+      {
+        "switch": "/scanfile <file>",
+        "meaning": "Scans the integrity of the specified file (full path and filename) and attempts to repair any problems if they're detected."
+      },
+      {
+        "switch": "/verifyfile <file>",
+        "meaning": "Verifies the integrity of the specified file (full path and filename), without performing repairs."
+      },
+      {
+        "switch": "/offwindir <offline windows directory>",
+        "meaning": "Specifies the location of the offline windows directory, for offline repair."
+      },
+      {
+        "switch": "/offbootdir <offline boot directory>",
+        "meaning": "Specifies the location of the offline boot directory for offline repair."
+      },
+      {
+        "switch": "/offlogfile=<log file path>",
+        "meaning": "Specifies a location to store the log file other than the default."
+      },
+      {
+        "switch": "/?",
+        "meaning": "Displays help at the command prompt."
+      }
+    ],
+    "syntax": [
+      "sfc [/scannow] [/verifyonly] [/scanfile=<file>] [/verifyfile=<file>] [/offwindir=<offline windows directory> /offbootdir=<offline boot directory> /offlogfile=<log file path>]",
+      "sfc /verifyfile=c:\\windows\\system32\\kernel32.dll",
+      "sfc /scanfile=D:\\windows\\system32\\kernel32.dll /offbootdir=D:\\ /offwindir=d:\\windows"
+    ]
+  },
+  "systeminfo": {
+    "file": "systeminfo.html",
+    "headings": [
+      {
+        "level": 2,
+        "id": "ms--in-this-article",
+        "text": "In this article"
+      },
+      {
+        "level": 2,
+        "id": "syntax",
+        "text": "Syntax"
+      },
+      {
+        "level": 3,
+        "id": "parameters",
+        "text": "Parameters"
+      },
+      {
+        "level": 2,
+        "id": "examples",
+        "text": "Examples"
+      },
+      {
+        "level": 2,
+        "id": "related-links",
+        "text": "Related links"
+      },
+      {
+        "level": 2,
+        "id": "ms--feedback",
+        "text": "Feedback"
+      },
+      {
+        "level": 2,
+        "id": "ms--additional-resources-mobile-heading",
+        "text": "Additional resources"
+      }
+    ],
+    "tableRows": [
+      {
+        "switch": "Parameter",
+        "meaning": "Description"
+      },
+      {
+        "switch": "/s <computer>",
+        "meaning": "Specifies the name or IP address of a remote computer (do not use backslashes). The default is the local computer."
+      },
+      {
+        "switch": "/u <domain>\\<username>",
+        "meaning": "Runs the command with the account permissions of the specified user account. If /u is not specified, this command uses the permissions of the user who is currently logged on to the computer that is issuing the command."
+      },
+      {
+        "switch": "/p <password>",
+        "meaning": "Specifies the password of the user account that is specified in the /u parameter."
+      },
+      {
+        "switch": "/fo <format>",
+        "meaning": "Specifies the output format with one of the following values:TABLE - Displays output in a table.LIST - Displays output in a list.CSV - Displays output in comma-separated values (.csv) format."
+      },
+      {
+        "switch": "/nh",
+        "meaning": "Suppresses column headers in the output. Valid when the /fo parameter is set to TABLE or CSV."
+      },
+      {
+        "switch": "/?",
+        "meaning": "Displays help at the command prompt."
+      }
+    ],
+    "syntax": [
+      "systeminfo [/s <computer> [/u <domain>\\<username> [/p <password>]]] [/fo {TABLE | LIST | CSV}] [/nh]",
+      "systeminfo /s srvmain",
+      "systeminfo /s srvmain2 /u maindom\\hiropln",
+      "systeminfo /s srvmain2 /u maindom\\hiropln /p p@ssW23 /fo list"
+    ]
+  },
+  "tasklist": {
+    "file": "tasklist.html",
+    "headings": [
+      {
+        "level": 2,
+        "id": "ms--in-this-article",
+        "text": "In this article"
+      },
+      {
+        "level": 2,
+        "id": "syntax",
+        "text": "Syntax"
+      },
+      {
+        "level": 3,
+        "id": "parameters",
+        "text": "Parameters"
+      },
+      {
+        "level": 2,
+        "id": "examples",
+        "text": "Examples"
+      },
+      {
+        "level": 2,
+        "id": "related-links",
+        "text": "Related links"
+      },
+      {
+        "level": 2,
+        "id": "ms--feedback",
+        "text": "Feedback"
+      },
+      {
+        "level": 2,
+        "id": "ms--additional-resources-mobile-heading",
+        "text": "Additional resources"
+      }
+    ],
+    "tableRows": [
+      {
+        "switch": "Parameter",
+        "meaning": "Description"
+      },
+      {
+        "switch": "/s <computer>",
+        "meaning": "Specifies the name or IP address of a remote computer (do not use backslashes). The default is the local computer."
+      },
+      {
+        "switch": "/u <domain>\\<username>",
+        "meaning": "Runs the command with the account permissions of the user who is specified by <username> or by <domain>\\<username>. The /u parameter can be specified only if /s is also specified. The default is the permissions of the user who is currently logged on to the computer that is issuing the command."
+      },
+      {
+        "switch": "/p <password>",
+        "meaning": "Specifies the password of the user account that is specified in the /u parameter."
+      },
+      {
+        "switch": "/m <module>",
+        "meaning": "Lists all tasks with DLL modules loaded that match the given pattern name. If the module name is not specified, this option displays all modules loaded by each task."
+      },
+      {
+        "switch": "svc",
+        "meaning": "Lists all the service information for each process without truncation. Valid when the /fo parameter is set to table."
+      },
+      {
+        "switch": "/v",
+        "meaning": "Displays verbose task information in the output. For complete verbose output without truncation, use /v and /svc together."
+      },
+      {
+        "switch": "/fo {table | list | csv}",
+        "meaning": "Specifies the format to use for the output. Valid values are table, list, and csv. The default format for output is table."
+      },
+      {
+        "switch": "/nh",
+        "meaning": "Suppresses column headers in the output. Valid when the /fo parameter is set to table or csv."
+      },
+      {
+        "switch": "/fi <filter>",
+        "meaning": "Specifies the types of processes to include in or exclude from the query. You can use more than one filter or use the wildcard character (\\) to specify all tasks or image names. The valid filters are listed in the Filter names, operators, and values section of this article."
+      },
+      {
+        "switch": "/?",
+        "meaning": "Displays help at the command prompt."
+      },
+      {
+        "switch": "Filter Name",
+        "meaning": "Valid Operators | Valid Value(s)"
+      },
+      {
+        "switch": "STATUS",
+        "meaning": "eq, ne | RUNNING | NOT RESPONDING | UNKNOWN. This filter isn't supported if you specify a remote system."
+      },
+      {
+        "switch": "IMAGENAME",
+        "meaning": "eq, ne | Image name"
+      },
+      {
+        "switch": "PID",
+        "meaning": "eq, ne, gt, lt, ge, le | PID value"
+      },
+      {
+        "switch": "SESSION",
+        "meaning": "eq, ne, gt, lt, ge, le | Session number"
+      },
+      {
+        "switch": "SESSIONNAME",
+        "meaning": "eq, ne | Session name"
+      },
+      {
+        "switch": "CPUtime",
+        "meaning": "eq, ne, gt, lt, ge, le | CPU time in the format HH:MM:SS, where MM and SS are between 0 and 59 and HH is any unsigned number"
+      },
+      {
+        "switch": "MEMUSAGE",
+        "meaning": "eq, ne, gt, lt, ge, le | Memory usage in KB"
+      },
+      {
+        "switch": "USERNAME",
+        "meaning": "eq, ne | Any valid user name (<user> or <domain\\user>)"
+      },
+      {
+        "switch": "SERVICES",
+        "meaning": "eq, ne | Service name"
+      },
+      {
+        "switch": "WINDOWTITLE",
+        "meaning": "eq, ne | Window title. This filter isn't supported if you specify a remote system."
+      },
+      {
+        "switch": "MODULES",
+        "meaning": "eq, ne | DLL name"
+      }
+    ],
+    "syntax": [
+      "tasklist [/s <computer> [/u [<domain>\\]<username> [/p <password>]]] [{/m <module> | /svc | /v}] [/fo {table | list | csv}] [/nh] [/fi <filter> [/fi <filter> [ ... ]]]",
+      "tasklist /v /fi \"PID gt 1000\" /fo csv",
+      "tasklist /fi \"USERNAME ne NT AUTHORITY\\SYSTEM\" /fi \"STATUS eq running\"",
+      "tasklist /v /fi \"STATUS eq running\"",
+      "tasklist /s srvmain /svc /fi \"MODULES eq ntdll*\"",
+      "tasklist /s srvmain",
+      "tasklist /s srvmain /u maindom\\hiropln /p p@ssW23"
+    ]
+  },
+  "tracert": {
+    "file": "tracert.html",
+    "headings": [
+      {
+        "level": 2,
+        "id": "ms--in-this-article",
+        "text": "In this article"
+      },
+      {
+        "level": 2,
+        "id": "syntax",
+        "text": "Syntax"
+      },
+      {
+        "level": 3,
+        "id": "parameters",
+        "text": "Parameters"
+      },
+      {
+        "level": 2,
+        "id": "examples",
+        "text": "Examples"
+      },
+      {
+        "level": 2,
+        "id": "related-links",
+        "text": "Related links"
+      },
+      {
+        "level": 2,
+        "id": "ms--feedback",
+        "text": "Feedback"
+      },
+      {
+        "level": 2,
+        "id": "ms--additional-resources-mobile-heading",
+        "text": "Additional resources"
+      }
+    ],
+    "tableRows": [
+      {
+        "switch": "Parameter",
+        "meaning": "Description"
+      },
+      {
+        "switch": "/d",
+        "meaning": "Stops attempts to resolve the IP addresses of intermediate routers to their names. This can speed up the return of results."
+      },
+      {
+        "switch": "/h <maximumhops>",
+        "meaning": "Specifies the maximum number of hops in the path to search for the target (destination). The default is 30 hops."
+      },
+      {
+        "switch": "/j <hostlist>",
+        "meaning": "Specifies that echo Request messages use the Loose Source Route option in the IP header with the set of intermediate destinations specified in <hostlist>. With loose source routing, successive intermediate destinations can be separated by one or multiple routers. The maximum number of addresses or names in the list is 9. The <hostlist> is a series of IP addresses (in dotted decimal notation) separated by spaces. Use this parameter only when tracing IPv4 addresses."
+      },
+      {
+        "switch": "/w <timeout>",
+        "meaning": "Specifies the amount of time in milliseconds to wait for the ICMP time Exceeded or echo Reply message corresponding to a given echo Request message to be received. If not received within the time-out, an asterisk (*) is displayed. The default time-out is 4000 (4 seconds)."
+      },
+      {
+        "switch": "/R",
+        "meaning": "Specifies that the IPv6 Routing extension header be used to send an echo Request message to the local host, using the destination as an intermediate destination and testing the reverse route."
+      },
+      {
+        "switch": "/S <srcaddr>",
+        "meaning": "Specifies the source address to use in the echo Request messages. Use this parameter only when tracing IPv6 addresses."
+      },
+      {
+        "switch": "/4",
+        "meaning": "Specifies that tracert.exe can use only IPv4 for this trace."
+      },
+      {
+        "switch": "/6",
+        "meaning": "Specifies that tracert.exe can use only IPv6 for this trace."
+      },
+      {
+        "switch": "<targetname>",
+        "meaning": "Specifies the destination, identified either by IP address or host name."
+      },
+      {
+        "switch": "/?",
+        "meaning": "Displays help at the command prompt."
+      }
+    ],
+    "syntax": [
+      "tracert [/d] [/h <maximumhops>] [/j <hostlist>] [/w <timeout>] [/R] [/S <srcaddr>] [/4][/6] <targetname>",
+      "tracert www.microsoft.com",
+      "Tracing route to e13678.dscb.akamaiedge.net [23.216.93.114] over a maximum of 30 hops: 1 1 ms 1 ms <1 ms <devicename>.mshome.net [172.26.96.1] 2 11 ms 13 ms 6 ms 192.168.191.20 3 20 ms 11 ms 18 ms 192.168.1.1 4 44 ms 41 ms 35 ms 10.228.0.1 5 32 ms 31 ms 46 ms 10.41.0.49 6 36 ms 39 ms 30 ms 10.41.0.221 7 35 ms 36 ms 39 ms 10.41.0.225 8 54 ms 45 ms 50 ms 204.111.0.147 9 50 ms 52 ms 47 ms ae-39.a02.atlnga05.us.bb.gin.ntt.net [128.241.219.117] 10 53 ms 51 ms 61 ms ae-5.r24.atlnga05.us.bb.gin.ntt.net [129.250.4.192] 11 64 ms 45 ms 44 ms ae-0.a03.atlnga05.us.bb.gin.ntt.net [129.250.2.20] 12 49 ms 67 ms 46 ms ae-0.akamai-onnet.atlnga05.us.bb.gin.ntt.net [128.241.1.122] 13 67 ms 287 ms * ae20.r03.border101.atl02.fab.netarch.akamai.com [23.203.144.21] 14 * * * Request timed out. 15 * * * Request timed out. 16 * * * Request timed out. 17 204 ms 58 ms 51 ms a23-216-93-114.deploy.static.akamaitechnologies.com [23.216.93.114] Trace complete.",
+      "tracert /d www.microsoft.com",
+      "tracert /j 10.12.0.1 10.29.3.1 10.1.44.1 www.microsoft.com"
+    ]
+  }
+}

@@ -4,10 +4,10 @@
 #
 # 参数知识来源（两类，均可离线复核）：
 #   1) 官方 CLI 参考文档 https://docs.astral.sh/uv/reference/cli/
-#      抓取与转换方式见 docs/reference/README.md，落盘为
-#      docs/reference/uv-docs/cli-reference.html / cli-reference.md
+#      抓取与转换方式见 本机帮助快照（**未入库**，可用下列命令重新抓取）.md，落盘为
+#      本机帮助快照（**未入库**，可用下列命令重新抓取）/cli-reference.html / cli-reference.md
 #      该页每个命令都有独立锚点（#uv-sync、#uv-pip-install …），字段的 doc 直接指锚点。
-#   2) 本机 uv 0.11.15 的帮助快照 docs/reference/uv-help/<命令>.txt（由 scripts/fetch-uv-help.ps1 抓取）
+#   2) 本机 uv 0.11.15 的帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/<命令>.txt（由 scripts/fetch-uv-help.ps1 抓取）
 #
 # 覆盖原则：只覆盖真实常用项，未做的命令与开关在 NOTES.md 里逐条记录。
 # 本文件里出现的每个命令与开关，都能在上面两类来源里指出出处。
@@ -34,9 +34,9 @@ sources:
     url: https://docs.astral.sh/uv/reference/cli/
     retrieved: "2026-09-27"
     appliesTo: "0.11.15"
-    note: 离线快照 docs/reference/uv-docs/cli-reference.html（HTML）与 cli-reference.md（pandoc 转出的 Markdown）。抓取方式见 docs/reference/README.md。字段的 doc 字段指向该页的锚点，例如 #uv-sync。
+    note: 离线快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/cli-reference.html（HTML）与 cli-reference.md（pandoc 转出的 Markdown）。抓取方式见 本机帮助快照（**未入库**，可用下列命令重新抓取）.md。字段的 doc 字段指向该页的锚点，例如 #uv-sync。
   - title: 本机 uv 0.11.15 的内置帮助快照（每个命令一个文件）
-    url: file:///D:/AI/swpj/docs/reference/uv-help/
+    url: https://docs.astral.sh/uv/reference/cli/
     retrieved: "2026-09-27"
     appliesTo: "0.11.15"
     note: 由 scripts/fetch-uv-help.ps1 抓取，49 个命令的帮助 + index.json + _meta.json。它是"与已安装版本严格对应"的来源，且比官方长文档更紧凑（含每个开关的默认值）。各动作的 sources 里按文件名引用具体哪一个。
@@ -96,7 +96,7 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-run
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/run.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/run.txt
     fields:
       # 字段声明顺序 = argv 顺序，对 uv run 尤其关键：uv 把第一个非开关参数当作"要运行的程序"，
       # 之后的参数全部原样转交给它。所以 uv 自己的开关必须声明在 command 之前。
@@ -108,7 +108,7 @@ actions:
         repeatable: true
         placeholder: 例如 requests
         help: 在运行环境里额外装上这些包（可多行，每行一个）。此开关必须写在要运行的命令之前。
-        doc: "#uv-run（--with，帮助快照 run.txt 第 37 行）"
+        doc: "#uv-run（--with，本机 uv `run` 帮助 第 37 行）"
       - id: python
         label: Python 解释器
         type: text
@@ -117,7 +117,7 @@ actions:
         group: 高级
         advanced: true
         placeholder: 例如 3.12 或路径
-        doc: "#uv-run（--python / -p，帮助快照 run.txt 第 184 行）"
+        doc: "#uv-run（--python / -p，本机 uv `run` 帮助 第 184 行）"
       - id: noProject
         label: 不查找项目
         type: bool
@@ -127,7 +127,7 @@ actions:
         advanced: true
         default: false
         help: 完全不查找 pyproject.toml，在临时环境里跑。适合"只想用某个工具跑一条命令"。
-        doc: "#uv-run（--no-project，帮助快照 run.txt 第 61 行）"
+        doc: "#uv-run（--no-project，本机 uv `run` 帮助 第 61 行）"
       - id: noSync
         label: 不同步环境
         type: bool
@@ -136,7 +136,7 @@ actions:
         group: 高级
         advanced: true
         default: false
-        doc: "#uv-run（--no-sync，帮助快照 run.txt 第 47 行）"
+        doc: "#uv-run（--no-sync，本机 uv `run` 帮助 第 47 行）"
       - id: locked
         label: 锁定模式（不允许改 uv.lock）
         type: bool
@@ -145,7 +145,7 @@ actions:
         group: 高级
         advanced: true
         default: false
-        doc: "#uv-run（--locked，帮助快照 run.txt 第 49 行）"
+        doc: "#uv-run（--locked，本机 uv `run` 帮助 第 49 行）"
       - id: module
         label: 按模块运行（-m）
         type: bool
@@ -155,7 +155,7 @@ actions:
         advanced: true
         default: false
         help: 勾选后，下面的"命令"被当作 Python 模块名，等价于 python -m <模块>。
-        doc: "#uv-run（--module / -m，帮助快照 run.txt 第 24 行）"
+        doc: "#uv-run（--module / -m，本机 uv `run` 帮助 第 24 行）"
       - id: command
         label: 要运行的命令
         type: text
@@ -163,14 +163,14 @@ actions:
         required: true
         placeholder: 例如 pytest
         help: uv 把第一个非开关参数当作要运行的程序名，其后的参数原样转交给它。
-        doc: "#uv-run（Usage: uv run [OPTIONS] [COMMAND]，帮助快照 run.txt 第 3 行）"
+        doc: "#uv-run（Usage: uv run [OPTIONS] [COMMAND]，本机 uv `run` 帮助 第 3 行）"
       - id: commandArgs
         label: 命令参数
         type: textarea
         style: positional
         positionalMode: perLine
         help: 一行一个参数，原样追加在命令之后，交给被运行的程序。
-        doc: "帮助快照 run.txt 第 3 行（[COMMAND] 之后的参数透传）"
+        doc: "本机 uv `run` 帮助 第 3 行（[COMMAND] 之后的参数透传）"
     output:
       mode: stream
       showCommandLine: true
@@ -191,7 +191,7 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-init
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/init.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/init.txt
     fields:
       - id: path
         label: 项目目录
@@ -200,21 +200,21 @@ actions:
         required: true
         save: true
         placeholder: 留空或填 . 表示当前目录
-        doc: "#uv-init（[PATH]，帮助快照 init.txt 第 6 行）"
+        doc: "#uv-init（[PATH]，本机 uv `init` 帮助 第 6 行）"
       - id: name
         label: 项目名
         type: text
         style: separate
         prefix: "--name"
         placeholder: 默认取目录名
-        doc: "#uv-init（--name，帮助快照 init.txt 第 9 行）"
+        doc: "#uv-init（--name，本机 uv `init` 帮助 第 9 行）"
       - id: lib
         label: 作为库（可被打包发布）
         type: bool
         style: flag
         prefix: "--lib"
         default: false
-        doc: "#uv-init（--lib，帮助快照 init.txt 第 14 行）"
+        doc: "#uv-init（--lib，本机 uv `init` 帮助 第 14 行）"
       - id: bare
         label: 只生成 pyproject.toml
         type: bool
@@ -223,7 +223,7 @@ actions:
         group: 高级
         advanced: true
         default: false
-        doc: "#uv-init（--bare，帮助快照 init.txt 第 10 行）"
+        doc: "#uv-init（--bare，本机 uv `init` 帮助 第 10 行）"
       - id: vcs
         label: 版本控制
         type: enum
@@ -232,7 +232,7 @@ actions:
         group: 高级
         advanced: true
         default: ""
-        doc: "#uv-init（--vcs，帮助快照 init.txt 第 18 行）"
+        doc: "#uv-init（--vcs，本机 uv `init` 帮助 第 18 行）"
         values:
           - { value: "", label: 默认（git，若在 git 仓库外则自动判断） }
           - { value: git, label: git }
@@ -244,7 +244,7 @@ actions:
         prefix: "--python"
         advanced: true
         placeholder: 例如 3.12
-        doc: "#uv-init（--python / -p，帮助快照 init.txt 第 30 行）"
+        doc: "#uv-init（--python / -p，本机 uv `init` 帮助 第 30 行）"
     output:
       mode: stream
       showCommandLine: true
@@ -262,7 +262,7 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-add
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/add.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/add.txt
     fields:
       - id: packages
         label: 包
@@ -272,21 +272,21 @@ actions:
         repeatable: true
         placeholder: "例如 requests 或 ruff==0.5.0"
         help: 可填多行，每行一个 PEP 508 需求（含版本约束）。
-        doc: "#uv-add（[PACKAGES]...，帮助快照 add.txt 第 6 行）"
+        doc: "#uv-add（[PACKAGES]...，本机 uv `add` 帮助 第 6 行）"
       - id: dev
         label: 加入开发依赖组
         type: bool
         style: flag
         prefix: "--dev"
         default: false
-        doc: "#uv-add（--dev，帮助快照 add.txt 第 15 行）"
+        doc: "#uv-add（--dev，本机 uv `add` 帮助 第 15 行）"
       - id: optional
         label: 作为可选依赖（extra）
         type: text
         style: separate
         prefix: "--optional"
         placeholder: extra 名
-        doc: "#uv-add（--optional，帮助快照 add.txt 第 17 行）"
+        doc: "#uv-add（--optional，本机 uv `add` 帮助 第 17 行）"
       - id: group
         label: 指定的依赖组
         type: text
@@ -294,7 +294,7 @@ actions:
         prefix: "--group"
         advanced: true
         placeholder: 比如 dev / docs
-        doc: "#uv-add（--group，帮助快照 add.txt 第 19 行）"
+        doc: "#uv-add（--group，本机 uv `add` 帮助 第 19 行）"
       - id: editable
         label: 以可编辑方式安装
         type: bool
@@ -303,7 +303,7 @@ actions:
         group: 高级
         advanced: true
         default: false
-        doc: "#uv-add（--editable，帮助快照 add.txt 第 21 行）"
+        doc: "#uv-add（--editable，本机 uv `add` 帮助 第 21 行）"
       - id: noSync
         label: 不自动同步环境
         type: bool
@@ -313,7 +313,7 @@ actions:
         advanced: true
         default: false
         help: 只改 pyproject.toml 与 uv.lock，不装包。
-        doc: "#uv-add（--no-sync，帮助快照 add.txt 第 38 行）"
+        doc: "#uv-add（--no-sync，本机 uv `add` 帮助 第 38 行）"
       - id: python
         label: Python 解释器
         type: text
@@ -321,7 +321,7 @@ actions:
         prefix: "--python"
         group: 高级
         advanced: true
-        doc: "#uv-add（--python / -p，帮助快照 add.txt 第 167 行）"
+        doc: "#uv-add（--python / -p，本机 uv `add` 帮助 第 167 行）"
     output:
       mode: stream
       showCommandLine: true
@@ -339,7 +339,7 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-remove
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/remove.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/remove.txt
     fields:
       - id: packages
         label: 要移除的包
@@ -348,21 +348,21 @@ actions:
         required: true
         repeatable: true
         placeholder: 每行一个包名
-        doc: "#uv-remove（<PACKAGES>...，帮助快照 remove.txt 第 5 行）"
+        doc: "#uv-remove（<PACKAGES>...，本机 uv `remove` 帮助 第 5 行）"
       - id: dev
         label: 从开发依赖组移除
         type: bool
         style: flag
         prefix: "--dev"
         default: false
-        doc: "#uv-remove（--dev，帮助快照 remove.txt 第 9 行）"
+        doc: "#uv-remove（--dev，本机 uv `remove` 帮助 第 9 行）"
       - id: group
         label: 指定的依赖组
         type: text
         style: separate
         prefix: "--group"
         advanced: true
-        doc: "#uv-remove（--group，帮助快照 remove.txt 第 13 行）"
+        doc: "#uv-remove（--group，本机 uv `remove` 帮助 第 13 行）"
       - id: noSync
         label: 不自动同步环境
         type: bool
@@ -371,7 +371,7 @@ actions:
         group: 高级
         advanced: true
         default: false
-        doc: "#uv-remove（--no-sync，帮助快照 remove.txt 第 14 行）"
+        doc: "#uv-remove（--no-sync，本机 uv `remove` 帮助 第 14 行）"
     output:
       mode: stream
       showCommandLine: true
@@ -389,7 +389,7 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-sync
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/sync.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/sync.txt
     fields:
       - id: extra
         label: 启用的 extra
@@ -398,21 +398,21 @@ actions:
         prefix: "--extra"
         repeatable: true
         placeholder: 每行一个 extra 名
-        doc: "#uv-sync（--extra，帮助快照 sync.txt 第 6 行）"
+        doc: "#uv-sync（--extra，本机 uv `sync` 帮助 第 6 行）"
       - id: allExtras
         label: 启用全部 extra
         type: bool
         style: flag
         prefix: "--all-extras"
         default: false
-        doc: "#uv-sync（--all-extras，帮助快照 sync.txt 第 10 行）"
+        doc: "#uv-sync（--all-extras，本机 uv `sync` 帮助 第 10 行）"
       - id: noDev
         label: 不要开发依赖
         type: bool
         style: flag
         prefix: "--no-dev"
         default: false
-        doc: "#uv-sync（--no-dev，帮助快照 sync.txt 第 14 行）"
+        doc: "#uv-sync（--no-dev，本机 uv `sync` 帮助 第 14 行）"
       - id: inexact
         label: 不移除多余包
         type: bool
@@ -421,7 +421,7 @@ actions:
         group: 高级
         advanced: true
         default: false
-        doc: "#uv-sync（--inexact，帮助快照 sync.txt 第 31 行）"
+        doc: "#uv-sync（--inexact，本机 uv `sync` 帮助 第 31 行）"
       - id: locked
         label: 锁定模式（不允许改 uv.lock）
         type: bool
@@ -430,7 +430,7 @@ actions:
         group: 高级
         advanced: true
         default: false
-        doc: "#uv-sync（--locked，帮助快照 sync.txt 第 43 行）"
+        doc: "#uv-sync（--locked，本机 uv `sync` 帮助 第 43 行）"
       - id: dryRun
         label: 试运行（不实际改动）
         type: bool
@@ -439,7 +439,7 @@ actions:
         group: 高级
         advanced: true
         default: false
-        doc: "#uv-sync（--dry-run，帮助快照 sync.txt 第 47 行）"
+        doc: "#uv-sync（--dry-run，本机 uv `sync` 帮助 第 47 行）"
       - id: check
         label: 只检查是否已同步
         type: bool
@@ -449,7 +449,7 @@ actions:
         advanced: true
         default: false
         help: 不安装任何东西；环境与项目不一致时以非零退出码报告。
-        doc: "#uv-sync（--check，帮助快照 sync.txt 第 71 行）"
+        doc: "#uv-sync（--check，本机 uv `sync` 帮助 第 71 行）"
       - id: python
         label: Python 解释器
         type: text
@@ -457,7 +457,7 @@ actions:
         prefix: "--python"
         group: 高级
         advanced: true
-        doc: "#uv-sync（--python / -p，帮助快照 sync.txt 第 178 行）"
+        doc: "#uv-sync（--python / -p，本机 uv `sync` 帮助 第 178 行）"
     output:
       mode: stream
       showCommandLine: true
@@ -481,7 +481,7 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-lock
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/lock.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/lock.txt
     fields:
       - id: check
         label: 只检查锁文件是否最新
@@ -490,7 +490,7 @@ actions:
         prefix: "--check"
         default: false
         help: 不写文件；不一致时以非零退出码报告。适合放进 CI。
-        doc: "#uv-lock（--check，帮助快照 lock.txt 第 6 行）"
+        doc: "#uv-lock（--check，本机 uv `lock` 帮助 第 6 行）"
       - id: dryRun
         label: 试运行（不写锁文件）
         type: bool
@@ -498,7 +498,7 @@ actions:
         prefix: "--dry-run"
         advanced: true
         default: false
-        doc: "#uv-lock（--dry-run，帮助快照 lock.txt 第 9 行）"
+        doc: "#uv-lock（--dry-run，本机 uv `lock` 帮助 第 9 行）"
       - id: upgrade
         label: 允许升级
         type: bool
@@ -507,7 +507,7 @@ actions:
         advanced: true
         default: false
         help: 忽略已有输出文件里钉住的版本，重新选版本。
-        doc: "#uv-lock（--upgrade / -U，帮助快照 lock.txt 第 39 行）"
+        doc: "#uv-lock（--upgrade / -U，本机 uv `lock` 帮助 第 39 行）"
       - id: script
         label: 针对某个脚本
         type: file
@@ -515,7 +515,7 @@ actions:
         prefix: "--script"
         advanced: true
         accept: [.py]
-        doc: "#uv-lock（--script，帮助快照 lock.txt 第 10 行）"
+        doc: "#uv-lock（--script，本机 uv `lock` 帮助 第 10 行）"
     output:
       mode: stream
       showCommandLine: true
@@ -536,7 +536,7 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-export
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/export.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/export.txt
     fields:
       - id: format
         label: 导出格式
@@ -544,7 +544,7 @@ actions:
         style: separate
         prefix: "--format"
         default: ""
-        doc: "#uv-export（--format，帮助快照 export.txt 第 6 行）"
+        doc: "#uv-export（--format，本机 uv `export` 帮助 第 6 行）"
         values:
           - { value: "", label: 默认（requirements.txt） }
           - { value: requirements.txt, label: requirements.txt }
@@ -557,21 +557,21 @@ actions:
         prefix: "--output-file"
         save: true
         help: 不填则打印到标准输出。
-        doc: "#uv-export（--output-file / -o，帮助快照 export.txt 第 44 行）"
+        doc: "#uv-export（--output-file / -o，本机 uv `export` 帮助 第 44 行）"
       - id: noHashes
         label: 不带哈希
         type: bool
         style: flag
         prefix: "--no-hashes"
         default: false
-        doc: "#uv-export（--no-hashes，帮助快照 export.txt 第 42 行）"
+        doc: "#uv-export（--no-hashes，本机 uv `export` 帮助 第 42 行）"
       - id: noDev
         label: 不要开发依赖
         type: bool
         style: flag
         prefix: "--no-dev"
         default: false
-        doc: "#uv-export（--no-dev，帮助快照 export.txt 第 21 行）"
+        doc: "#uv-export（--no-dev，本机 uv `export` 帮助 第 21 行）"
       - id: noHeader
         label: 不带文件头注释
         type: bool
@@ -579,7 +579,7 @@ actions:
         prefix: "--no-header"
         advanced: true
         default: false
-        doc: "#uv-export（--no-header，帮助快照 export.txt 第 37 行）"
+        doc: "#uv-export（--no-header，本机 uv `export` 帮助 第 37 行）"
       - id: noAnnotate
         label: 不带来源注释
         type: bool
@@ -587,7 +587,7 @@ actions:
         prefix: "--no-annotate"
         advanced: true
         default: false
-        doc: "#uv-export（--no-annotate，帮助快照 export.txt 第 35 行）"
+        doc: "#uv-export（--no-annotate，本机 uv `export` 帮助 第 35 行）"
       - id: locked
         label: 锁定模式（不允许改 uv.lock）
         type: bool
@@ -595,7 +595,7 @@ actions:
         prefix: "--locked"
         advanced: true
         default: false
-        doc: "#uv-export（--locked，帮助快照 export.txt 第 54 行）"
+        doc: "#uv-export（--locked，本机 uv `export` 帮助 第 54 行）"
     output:
       mode: capture
       showCommandLine: true
@@ -613,7 +613,7 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-tree
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/tree.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/tree.txt
     fields:
       - id: depth
         label: 显示深度
@@ -622,7 +622,7 @@ actions:
         prefix: "--depth"
         default: 255
         help: 默认 255（即不限深度）。
-        doc: "#uv-tree（--depth / -d，帮助快照 tree.txt 第 8 行）"
+        doc: "#uv-tree（--depth / -d，本机 uv `tree` 帮助 第 8 行）"
       - id: outdated
         label: 显示每个包的最新可用版本
         type: bool
@@ -630,14 +630,14 @@ actions:
         prefix: "--outdated"
         default: false
         help: 需要联网查询索引。
-        doc: "#uv-tree（--outdated，帮助快照 tree.txt 第 22 行）"
+        doc: "#uv-tree（--outdated，本机 uv `tree` 帮助 第 22 行）"
       - id: showSizes
         label: 显示 wheel 体积
         type: bool
         style: flag
         prefix: "--show-sizes"
         default: false
-        doc: "#uv-tree（--show-sizes，帮助快照 tree.txt 第 24 行）"
+        doc: "#uv-tree（--show-sizes，本机 uv `tree` 帮助 第 24 行）"
       - id: noDedupe
         label: 不合并重复依赖
         type: bool
@@ -645,7 +645,7 @@ actions:
         prefix: "--no-dedupe"
         advanced: true
         default: false
-        doc: "#uv-tree（--no-dedupe，帮助快照 tree.txt 第 14 行）"
+        doc: "#uv-tree（--no-dedupe，本机 uv `tree` 帮助 第 14 行）"
       - id: universal
         label: 平台无关的依赖树
         type: bool
@@ -653,7 +653,7 @@ actions:
         prefix: "--universal"
         advanced: true
         default: false
-        doc: "#uv-tree（--universal，帮助快照 tree.txt 第 6 行）"
+        doc: "#uv-tree（--universal，本机 uv `tree` 帮助 第 6 行）"
       - id: locked
         label: 锁定模式（不允许改 uv.lock）
         type: bool
@@ -661,7 +661,7 @@ actions:
         prefix: "--locked"
         advanced: true
         default: false
-        doc: "#uv-tree（--locked，帮助快照 tree.txt 第 40 行）"
+        doc: "#uv-tree（--locked，本机 uv `tree` 帮助 第 40 行）"
     output:
       mode: capture
       showCommandLine: true
@@ -681,7 +681,7 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-venv
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/venv.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/venv.txt
     fields:
       - id: path
         label: 环境目录
@@ -690,21 +690,21 @@ actions:
         required: true
         save: true
         placeholder: 例如 .venv
-        doc: "#uv-venv（[PATH]，帮助快照 venv.txt 第 6 行）"
+        doc: "#uv-venv（[PATH]，本机 uv `venv` 帮助 第 6 行）"
       - id: python
         label: Python 解释器
         type: text
         style: separate
         prefix: "--python"
         placeholder: 例如 3.12
-        doc: "#uv-venv（--python / -p，帮助快照 venv.txt 第 41 行）"
+        doc: "#uv-venv（--python / -p，本机 uv `venv` 帮助 第 41 行）"
       - id: seed
         label: 一并安装 pip/setuptools/wheel
         type: bool
         style: flag
         prefix: "--seed"
         default: false
-        doc: "#uv-venv（--seed，帮助快照 venv.txt 第 11 行）"
+        doc: "#uv-venv（--seed，本机 uv `venv` 帮助 第 11 行）"
       - id: clear
         label: 清空已有目录
         type: bool
@@ -713,7 +713,7 @@ actions:
         advanced: true
         default: false
         help: 会删除目标路径上已存在的文件或目录。
-        doc: "#uv-venv（--clear / -c，帮助快照 venv.txt 第 14 行）"
+        doc: "#uv-venv（--clear / -c，本机 uv `venv` 帮助 第 14 行）"
       - id: allowExisting
         label: 保留已有文件
         type: bool
@@ -721,7 +721,7 @@ actions:
         prefix: "--allow-existing"
         advanced: true
         default: false
-        doc: "#uv-venv（--allow-existing，帮助快照 venv.txt 第 16 行）"
+        doc: "#uv-venv（--allow-existing，本机 uv `venv` 帮助 第 16 行）"
       - id: systemSitePackages
         label: 可访问系统 site-packages
         type: bool
@@ -729,7 +729,7 @@ actions:
         prefix: "--system-site-packages"
         advanced: true
         default: false
-        doc: "#uv-venv（--system-site-packages，帮助快照 venv.txt 第 20 行）"
+        doc: "#uv-venv（--system-site-packages，本机 uv `venv` 帮助 第 20 行）"
       - id: noProject
         label: 不查找项目
         type: bool
@@ -737,7 +737,7 @@ actions:
         prefix: "--no-project"
         advanced: true
         default: false
-        doc: "#uv-venv（--no-project，帮助快照 venv.txt 第 9 行）"
+        doc: "#uv-venv（--no-project，本机 uv `venv` 帮助 第 9 行）"
     output:
       mode: stream
       showCommandLine: true
@@ -760,7 +760,7 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-pip-list
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/pip-list.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/pip-list.txt
     fields:
       - id: format
         label: 输出格式
@@ -768,7 +768,7 @@ actions:
         style: separate
         prefix: "--format"
         default: "columns"
-        doc: "#uv-pip-list（--format，帮助快照 pip-list.txt 第 9 行）"
+        doc: "#uv-pip-list（--format，本机 uv `pip list` 帮助 第 9 行）"
         values:
           - { value: columns, label: 表格（默认）, isDefault: true }
           - { value: freeze, label: freeze 格式 }
@@ -780,7 +780,7 @@ actions:
         prefix: "--outdated"
         default: false
         help: 需要联网查询索引。
-        doc: "#uv-pip-list（--outdated，帮助快照 pip-list.txt 第 11 行）"
+        doc: "#uv-pip-list（--outdated，本机 uv `pip list` 帮助 第 11 行）"
       - id: editable
         label: 只列出可编辑安装的项目
         type: bool
@@ -788,7 +788,7 @@ actions:
         prefix: "--editable"
         advanced: true
         default: false
-        doc: "#uv-pip-list（--editable / -e，帮助快照 pip-list.txt 第 6 行）"
+        doc: "#uv-pip-list（--editable / -e，本机 uv `pip list` 帮助 第 6 行）"
       - id: system
         label: 使用系统 Python 环境
         type: bool
@@ -797,14 +797,14 @@ actions:
         advanced: true
         default: false
         help: 不加时 uv 会自己选一个有 Python 的环境；本机实测会选中 scoop 装的那个 Python 3.14.7。
-        doc: "#uv-pip-list（--system，帮助快照 pip-list.txt 第 14 行）"
+        doc: "#uv-pip-list（--system，本机 uv `pip list` 帮助 第 14 行）"
       - id: python
         label: Python 解释器
         type: text
         style: separate
         prefix: "--python"
         advanced: true
-        doc: "#uv-pip-list（--python / -p，帮助快照 pip-list.txt 第 49 行）"
+        doc: "#uv-pip-list（--python / -p，本机 uv `pip list` 帮助 第 49 行）"
     output:
       mode: capture
       showCommandLine: true
@@ -823,7 +823,7 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-pip-freeze
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/pip-freeze.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/pip-freeze.txt
     fields:
       - id: excludeEditable
         label: 排除可编辑安装的包
@@ -831,14 +831,14 @@ actions:
         style: flag
         prefix: "--exclude-editable"
         default: false
-        doc: "#uv-pip-freeze（--exclude-editable，帮助快照 pip-freeze.txt 第 6 行）"
+        doc: "#uv-pip-freeze（--exclude-editable，本机 uv `pip freeze` 帮助 第 6 行）"
       - id: strict
         label: 校验环境一致性
         type: bool
         style: flag
         prefix: "--strict"
         default: false
-        doc: "#uv-pip-freeze（--strict，帮助快照 pip-freeze.txt 第 8 行）"
+        doc: "#uv-pip-freeze（--strict，本机 uv `pip freeze` 帮助 第 8 行）"
       - id: system
         label: 使用系统 Python 环境
         type: bool
@@ -846,14 +846,14 @@ actions:
         prefix: "--system"
         advanced: true
         default: false
-        doc: "#uv-pip-freeze（--system，帮助快照 pip-freeze.txt 第 12 行）"
+        doc: "#uv-pip-freeze（--system，本机 uv `pip freeze` 帮助 第 12 行）"
       - id: python
         label: Python 解释器
         type: text
         style: separate
         prefix: "--python"
         advanced: true
-        doc: "#uv-pip-freeze（--python / -p，帮助快照 pip-freeze.txt 第 17 行）"
+        doc: "#uv-pip-freeze（--python / -p，本机 uv `pip freeze` 帮助 第 17 行）"
     output:
       mode: capture
       showCommandLine: true
@@ -873,7 +873,7 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-pip-install
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/pip-install.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/pip-install.txt
     fields:
       - id: packages
         label: 包
@@ -881,7 +881,7 @@ actions:
         style: positional
         repeatable: true
         placeholder: 每行一个包名，可带版本约束
-        doc: "#uv-pip-install（[PACKAGE]...，帮助快照 pip-install.txt 第 6 行）"
+        doc: "#uv-pip-install（[PACKAGE]...，本机 uv `pip install` 帮助 第 6 行）"
       - id: requirements
         label: 从 requirements 文件安装
         type: file
@@ -889,14 +889,14 @@ actions:
         prefix: "--requirements"
         repeatable: true
         accept: [.txt, .in]
-        doc: "#uv-pip-install（--requirements / -r，帮助快照 pip-install.txt 第 9 行）"
+        doc: "#uv-pip-install（--requirements / -r，本机 uv `pip install` 帮助 第 9 行）"
       - id: editable
         label: 以可编辑方式安装本地路径
         type: text
         style: separate
         prefix: "--editable"
         placeholder: 本地目录或 . 路径
-        doc: "#uv-pip-install（--editable / -e，帮助快照 pip-install.txt 第 11 行）"
+        doc: "#uv-pip-install（--editable / -e，本机 uv `pip install` 帮助 第 11 行）"
       - id: target
         label: 安装到指定目录
         type: directory
@@ -904,7 +904,7 @@ actions:
         prefix: "--target"
         advanced: true
         help: 不装进虚拟或系统环境，而是直接放到该目录顶层。
-        doc: "#uv-pip-install（--target / -t，帮助快照 pip-install.txt 第 45 行）"
+        doc: "#uv-pip-install（--target / -t，本机 uv `pip install` 帮助 第 45 行）"
       - id: noDeps
         label: 不安装依赖
         type: bool
@@ -912,7 +912,7 @@ actions:
         prefix: "--no-deps"
         advanced: true
         default: false
-        doc: "#uv-pip-install（--no-deps，帮助快照 pip-install.txt 第 31 行）"
+        doc: "#uv-pip-install（--no-deps，本机 uv `pip install` 帮助 第 31 行）"
       - id: system
         label: 装进系统 Python 环境
         type: bool
@@ -921,14 +921,14 @@ actions:
         advanced: true
         default: false
         help: 会改动系统 Python，谨慎使用。
-        doc: "#uv-pip-install（--system，帮助快照 pip-install.txt 第 38 行）"
+        doc: "#uv-pip-install（--system，本机 uv `pip install` 帮助 第 38 行）"
       - id: python
         label: Python 解释器
         type: text
         style: separate
         prefix: "--python"
         advanced: true
-        doc: "#uv-pip-install（--python / -p，帮助快照 pip-install.txt 第 76 行起）"
+        doc: "#uv-pip-install（--python / -p，本机 uv `pip install` 帮助 第 76 行起）"
     output:
       mode: stream
       showCommandLine: true
@@ -948,7 +948,7 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-pip-uninstall
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/pip-uninstall.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/pip-uninstall.txt
     fields:
       - id: packages
         label: 要卸载的包
@@ -956,7 +956,7 @@ actions:
         style: positional
         repeatable: true
         placeholder: 每行一个包名
-        doc: "#uv-pip-uninstall（[PACKAGE]...，帮助快照 pip-uninstall.txt 第 6 行）"
+        doc: "#uv-pip-uninstall（[PACKAGE]...，本机 uv `pip uninstall` 帮助 第 6 行）"
       - id: requirements
         label: 从 requirements 文件卸载
         type: file
@@ -964,7 +964,7 @@ actions:
         prefix: "--requirements"
         repeatable: true
         accept: [.txt]
-        doc: "#uv-pip-uninstall（--requirements / -r，帮助快照 pip-uninstall.txt 第 9 行）"
+        doc: "#uv-pip-uninstall（--requirements / -r，本机 uv `pip uninstall` 帮助 第 9 行）"
       - id: dryRun
         label: 试运行（不真的卸载）
         type: bool
@@ -972,7 +972,7 @@ actions:
         prefix: "--dry-run"
         default: false
         help: 只打印将要执行的动作。
-        doc: "#uv-pip-uninstall（--dry-run，帮助快照 pip-uninstall.txt 第 25 行）"
+        doc: "#uv-pip-uninstall（--dry-run，本机 uv `pip uninstall` 帮助 第 25 行）"
       - id: system
         label: 卸载系统 Python 环境里的包
         type: bool
@@ -980,14 +980,14 @@ actions:
         prefix: "--system"
         advanced: true
         default: false
-        doc: "#uv-pip-uninstall（--system，帮助快照 pip-uninstall.txt 第 14 行）"
+        doc: "#uv-pip-uninstall（--system，本机 uv `pip uninstall` 帮助 第 14 行）"
       - id: python
         label: Python 解释器
         type: text
         style: separate
         prefix: "--python"
         advanced: true
-        doc: "#uv-pip-uninstall（--python / -p，帮助快照 pip-uninstall.txt 第 29 行）"
+        doc: "#uv-pip-uninstall（--python / -p，本机 uv `pip uninstall` 帮助 第 29 行）"
     output:
       mode: stream
       showCommandLine: true
@@ -1004,7 +1004,7 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-python-list
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/python-list.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/python-list.txt
     fields:
       - id: request
         label: 版本过滤
@@ -1012,14 +1012,14 @@ actions:
         style: positional
         placeholder: 例如 3.12
         help: 只列出匹配该请求的 Python。
-        doc: "#uv-python-list（[REQUEST]，帮助快照 python-list.txt 第 6 行）"
+        doc: "#uv-python-list（[REQUEST]，本机 uv `python list` 帮助 第 6 行）"
       - id: onlyInstalled
         label: 只看已安装的
         type: bool
         style: flag
         prefix: "--only-installed"
         default: false
-        doc: "#uv-python-list（--only-installed，帮助快照 python-list.txt 第 15 行）"
+        doc: "#uv-python-list（--only-installed，本机 uv `python list` 帮助 第 15 行）"
       - id: allVersions
         label: 包含旧的补丁版本
         type: bool
@@ -1027,7 +1027,7 @@ actions:
         prefix: "--all-versions"
         advanced: true
         default: false
-        doc: "#uv-python-list（--all-versions，帮助快照 python-list.txt 第 9 行）"
+        doc: "#uv-python-list（--all-versions，本机 uv `python list` 帮助 第 9 行）"
       - id: showUrls
         label: 显示下载地址
         type: bool
@@ -1035,7 +1035,7 @@ actions:
         prefix: "--show-urls"
         advanced: true
         default: false
-        doc: "#uv-python-list（--show-urls，帮助快照 python-list.txt 第 19 行）"
+        doc: "#uv-python-list（--show-urls，本机 uv `python list` 帮助 第 19 行）"
       - id: outputFormat
         label: 输出格式
         type: enum
@@ -1043,7 +1043,7 @@ actions:
         prefix: "--output-format"
         advanced: true
         default: "text"
-        doc: "#uv-python-list（--output-format，帮助快照 python-list.txt 第 21 行）"
+        doc: "#uv-python-list（--output-format，本机 uv `python list` 帮助 第 21 行）"
         values:
           - { value: text, label: 文本（默认）, isDefault: true }
           - { value: json, label: JSON }
@@ -1066,7 +1066,7 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-python-install
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/python-install.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/python-install.txt
     fields:
       - id: targets
         label: 要安装的版本
@@ -1075,28 +1075,28 @@ actions:
         repeatable: true
         placeholder: 每行一个，例如 3.12
         help: 留空时按项目里的 .python-version / pyproject.toml 决定。
-        doc: "#uv-python-install（[TARGETS]...，帮助快照 python-install.txt 第 6 行）"
+        doc: "#uv-python-install（[TARGETS]...，本机 uv `python install` 帮助 第 6 行）"
       - id: reinstall
         label: 重新安装
         type: bool
         style: flag
         prefix: "--reinstall"
         default: false
-        doc: "#uv-python-install（--reinstall / -r，帮助快照 python-install.txt 第 21 行）"
+        doc: "#uv-python-install（--reinstall / -r，本机 uv `python install` 帮助 第 21 行）"
       - id: default
         label: 设为默认 Python
         type: bool
         style: flag
         prefix: "--default"
         default: false
-        doc: "#uv-python-install（--default，帮助快照 python-install.txt 第 27 行）"
+        doc: "#uv-python-install（--default，本机 uv `python install` 帮助 第 27 行）"
       - id: installDir
         label: 安装目录
         type: directory
         style: separate
         prefix: "--install-dir"
         advanced: true
-        doc: "#uv-python-install（--install-dir / -i，帮助快照 python-install.txt 第 9 行）"
+        doc: "#uv-python-install（--install-dir / -i，本机 uv `python install` 帮助 第 9 行）"
       - id: noRegistry
         label: 不注册到 Windows 注册表
         type: bool
@@ -1104,7 +1104,7 @@ actions:
         prefix: "--no-registry"
         advanced: true
         default: false
-        doc: "#uv-python-install（--no-registry，帮助快照 python-install.txt 第 13 行）"
+        doc: "#uv-python-install（--no-registry，本机 uv `python install` 帮助 第 13 行）"
     output:
       mode: stream
       showCommandLine: true
@@ -1122,21 +1122,21 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-python-pin
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/python-pin.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/python-pin.txt
     fields:
       - id: request
         label: 版本请求
         type: text
         style: positional
         placeholder: 例如 3.12
-        doc: "#uv-python-pin（[REQUEST]，帮助快照 python-pin.txt 第 6 行）"
+        doc: "#uv-python-pin（[REQUEST]，本机 uv `python pin` 帮助 第 6 行）"
       - id: pinGlobal
         label: 改全局钉定
         type: bool
         style: flag
         prefix: "--global"
         default: false
-        doc: "#uv-python-pin（--global，帮助快照 python-pin.txt 第 14 行）"
+        doc: "#uv-python-pin（--global，本机 uv `python pin` 帮助 第 14 行）"
       - id: resolved
         label: 写入解析后的解释器路径
         type: bool
@@ -1144,7 +1144,7 @@ actions:
         prefix: "--resolved"
         advanced: true
         default: false
-        doc: "#uv-python-pin（--resolved，帮助快照 python-pin.txt 第 9 行）"
+        doc: "#uv-python-pin（--resolved，本机 uv `python pin` 帮助 第 9 行）"
       - id: rm
         label: 移除版本钉定
         type: bool
@@ -1152,7 +1152,7 @@ actions:
         prefix: "--rm"
         advanced: true
         default: false
-        doc: "#uv-python-pin（--rm，帮助快照 python-pin.txt 第 16 行）"
+        doc: "#uv-python-pin（--rm，本机 uv `python pin` 帮助 第 16 行）"
     output:
       mode: stream
       showCommandLine: true
@@ -1169,7 +1169,7 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-tool-list
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/tool-list.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/tool-list.txt
     fields:
       - id: showVersionSpecifiers
         label: 显示版本约束
@@ -1177,14 +1177,14 @@ actions:
         style: flag
         prefix: "--show-version-specifiers"
         default: false
-        doc: "#uv-tool-list（--show-version-specifiers，帮助快照 tool-list.txt 第 8 行）"
+        doc: "#uv-tool-list（--show-version-specifiers，本机 uv `tool list` 帮助 第 8 行）"
       - id: showPaths
         label: 显示环境与可执行文件路径
         type: bool
         style: flag
         prefix: "--show-paths"
         default: false
-        doc: "#uv-tool-list（--show-paths，帮助快照 tool-list.txt 第 6 行）"
+        doc: "#uv-tool-list（--show-paths，本机 uv `tool list` 帮助 第 6 行）"
       - id: showPython
         label: 显示所用 Python 版本
         type: bool
@@ -1192,7 +1192,7 @@ actions:
         prefix: "--show-python"
         advanced: true
         default: false
-        doc: "#uv-tool-list（--show-python，帮助快照 tool-list.txt 第 13 行）"
+        doc: "#uv-tool-list（--show-python，本机 uv `tool list` 帮助 第 13 行）"
       - id: outdated
         label: 只列出可升级的工具
         type: bool
@@ -1201,7 +1201,7 @@ actions:
         advanced: true
         default: false
         help: 需要联网。
-        doc: "#uv-tool-list（--outdated，帮助快照 tool-list.txt 第 14 行）"
+        doc: "#uv-tool-list（--outdated，本机 uv `tool list` 帮助 第 14 行）"
     output:
       mode: capture
       showCommandLine: true
@@ -1222,7 +1222,7 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-tool-install
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/tool-install.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/tool-install.txt
     fields:
       - id: package
         label: 包名
@@ -1230,7 +1230,7 @@ actions:
         style: positional
         required: true
         placeholder: 例如 ruff
-        doc: "#uv-tool-install（<PACKAGE>，帮助快照 tool-install.txt 第 6 行）"
+        doc: "#uv-tool-install（<PACKAGE>，本机 uv `tool install` 帮助 第 6 行）"
       - id: with
         label: 附加依赖
         type: text
@@ -1238,21 +1238,21 @@ actions:
         prefix: "--with"
         repeatable: true
         placeholder: 每行一个
-        doc: "#uv-tool-install（--with / -w，帮助快照 tool-install.txt 第 9 行）"
+        doc: "#uv-tool-install（--with / -w，本机 uv `tool install` 帮助 第 9 行）"
       - id: force
         label: 强制安装
         type: bool
         style: flag
         prefix: "--force"
         default: false
-        doc: "#uv-tool-install（--force，帮助快照 tool-install.txt 第 29 行）"
+        doc: "#uv-tool-install（--force，本机 uv `tool install` 帮助 第 29 行）"
       - id: python
         label: Python 解释器
         type: text
         style: separate
         prefix: "--python"
         advanced: true
-        doc: "#uv-tool-install（--python / -p，帮助快照 tool-install.txt 第 71 行起）"
+        doc: "#uv-tool-install（--python / -p，本机 uv `tool install` 帮助 第 71 行起）"
       - id: editable
         label: 以可编辑方式安装本地包
         type: bool
@@ -1260,7 +1260,7 @@ actions:
         prefix: "--editable"
         advanced: true
         default: false
-        doc: "#uv-tool-install（--editable / -e，帮助快照 tool-install.txt 第 13 行）"
+        doc: "#uv-tool-install（--editable / -e，本机 uv `tool install` 帮助 第 13 行）"
     output:
       mode: stream
       showCommandLine: true
@@ -1278,7 +1278,7 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-tool-run
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/tool-run.txt。本机 locate.alternativeNames 里的 uvx 就是它的别名。
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/tool-run.txt。本机 locate.alternativeNames 里的 uvx 就是它的别名。
     fields:
       - id: fromPackage
         label: 提供命令的包
@@ -1287,7 +1287,7 @@ actions:
         prefix: "--from"
         placeholder: 例如 ruff
         help: 命令名与包名不同时用它指定包。
-        doc: "#uv-tool-run（--from，帮助快照 tool-run.txt 第 6 行）"
+        doc: "#uv-tool-run（--from，本机 uv `tool run` 帮助 第 6 行）"
       - id: with
         label: 附加依赖
         type: text
@@ -1295,7 +1295,7 @@ actions:
         prefix: "--with"
         repeatable: true
         placeholder: 每行一个
-        doc: "#uv-tool-run（--with / -w，帮助快照 tool-run.txt 第 8 行）"
+        doc: "#uv-tool-run（--with / -w，本机 uv `tool run` 帮助 第 8 行）"
       - id: isolated
         label: 隔离运行
         type: bool
@@ -1304,14 +1304,14 @@ actions:
         advanced: true
         default: false
         help: 忽略已安装的同名工具，用独立环境跑。
-        doc: "#uv-tool-run（--isolated，帮助快照 tool-run.txt 第 21 行）"
+        doc: "#uv-tool-run（--isolated，本机 uv `tool run` 帮助 第 21 行）"
       - id: python
         label: Python 解释器
         type: text
         style: separate
         prefix: "--python"
         advanced: true
-        doc: "#uv-tool-run（--python / -p，帮助快照 tool-run.txt 第 61 行起）"
+        doc: "#uv-tool-run（--python / -p，本机 uv `tool run` 帮助 第 61 行起）"
       - id: command
         label: 命令
         type: text
@@ -1319,14 +1319,14 @@ actions:
         required: true
         placeholder: 例如 ruff
         help: 与 uv run 一样，第一个非开关参数是命令名，其后参数原样转交。
-        doc: "#uv-tool-run（[COMMAND]，帮助快照 tool-run.txt 第 3 行）"
+        doc: "#uv-tool-run（[COMMAND]，本机 uv `tool run` 帮助 第 3 行）"
       - id: commandArgs
         label: 命令参数
         type: textarea
         style: positional
         positionalMode: perLine
         help: 一行一个参数。
-        doc: "帮助快照 tool-run.txt 第 3 行（[COMMAND] 之后的参数透传）"
+        doc: "本机 uv `tool run` 帮助 第 3 行（[COMMAND] 之后的参数透传）"
     output:
       mode: stream
       showCommandLine: true
@@ -1343,7 +1343,7 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-cache-dir
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/cache-dir.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/cache-dir.txt
     fields: []
     output:
       mode: capture
@@ -1365,7 +1365,7 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-cache-clean
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/cache-clean.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/cache-clean.txt
     fields:
       - id: packages
         label: 只清理这些包
@@ -1373,14 +1373,14 @@ actions:
         style: positional
         repeatable: true
         placeholder: 留空表示清空整个缓存
-        doc: "#uv-cache-clean（[PACKAGE]...，帮助快照 cache-clean.txt 第 6 行）"
+        doc: "#uv-cache-clean（[PACKAGE]...，本机 uv `cache clean` 帮助 第 6 行）"
       - id: force
         label: 强制清理（忽略占用检查）
         type: bool
         style: flag
         prefix: "--force"
         default: false
-        doc: "#uv-cache-clean（--force，帮助快照 cache-clean.txt 第 9 行）"
+        doc: "#uv-cache-clean（--force，本机 uv `cache clean` 帮助 第 9 行）"
     output:
       mode: stream
       showCommandLine: true
@@ -1398,14 +1398,14 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-build
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/build.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/build.txt
     fields:
       - id: src
         label: 源码目录或 sdist
         type: directory
         style: positional
         placeholder: 默认当前目录
-        doc: "#uv-build（[SRC]，帮助快照 build.txt 第 6 行）"
+        doc: "#uv-build（[SRC]，本机 uv `build` 帮助 第 6 行）"
       - id: outDir
         label: 输出目录
         type: directory
@@ -1413,21 +1413,21 @@ actions:
         prefix: "--out-dir"
         save: true
         placeholder: 默认 dist
-        doc: "#uv-build（--out-dir / -o，帮助快照 build.txt 第 14 行）"
+        doc: "#uv-build（--out-dir / -o，本机 uv `build` 帮助 第 14 行）"
       - id: wheel
         label: 只构建 wheel
         type: bool
         style: flag
         prefix: "--wheel"
         default: false
-        doc: "#uv-build（--wheel，帮助快照 build.txt 第 19 行）"
+        doc: "#uv-build（--wheel，本机 uv `build` 帮助 第 19 行）"
       - id: sdist
         label: 只构建 sdist
         type: bool
         style: flag
         prefix: "--sdist"
         default: false
-        doc: "#uv-build（--sdist，帮助快照 build.txt 第 17 行）"
+        doc: "#uv-build（--sdist，本机 uv `build` 帮助 第 17 行）"
       - id: clear
         label: 先清空输出目录
         type: bool
@@ -1436,7 +1436,7 @@ actions:
         advanced: true
         default: false
         help: 会删除输出目录里的旧产物。
-        doc: "#uv-build（--clear，帮助快照 build.txt 第 24 行）"
+        doc: "#uv-build（--clear，本机 uv `build` 帮助 第 24 行）"
       - id: noBuildLogs
         label: 隐藏构建后端日志
         type: bool
@@ -1444,14 +1444,14 @@ actions:
         prefix: "--no-build-logs"
         advanced: true
         default: false
-        doc: "#uv-build（--no-build-logs，帮助快照 build.txt 第 20 行）"
+        doc: "#uv-build（--no-build-logs，本机 uv `build` 帮助 第 20 行）"
       - id: python
         label: Python 解释器
         type: text
         style: separate
         prefix: "--python"
         advanced: true
-        doc: "#uv-build（--python / -p，帮助快照 build.txt 第 37 行）"
+        doc: "#uv-build（--python / -p，本机 uv `build` 帮助 第 37 行）"
     output:
       mode: stream
       showCommandLine: true
@@ -1468,7 +1468,7 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-version
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/version.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/version.txt
     fields:
       - id: short
         label: 只输出版本号本身
@@ -1476,7 +1476,7 @@ actions:
         style: flag
         prefix: "--short"
         default: false
-        doc: "#uv-version（--short，帮助快照 version.txt 第 13 行）"
+        doc: "#uv-version（--short，本机 uv `version` 帮助 第 13 行）"
       - id: outputFormat
         label: 输出格式
         type: enum
@@ -1484,7 +1484,7 @@ actions:
         prefix: "--output-format"
         advanced: true
         default: "text"
-        doc: "#uv-version（--output-format，帮助快照 version.txt 第 14 行）"
+        doc: "#uv-version（--output-format，本机 uv `version` 帮助 第 14 行）"
         values:
           - { value: text, label: 文本（默认）, isDefault: true }
           - { value: json, label: JSON }
@@ -1505,21 +1505,21 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-version
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/version.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/version.txt
     fields:
       - id: value
         label: 新版本号
         type: text
         style: positional
         placeholder: 例如 1.2.0（留空则配合下面的递增方式）
-        doc: "#uv-version（[VALUE]，帮助快照 version.txt 第 6 行）"
+        doc: "#uv-version（[VALUE]，本机 uv `version` 帮助 第 6 行）"
       - id: bump
         label: 按语义化规则递增
         type: enum
         style: separate
         prefix: "--bump"
         default: ""
-        doc: "#uv-version（--bump，帮助快照 version.txt 第 9 行）"
+        doc: "#uv-version（--bump，本机 uv `version` 帮助 第 9 行）"
         values:
           - { value: "", label: 不递增（直接用上面的版本号） }
           - { value: major, label: 主版本 major }
@@ -1538,7 +1538,7 @@ actions:
         prefix: "--dry-run"
         advanced: true
         default: false
-        doc: "#uv-version（--dry-run，帮助快照 version.txt 第 12 行）"
+        doc: "#uv-version（--dry-run，本机 uv `version` 帮助 第 12 行）"
       - id: noSync
         label: 不自动同步环境
         type: bool
@@ -1546,7 +1546,7 @@ actions:
         prefix: "--no-sync"
         advanced: true
         default: false
-        doc: "#uv-version（--no-sync，帮助快照 version.txt 第 16 行）"
+        doc: "#uv-version（--no-sync，本机 uv `version` 帮助 第 16 行）"
     output:
       mode: stream
       showCommandLine: true
@@ -1563,7 +1563,7 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-self-version
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/self-version.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/self-version.txt
     fields:
       - id: short
         label: 只输出版本号本身
@@ -1571,7 +1571,7 @@ actions:
         style: flag
         prefix: "--short"
         default: false
-        doc: "#uv-self-version（--short，帮助快照 self-version.txt 第 6 行）"
+        doc: "#uv-self-version（--short，本机 uv `self version` 帮助 第 6 行）"
       - id: outputFormat
         label: 输出格式
         type: enum
@@ -1579,7 +1579,7 @@ actions:
         prefix: "--output-format"
         advanced: true
         default: "text"
-        doc: "#uv-self-version（--output-format，帮助快照 self-version.txt 第 7 行）"
+        doc: "#uv-self-version（--output-format，本机 uv `self version` 帮助 第 7 行）"
         values:
           - { value: text, label: 文本（默认）, isDefault: true }
           - { value: json, label: JSON }
@@ -1601,7 +1601,7 @@ actions:
         url: https://docs.astral.sh/uv/reference/cli/#uv-help
         retrieved: "2026-09-27"
         appliesTo: "0.11.15"
-        note: 帮助快照 docs/reference/uv-help/help.txt 与 _uv.txt
+        note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/help.txt 与 _uv.txt
     fields:
       - id: command
         label: 命令
@@ -1610,7 +1610,7 @@ actions:
         repeatable: true
         placeholder: 例如 sync，或 pip install（多行表示多级命令）
         help: 可留空查看总览；填多行可查二级命令，例如第一行 pip、第二行 install。
-        doc: "#uv-help（[COMMAND]...，帮助快照 help.txt）"
+        doc: "#uv-help（[COMMAND]...，本机 uv `help` 帮助）"
     output:
       mode: capture
       showCommandLine: true

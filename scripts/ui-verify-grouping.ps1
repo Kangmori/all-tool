@@ -10,7 +10,7 @@
 # 只是没法自动化，需要人工点一次。
 [CmdletBinding()]
 param(
-    [string]$Exe = (Join-Path $PSScriptRoot '..\src\Swpj.App\bin\Debug\net10.0-windows10.0.26100.0\Swpj.App.exe'),
+    [string]$Exe = (Join-Path $PSScriptRoot '..\src\AllTool.App\bin\Debug\net10.0-windows10.0.26100.0\AllTool.App.exe'),
     [string]$PackageId = 'ping',
     [string]$GroupName = '我的常用'
 )
@@ -19,18 +19,18 @@ $OutputEncoding = [Console]::OutputEncoding = [Text.Encoding]::UTF8
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 
-if (-not (Test-Path $Exe)) { throw "找不到 $Exe，先 dotnet build src\Swpj.slnx" }
+if (-not (Test-Path $Exe)) { throw "找不到 $Exe，先 dotnet build src\AllTool.slnx" }
 
 # 从干净状态开始，否则断言会被上次残留影响
-Remove-Item (Join-Path $env:APPDATA 'swpj\grouping.json') -Force -ErrorAction SilentlyContinue
+Remove-Item (Join-Path $env:APPDATA 'All Tool\grouping.json') -Force -ErrorAction SilentlyContinue
 
 $AE = [System.Windows.Automation.AutomationElement]
 $scope = [System.Windows.Automation.TreeScope]
 $true_ = [System.Windows.Automation.Condition]::TrueCondition
 
-$env:SWPJ_SELECT_PACKAGE = $PackageId
+$env:ALLTOOL_SELECT_PACKAGE = $PackageId
 $process = Start-Process -FilePath $Exe -PassThru
-Remove-Item Env:\SWPJ_SELECT_PACKAGE -ErrorAction SilentlyContinue
+Remove-Item Env:\ALLTOOL_SELECT_PACKAGE -ErrorAction SilentlyContinue
 
 $window = $null
 for ($i = 0; $i -lt 40 -and -not $window; $i++) {

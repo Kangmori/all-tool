@@ -131,14 +131,14 @@ Windows 自带命令**没有子命令这个概念**，所以"直接运行程序"
 JSON Schema 允许（`command` 是可选字符串），但宿主的运行时校验拒绝：
 
 - 症状：`dotnet test` 报 `清单校验失败 plugins\chkdsk\manifest.yaml：- 动作 check：缺少 command`
-- 位置：`src/Swpj.Core/Manifest/ManifestValidation.cs:78`
+- 位置：`src/AllTool.Core/Manifest/ManifestValidation.cs:78`
   ```csharp
   if (string.IsNullOrWhiteSpace(action.Command))
   {
       errors.Add($"{where}：缺少 command");
   }
   ```
-- **但执行层本来就支持空命令**：`src/Swpj.Core/Execution/ArgvBuilder.cs:28`
+- **但执行层本来就支持空命令**：`src/AllTool.Core/Execution/ArgvBuilder.cs:28`
   ```csharp
   if (!string.IsNullOrEmpty(action.Command))
   {
@@ -146,7 +146,7 @@ JSON Schema 允许（`command` 是可选字符串），但宿主的运行时校�
   }
   ```
   也就是说校验与执行层**自相矛盾**：校验不允许，执行早就允许了。
-- 复现：`dotnet test src\Swpj.slnx`（`RealManifestTests.加载全部工具包都不应抛异常` 会遍历 `plugins/`）
+- 复现：`dotnet test src\AllTool.slnx`（`RealManifestTests.加载全部工具包都不应抛异常` 会遍历 `plugins/`）
 - 建议改法（一行，任选其一）：
   1. 把 78 行改成 `if (action.Command is null)` —— 只在"作者根本没写这个键"时报错；
   2. 或直接删掉这段校验，让 `ArgvBuilder` 的容错生效；

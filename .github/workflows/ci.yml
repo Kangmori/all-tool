@@ -46,9 +46,9 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: 编译核心库与测试
-        # 注意：这里只编译 src/Swpj.slnx，暂不含 WinUI 应用项目。
+        # 注意：这里只编译 src/AllTool.slnx，暂不含 WinUI 应用项目。
         # WinUI 3 项目需要 Windows App SDK 与 Windows SDK，等它建好并本地验证通过后再纳入。
-        run: dotnet build src/Swpj.slnx -c Release --nologo
+        run: dotnet build src/AllTool.slnx -c Release --nologo
 
       - name: 运行单元测试
-        run: dotnet test src/Swpj.slnx -c Release --no-build --nologo
+        run: dotnet test src/AllTool.slnx -c Release --no-build --nologo

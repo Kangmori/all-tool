@@ -5,14 +5,14 @@
 #     **目标机器什么都不用装**（Win10/11 x64 即可）。适合发给别人或做 Release。
 #   - -FrameworkDependent：体积小，但目标机器要预装 .NET 10 桌面运行时与 Windows App Runtime。
 #
-# 产出结构（默认 dist\swpj\）：
-#   Swpj.App.exe            宿主
+# 产出结构（默认 dist\All Tool\）：
+#   AllTool.exe            宿主
 #   plugins\                工具包（放在 exe 旁边，宿主会优先用这里的）
 #   README-启动说明.txt      给人看的几句话
 #
 # 关于 `dotnet publish` 的两个坑（都已处理，别再改回去）：
-#   1. publish 的输出**漏掉 Swpj.App.pri 与 *.xbf**（编译后的 XAML 资源），
-#      程序会启动即崩，退出码 0xC000027B。已在 Swpj.App.csproj 里用
+#   1. publish 的输出**漏掉 AllTool.pri 与 *.xbf**（编译后的 XAML 资源），
+#      程序会启动即崩，退出码 0xC000027B。已在 AllTool.App.csproj 里用
 #      CopyXamlResourcesToPublish 目标补齐（陷阱 P22）。
 #   2. 只加 --self-contained 而不加 WindowsAppSDKSelfContained 时 WinUI 也起不来；
 #      两者要一起加才是真正独立（实测已能启动）。
@@ -22,7 +22,7 @@
 param(
     [string]$Configuration = 'Release',
     [string]$Runtime = 'win-x64',
-    [string]$OutputDirectory = (Join-Path $PSScriptRoot '..\dist\swpj'),
+    [string]$OutputDirectory = (Join-Path $PSScriptRoot '..\dist\All Tool'),
     [switch]$FrameworkDependent
 )
 
@@ -30,7 +30,7 @@ $OutputEncoding = [Console]::OutputEncoding = [Text.Encoding]::UTF8
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$project = Join-Path $repoRoot 'src\Swpj.App\Swpj.App.csproj'
+$project = Join-Path $repoRoot 'src\AllTool.App\AllTool.App.csproj'
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 
 if (-not (Test-Path $project)) { throw "找不到项目：$project" }
@@ -62,13 +62,13 @@ Write-Host "dotnet $($publishArgs -join ' ')" -ForegroundColor DarkGray
 if ($LASTEXITCODE -ne 0) { throw "发布失败（退出码 $LASTEXITCODE）" }
 
 # 关键文件校验：少了 XAML 资源，程序会启动即崩（P22）
-foreach ($required in 'Swpj.App.exe', 'Swpj.App.pri', 'App.xbf', 'MainWindow.xbf') {
+foreach ($required in 'AllTool.exe', 'AllTool.pri', 'App.xbf', 'MainWindow.xbf') {
     if (-not (Test-Path (Join-Path $OutputDirectory $required))) {
         throw "交付目录缺少关键文件：$required —— 发布不完整，程序会启动即崩（见 P22）"
     }
 }
 
-# 工具包放在 exe 旁边 —— 宿主优先在这里找（见 src/Swpj.App/RepoPaths.cs）
+# 工具包放在 exe 旁边 —— 宿主优先在这里找（见 src/AllTool.App/RepoPaths.cs）
 Write-Host "复制工具包…" -ForegroundColor Cyan
 $pluginsSource = Join-Path $repoRoot 'plugins'
 $pluginsTarget = Join-Path $OutputDirectory 'plugins'
@@ -81,11 +81,11 @@ if (Test-Path $trash) { Remove-Item -Recurse -Force $trash }
 $packages = Get-ChildItem $pluginsTarget -Directory | Select-Object -ExpandProperty Name
 
 $readme = @"
-swpj —— 把命令行软件变成可点击界面
+All Tool —— 把命令行软件变成可点击界面
 ================================================
 
 怎么运行
-  双击 Swpj.App.exe（解压后直接运行，不需要安装）
+  双击 AllTool.exe（解压后直接运行，不需要安装）
 
 怎么用
   1. 左侧「工具包」选一个软件（$(($packages -join '、')))
@@ -101,7 +101,7 @@ $(($packages | ForEach-Object { "  - $_" }) -join "`n")
 
 注意
   - 工具包是纯声明式的 YAML，不含任何代码；宿主只按声明调用你机器上已装的程序
-  - 「记住上次输入」与自定义分组存在 %APPDATA%\swpj\ 下（密码永不落盘）
+  - 「记住上次输入」与自定义分组存在 %APPDATA%\All Tool\ 下（密码永不落盘）
   - 本目录可整体拷贝到别处使用（插件就在 exe 旁边）
   - 若提示"找不到可执行文件"，说明对应软件没装或不在 PATH 里
   - 把工具包文件夹拖到「工具包」区域即可安装；右键工具包可卸载
@@ -112,7 +112,7 @@ $(($packages | ForEach-Object { "  - $_" }) -join "`n")
 
 Set-Content -Path (Join-Path $OutputDirectory 'README-启动说明.txt') -Value $readme -Encoding utf8
 
-$exe = Join-Path $OutputDirectory 'Swpj.App.exe'
+$exe = Join-Path $OutputDirectory 'AllTool.exe'
 $sizeMb = [math]::Round((Get-ChildItem $OutputDirectory -Recurse -File | Measure-Object Length -Sum).Sum / 1MB)
 
 Write-Host ""
