@@ -14,6 +14,12 @@ spike/**/obj/
 # 从 CHM 反编译出的原始 HTML 快照（可由脚本重新生成，体积大且是派生数据）
 docs/reference/7zip-chm/
 
+# Windows 自带命令的 `/?` 帮助快照（由 scripts/fetch-win-help.ps1 生成）。
+# **这些是微软的文本**，本项目要转为公开仓库，不能把它们发布出去；
+# 而且任何一台 Windows 机器都能用一条命令重新抓到，属于可再生数据。
+# 代价：校验器的"开关溯源"启发式检查在干净克隆里看不到这批语料（只提示、不阻断）。
+docs/reference/win-help/
+
 # Python
 __pycache__/
 *.pyc
