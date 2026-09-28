@@ -79,15 +79,19 @@ pwsh -File scripts/publish-app.ps1
 
 ## 6. 当前进度（一句话）
 
-规范 v1 已定稿（含 `category` 分组与 `nextSteps` 推荐下一步）；**宿主（WinUI 3）可工作并经界面冒烟验证**
-（UIA 填表 → 点执行 → 真实 7z 解压 → **进度条走到 100** → 输出与产物均正确；另有取消场景）；
-界面支持**拖文件填路径、工具包分组（默认折叠；用「分组…」按钮或右键菜单增删改移，不做鼠标拖动）、执行后一键执行推荐、必填校验、记住上次输入**；工具包可**直接拖进来安装**（右键可卸载，移到 .trash 不删除），菜单栏含「关于」；
-工具包 **15 个**：7-Zip(11 动作) / Scoop(40) / uv(26) / **Windows 自带命令 12 个**
-（ping ipconfig tracert nslookup netstat tasklist systeminfo chkdsk sfc robocopy cleanmgr powercfg，共 70 动作）；
-字段出处标注 **419/419 = 100%**；开关溯源 300 个查 298 命中（启发式，只提示不阻断）；
-测试 **142 个**全通过；CI 与每周文档漂移检测已接入；
-`scripts/publish-app.ps1` 能产出**零预装的独立交付目录**（目标机器不需要 .NET 或 Windows App Runtime）。
-**待办以 `docs/ai/project-state.json` 的 `nextActions` 为准**（当前主要是：改名 All Tool、清掉第三方文档快照后转公开、加 MIT 许可、发开发测试版 Release）。
+**仓库已公开**：https://github.com/Kangmori/all-tool （MIT，作者 Kangmori）；
+首个开发测试版 https://github.com/Kangmori/all-tool/releases/tag/v0.1.0-dev
+（独立版 zip，目标机器不需要预装 .NET 或 Windows App Runtime）。
+
+规范 v1（含 `category` 动作分组、`nextSteps` 推荐下一步、`quickActions` 右键菜单、`requiresAdmin`）；
+宿主（WinUI 3）经界面验收脚本验证（解压走进度条、取消报告已取消、分组可增删改移、必填校验、
+拖文件填路径、执行后一键执行推荐、记住上次输入、菜单栏含「关于」）；
+工具包 **15 个**：7-Zip(11 动作) / Scoop(40) / uv(26) / **Windows 自带命令 12 个**（70 动作）；
+字段出处 **419/419 = 100%**；开关溯源 300 查 298（启发式，不阻断）；测试 **142 个**全通过；
+CI 与每周文档漂移检测已接入。`scripts/publish-app.ps1` 产出零预装的独立交付目录。
+
+**待办以 `docs/ai/project-state.json` 的 `nextActions` 为准**（当前：N12 把 uv 接进漂移检测、
+N19 补第二批 Windows 命令）。
 
 ## 7. 文档地图（别在错的地方找东西）
 
