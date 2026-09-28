@@ -18,6 +18,7 @@ description: 7-Zip 的命令行版本。压缩、解压、查看、测试、计�
 homepage: https://www.7-zip.org/
 license: LGPL-2.1-or-later（unRAR 部分另有不得用于开发 RAR 压缩器的限制条款）
 tags: [压缩, 归档, 哈希]
+category: 压缩归档
 
 sources:
   - title: 7-Zip 帮助文件 —— Command Line Version 章节
@@ -65,6 +66,7 @@ actions:
 
   # =============================================================== a — 添加
   - id: add
+    category: 压缩
     title: 添加到压缩包
     description: 创建压缩包，或向已有压缩包添加文件（7z a）
     command: a
@@ -242,6 +244,7 @@ actions:
 
   # =============================================================== x — 解压
   - id: extract
+    category: 解压
     title: 解压（保留目录结构）
     description: 把压缩包解压到指定目录，保留内部路径（7z x）
     command: x
@@ -370,6 +373,7 @@ actions:
 
   # =============================================================== e — 平铺解压
   - id: extract-flat
+    category: 解压
     title: 解压（不保留目录结构）
     description: 把压缩包内所有文件解压到同一个目录（7z e）
     command: e
@@ -440,6 +444,11 @@ actions:
 
   # =============================================================== l — 列表
   - id: list
+    nextSteps:
+      - title: 把内容解压出来
+        action: extract
+        reason: 看过内容之后通常就要解压
+    category: 查看
     title: 查看内容
     description: 列出压缩包内的文件（7z l）
     command: l
@@ -509,6 +518,12 @@ actions:
 
   # =============================================================== t — 测试
   - id: test
+    nextSteps:
+      - title: 解压这个包
+        action: extract
+        when: "Everything is Ok|Everything is ok"
+        reason: 完整性没问题，可以放心解压
+    category: 查看
     title: 测试完整性
     description: 校验压缩包是否损坏（7z t）
     command: t
@@ -558,6 +573,7 @@ actions:
 
   # =============================================================== h — 哈希
   - id: hash
+    category: 查看
     title: 计算哈希
     description: 计算文件的校验值（7z h）
     command: h
@@ -634,6 +650,7 @@ actions:
 
   # =============================================================== d — 删除
   - id: delete
+    category: 维护归档
     title: 从压缩包删除文件
     description: 删除压缩包内的指定文件（7z d）。此操作不可撤销。
     command: d
@@ -684,6 +701,7 @@ actions:
 
   # =============================================================== rn — 重命名
   - id: rename
+    category: 维护归档
     title: 重命名压缩包内文件
     description: 修改压缩包内部的文件名（7z rn）
     command: rn
@@ -726,6 +744,7 @@ actions:
 
   # =============================================================== u — 更新
   - id: update
+    category: 维护归档
     title: 更新压缩包
     description: 更新归档中较旧的文件，并加入尚不存在的文件（7z u）
     command: u
@@ -814,6 +833,7 @@ actions:
 
   # =============================================================== b — 基准测试
   - id: benchmark
+    category: 诊断
     title: CPU 性能测试
     description: 用 LZMA 压缩/解压测试 CPU 速度与内存（7z b）
     command: b
@@ -869,6 +889,7 @@ actions:
 
   # =============================================================== i — 信息
   - id: info
+    category: 查看
     title: 查看支持的格式
     description: 显示 7-Zip 支持的归档格式、编解码器与版本信息（7z i）
     command: i

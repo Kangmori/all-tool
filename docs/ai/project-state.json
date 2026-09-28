@@ -527,6 +527,55 @@
       "command": "对比 bin\\Release\\<tfm>\\ 与 dist 的 publish 产物文件清单，并分别启动",
       "result": "publish 产物缺 Swpj.App.pri、App.xbf、MainWindow.xbf（另有 runtimes\\win-arm64 之类的无用件）；build 产物能启动、publish 产物崩溃 0xC000027B。已记为 P22",
       "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "ui-grouping-works",
+      "claim": "左侧工具包与动作按分组展示（清单默认分组生效）",
+      "command": "UIA 读界面文本与按钮名",
+      "result": "工具包分组：包管理(1) / 压缩归档(1) / Python 与包管理(1)；7zip 动作分组：查看(4)/解压(2)/维护归档(3)/压缩(1)/诊断(1)；scoop 动作分组 10 个（应用管理 15、Shim 管理 5、桶管理 4、别名 3、配置 3、定位与查看 3、导入导出 2、缓存 2、其它 2、诊断 1）",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "ui-next-steps-work",
+      "claim": "执行完按清单规则推荐下一步，并能一键执行",
+      "command": "UIA 点动作 → 点执行 → 等推荐按钮出现 → 点推荐",
+      "result": "scoop list 跑完出现「看看有没有可用更新」；scoop status 跑完出现「一键更新全部」与「清掉旧版本释放空间」（真实输出里当时有 5 个应用可更新）。点推荐后会切到目标动作；因目标动作会改动数据，先弹确认框，点取消后状态显示「已取消，动作已切好但没有执行」，输出区确认没有真的执行 update",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "ui-required-validation",
+      "claim": "必填字段为空时拦住执行并高亮该字段",
+      "command": "UIA 清空 7z 解压的「压缩包」→ 点执行",
+      "result": "状态栏显示「「压缩包」是必填项，请先填好再执行」，未生成命令、未执行",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "next-step-regex-verified",
+      "claim": "清单里的 when 正则是对着真实输出验证过的，不是凭印象写的",
+      "command": "跑 scoop status --local 抓真实输出，再用 .NET 正则逐条实测候选模式",
+      "result": "最初凭印象写的 'Updates are available' 在真实输出里 0 命中（scoop 打印的是表格）；改为 '(?m)^\\S+\\s+\\d\\S*\\s+\\d' 后精确命中当时有更新的 5 行、不误match表头与分隔行。已写进清单注释与 NextStepRealManifestTests",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "cancel-after-usability-round",
+      "claim": "易用性改动之后，界面「取消」仍然有效",
+      "command": "pwsh -File scripts/ui-smoke.ps1（两个场景）",
+      "result": "场景一（解压）通过：进度条到 100、产物正确、输出无转义序列；场景二（取消）通过：压缩到 65% 左右点取消，输出报告「已被用户取消（退出码 1，耗时 7.3 秒）」，执行按钮恢复可用",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "cancel-real-command-regression",
+      "claim": "取消能真的杀掉正在压缩的 7z（用真实被包装程序，而不是 cmd+powershell 的替身）",
+      "command": "dotnet test --filter CancelRealCommandTests",
+      "result": "通过：scoop shim 的 7z 压 48 MB 不可压缩数据，2 秒后取消，result.Canceled=true 且 15 秒内返回。补这条是因为原先的取消单测用的是 cmd+powershell，覆盖不到真实场景",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "danger-null-bug",
+      "claim": "没写 danger 的动作不应被当成会覆盖数据",
+      "command": "对照清单与界面文案；并加 DangerOrDefault 单测",
+      "result": "原先 Danger 为 null 时 `Danger != DangerLevel.None` 为真，所有只读动作（如 scoop status）都挂着「⚠ 此动作会覆盖已有文件」。已加 DangerOrDefault（空即 none）+ 3 个单测；界面复验描述里不再有该警告",
+      "verifiedAt": "2026-09-27"
     }
   ],
   "completedMilestones": [
@@ -599,6 +648,13 @@
       "doneAt": "2026-09-27",
       "evidence": "scripts/publish-app.ps1 产出 dist\\swpj\\（80 MB，含 exe + plugins + 启动说明）。实测：交付版启动正常、载入 3 个工具包、无载入失败、命令行预览带出记住的上次路径。过程中踩到并定位：dotnet publish 会漏掉 Swpj.App.pri 与 .xbf，导致启动即崩 0xC000027B；交付因此改用「dotnet build -c Release + 拷贝」",
       "remaining": "仍依赖目标机器预装 .NET 10 桌面运行时与 Windows App Runtime —— 见 N13"
+    },
+    {
+      "id": "N14",
+      "task": "主程序易用性改进（用户要求：拖放、分组、推荐下一步、其它人性化）",
+      "doneAt": "2026-09-27",
+      "evidence": "① 拖放：资源管理器拖文件/文件夹到输入框即填充，多值字段追加且去重；填充规则抽成 PathDropLogic 并有 7 个单测（拖放本身无法自动化，界面上的接线需人工点一次）。② 分组：左侧工具包与动作按分组展示（可折叠），清单用 category 声明默认分组、用户右键可改并存在 %APPDATA%\\swpj\\grouping.json；界面实测：三个工具包分成「包管理／压缩归档／Python 与包管理」，7zip 动作分成查看(4)/解压(2)/维护归档(3)/压缩(1)/诊断(1)，scoop 分成 10 组（应用管理 15、Shim 管理 5…）。③ 推荐下一步：清单声明 nextSteps，跑完按输出正则匹配给出按钮，点了可一键执行；界面实测：scoop list → 推荐「看看有没有可用更新」；scoop status（真有 5 个更新）→ 推荐「一键更新全部」+「清掉旧版本释放空间」。从推荐执行危险动作会先确认（实测弹框并取消，未执行）。④ 其它：必填校验（实测拦住空参数并高亮字段）、筛选框、复制命令/输出、记住上次选中的工具包与动作、执行期间禁用表单、防重入。⑤ 顺带修掉一个真 bug：没写 danger 的动作（Danger 为 null）被当成 overwrite，所有只读动作都挂着「⚠ 此动作会覆盖已有文件」；已加 DangerOrDefault 规范化属性 + 3 个单测。",
+      "note": "规范随之扩展：新增工具包级/动作级 category 与动作级 nextSteps（schema、规范文档、playbook 同步）。"
     }
   ],
   "plugins": [
@@ -824,6 +880,14 @@
       "how": "查 WinUI 3 的 publish 为什么漏掉 .pri/.xbf（可能是 MarkupCompilePass2 与 publish 布局的交互），或者在 csproj 里显式把 $(TargetDir)$(TargetName).pri 与 *.xbf 加入发布项；也可评估 MSIX 打包（个人自用需自签证书，是另一个取舍）",
       "doneWhen": "dotnet publish 出来的目录能直接启动，且不需要目标机器预装 Windows App Runtime",
       "priority": 3
+    },
+    {
+      "id": "N15",
+      "task": "人工验证本轮易用性改动里无法自动化的部分",
+      "why": "拖放（OLE 拖放没法用 UIA 模拟）、右键改分组、筛选框的组合行为，都只能人点一次；填充规则与分组存储本身已有单测覆盖",
+      "how": "按 docs/ai/project-state.json 里 N14 的说明逐条点一遍；发现问题记下来（若是宿主 bug，先写一条失败的回归测试再修）",
+      "doneWhen": "拖放、右键改分组、筛选三条都确认可用（或发现的缺陷已修并有测试）",
+      "priority": 1
     }
   ],
   "readingOrderForNewAgent": [

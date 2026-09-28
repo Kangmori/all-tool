@@ -5,6 +5,7 @@ using Swpj.Core.Manifest;
 
 namespace Swpj.Core.Tests;
 
+[Collection(RealProcessCollection.Name)]
 public class VersionComparisonTests
 {
     [Theory]
@@ -28,6 +29,7 @@ public class VersionComparisonTests
     }
 }
 
+[Collection(RealProcessCollection.Name)]
 public class ProgressParserTests
 {
     [Theory]
@@ -62,6 +64,7 @@ public class ProgressParserTests
     }
 }
 
+[Collection(RealProcessCollection.Name)]
 public class ExitCodeInterpreterTests
 {
     private static readonly List<ExitCodeSpec> SevenZip =
@@ -105,6 +108,7 @@ public class ExitCodeInterpreterTests
     }
 }
 
+[Collection(RealProcessCollection.Name)]
 public class EncodingResolverTests
 {
     [Fact]
@@ -138,6 +142,7 @@ public class EncodingResolverTests
     }
 }
 
+[Collection(RealProcessCollection.Name)]
 public class ToolLocatorTests
 {
     [Fact]

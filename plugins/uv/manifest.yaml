@@ -21,6 +21,7 @@ description: Astral 的极速 Python 包管理器与环境管理器。管理项�
 homepage: https://docs.astral.sh/uv/
 license: MIT OR Apache-2.0（uv 自身双许可）
 tags: [python, 包管理, 虚拟环境, 依赖]
+category: Python 与包管理
 
 sources:
   - title: uv CLI 参考（官方文档，覆盖全部命令与开关）
@@ -78,6 +79,7 @@ actions:
 
   # =============================================================== uv run
   - id: run
+    category: 运行
     title: 运行命令或脚本
     description: 在项目环境里运行命令（uv run）。会按需同步环境，可能下载并安装依赖。
     command: run
@@ -172,6 +174,7 @@ actions:
 
   # =============================================================== uv init
   - id: init
+    category: 项目
     title: 新建项目
     description: 创建一个新的 Python 项目骨架（uv init），会写入 pyproject.toml 等文件。
     command: init
@@ -242,6 +245,7 @@ actions:
 
   # =============================================================== uv add
   - id: add
+    category: 包
     title: 添加依赖
     description: 把依赖加入项目并更新锁文件与环境（uv add）
     command: add
@@ -318,6 +322,7 @@ actions:
 
   # =============================================================== uv remove
   - id: remove
+    category: 包
     title: 移除依赖
     description: 从项目里移除依赖（uv remove）
     command: remove
@@ -367,6 +372,7 @@ actions:
 
   # =============================================================== uv sync
   - id: sync
+    category: 环境
     title: 同步环境
     description: 按 pyproject.toml 与 uv.lock 把虚拟环境同步到位（uv sync）。会下载安装依赖。
     command: sync
@@ -454,6 +460,11 @@ actions:
 
   # =============================================================== uv lock
   - id: lock
+    nextSteps:
+      - title: 按锁文件同步环境
+        action: sync
+        reason: 锁文件更新后应当同步一次环境
+    category: 环境
     title: 更新锁文件
     description: 重新解析依赖并写入 uv.lock（uv lock）。会联网解析版本。
     command: lock
@@ -508,6 +519,7 @@ actions:
 
   # =============================================================== uv export
   - id: export
+    category: 环境
     title: 导出锁文件
     description: 把 uv.lock 导出成 requirements.txt / pylock.toml / CycloneDX（uv export）
     command: export
@@ -586,6 +598,7 @@ actions:
 
   # =============================================================== uv tree
   - id: tree
+    category: 环境
     title: 查看依赖树
     description: 显示项目的依赖树（uv tree）。需要当前目录（或其父目录）有 pyproject.toml。
     command: tree
@@ -651,6 +664,7 @@ actions:
 
   # =============================================================== uv venv
   - id: venv
+    category: 环境
     title: 创建虚拟环境
     description: 在指定路径创建虚拟环境（uv venv），默认写 .venv。
     command: venv
@@ -726,6 +740,11 @@ actions:
 
   # =============================================================== uv pip（子命令）
   - id: pip-list
+    nextSteps:
+      - title: 看看 Python 环境
+        action: python-list
+        reason: 顺便确认一下本机有哪些 Python
+    category: 包
     title: pip 兼容 —— 列出已装包
     description: 列出环境里已安装的包（uv pip list）
     command: pip
@@ -788,6 +807,7 @@ actions:
       - { title: 以 JSON 输出, args: ["pip", "list", "--format", "json"] }
 
   - id: pip-freeze
+    category: 包
     title: pip 兼容 —— 按 requirements 格式列出
     description: 以 requirements 格式列出已安装的包（uv pip freeze）
     command: pip
@@ -835,6 +855,7 @@ actions:
       - { title: 按 requirements 格式列出, args: ["pip", "freeze"] }
 
   - id: pip-install
+    category: 包
     title: pip 兼容 —— 安装包
     description: 把包装进某个环境（uv pip install）。uv pip 系列不读 pyproject.toml。
     command: pip
@@ -909,6 +930,7 @@ actions:
       - { title: 从 requirements 文件安装（需联网与写环境，未实跑）, args: ["pip", "install", "--requirements", "requirements.txt"] }
 
   - id: pip-uninstall
+    category: 包
     title: pip 兼容 —— 卸载包
     description: 从环境里卸载包（uv pip uninstall）
     command: pip
@@ -966,6 +988,7 @@ actions:
 
   # =============================================================== uv python
   - id: python-list
+    category: Python
     title: 列出 Python
     description: 列出可用的与已安装的 Python 版本（uv python list）
     command: python
@@ -1025,6 +1048,7 @@ actions:
       - { title: 只列出已安装的 Python, args: ["python", "list", "--only-installed"] }
 
   - id: python-install
+    category: Python
     title: 安装 Python
     description: 下载并安装由 uv 管理的 Python 版本（uv python install）
     command: python
@@ -1080,6 +1104,7 @@ actions:
       showCommandLine: true
 
   - id: python-pin
+    category: Python
     title: 固定 Python 版本
     description: 把项目钉到某个 Python 版本（uv python pin），会写 .python-version
     command: python
@@ -1128,6 +1153,7 @@ actions:
 
   # =============================================================== uv tool
   - id: tool-list
+    category: 全局工具
     title: 列出已安装的工具
     description: 列出 uv tool 装过的全局命令行工具（uv tool list）
     command: tool
@@ -1178,6 +1204,7 @@ actions:
       - { title: 连路径一起看, args: ["tool", "list", "--show-paths"] }
 
   - id: tool-install
+    category: 全局工具
     title: 安装全局工具
     description: 把一个 Python 包提供的命令行工具装成全局可用（uv tool install）
     command: tool
@@ -1233,6 +1260,7 @@ actions:
       showCommandLine: true
 
   - id: tool-run
+    category: 全局工具
     title: 临时运行工具
     description: 不安装地运行某个 Python 包提供的命令（uv tool run，即 uvx）
     command: tool
@@ -1299,6 +1327,7 @@ actions:
 
   # =============================================================== uv cache
   - id: cache-dir
+    category: 缓存
     title: 查看缓存目录
     description: 打印 uv 的缓存目录（uv cache dir）
     command: cache
@@ -1318,6 +1347,7 @@ actions:
       - { title: 打印缓存目录, args: ["cache", "dir"] }
 
   - id: cache-clean
+    category: 缓存
     title: 清理缓存
     description: 清空 uv 的缓存，或只清指定包的缓存（uv cache clean）
     command: cache
@@ -1351,6 +1381,7 @@ actions:
 
   # =============================================================== uv build
   - id: build
+    category: 构建与发布
     title: 构建发行包
     description: 把项目构建成 sdist 与 wheel（uv build），产物写到 dist/
     command: build
@@ -1422,6 +1453,7 @@ actions:
 
   # =============================================================== uv version
   - id: version-show
+    category: 环境
     title: 查看项目版本
     description: 读取当前项目的版本号（uv version）。读的是 pyproject.toml，不是 uv 自己的版本。
     command: version
@@ -1456,6 +1488,7 @@ actions:
       resultNote: 该命令读取当前项目的 pyproject.toml；在含中文项目名的项目里会以退出码 2 和错误信息结束。
 
   - id: version-set
+    category: 环境
     title: 修改项目版本
     description: 设定或递增当前项目的版本号（uv version <值> / --bump），会改写 pyproject.toml
     command: version
@@ -1514,6 +1547,7 @@ actions:
 
   # =============================================================== uv self
   - id: self-version
+    category: 诊断
     title: 查看 uv 自身版本
     description: 显示 uv 自己的版本（uv self version）。要查 uv 版本时用这个，不要用 uv version。
     command: self
@@ -1552,6 +1586,7 @@ actions:
 
   # =============================================================== uv help
   - id: help
+    category: 其它
     title: 查看帮助
     description: 显示 uv 或某个命令的文档（uv help [命令...]）
     command: help

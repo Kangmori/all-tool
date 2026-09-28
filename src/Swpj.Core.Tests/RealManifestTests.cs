@@ -9,6 +9,7 @@ namespace Swpj.Core.Tests;
 /// 这类测试的价值：验证"规范 + 真实的 manifest"确实能驱动出正确的 argv，
 /// 而不是只验证我自己构造的测试夹具。清单改了、加载器改坏了，这里会立刻响。
 /// </summary>
+[Collection(RealProcessCollection.Name)]
 public class RealManifestTests
 {
     private static readonly string RepoRoot = TestRepo.Root;

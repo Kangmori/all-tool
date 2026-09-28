@@ -3,10 +3,12 @@ using System.Globalization;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Swpj.Core.Discovery;
 using Swpj.Core.Execution;
 using Swpj.Core.Manifest;
 using Swpj.Core.Settings;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
 
@@ -25,16 +27,26 @@ public sealed partial class MainWindow : Window
 
     private readonly ProcessRunner _runner = new();
     private readonly LastValuesStore _lastValues = LastValuesStore.OpenDefault();
+    private readonly GroupingStore _grouping = GroupingStore.OpenDefault();
     private readonly List<PackageEntry> _packages = [];
     private readonly List<ActionEntry> _actions = [];
     private readonly Dictionary<string, object?> _values = new(StringComparer.Ordinal);
     private readonly List<(string Id, Func<object?> Get)> _valueSync = [];
     private readonly List<string> _outputLines = [];
 
+    /// <summary>字段 id → 生成的控件，用于必填校验时高亮与聚焦。</summary>
+    private readonly Dictionary<string, FrameworkElement> _fieldControls = new(StringComparer.Ordinal);
+
+    /// <summary>字段 id → 可接受拖放的输入框（用于"拖到窗口空白处"时找第一个空的路径字段）。</summary>
+    private readonly Dictionary<string, TextBox> _pathBoxes = new(StringComparer.Ordinal);
+
     private ToolManifest? _manifest;
     private ManifestAction? _action;
     private string? _executablePath;
     private CancellationTokenSource? _cancellation;
+
+    /// <summary>「下一步」按钮点了之后要先填进表单、再执行，所以值在这里中转一次。</summary>
+    private IReadOnlyDictionary<string, object?>? _pendingPresets;
 
     public MainWindow()
     {
@@ -42,7 +54,10 @@ public sealed partial class MainWindow : Window
         LoadPackages();
     }
 
-    // ------------------------------------------------------------------ 载入
+    // ------------------------------------------------------------------ 左栏：工具包与动作（按分组呈现）
+
+    /// <summary>记住上次选中的工具包/动作，下次打开直接回到那里。</summary>
+    private const string UiStateScope = "__ui__";
 
     private void LoadPackages()
     {
@@ -58,15 +73,25 @@ public sealed partial class MainWindow : Window
                     manifest));
             }
 
-            PackageList.ItemsSource = _packages;
+            RebuildPackageList();
+
             StatusText.Text = _packages.Count == 0
                 ? $"在 {pluginsRoot} 里没找到任何工具包"
                 : $"已载入 {_packages.Count} 个工具包，请选择";
 
-            // 只有一个/第一个工具包时直接选中，省一次点击。
-            if (_packages.Count > 0)
+            // 恢复上次的选择；没有记录就选第一个，省一次点击。
+            // 自动化冒烟可以用 SWPJ_SELECT_PACKAGE 钉住工具包——只靠 SWPJ_SELECT_ACTION 不够，
+            // 因为"恢复上次选择"会让那个序号套用到别的包上（脚本会静默失灵，踩过）。
+            var forcedPackage = Environment.GetEnvironmentVariable("SWPJ_SELECT_PACKAGE");
+            var lastPackage = _lastValues.Get(UiStateScope, "state", "lastPackage");
+
+            var target = _packages.FirstOrDefault(p => p.Manifest.Id == forcedPackage)
+                ?? _packages.FirstOrDefault(p => p.Manifest.Id == lastPackage)
+                ?? _packages.FirstOrDefault();
+
+            if (target is not null)
             {
-                PackageList.SelectedIndex = 0;
+                SelectPackage(target, restoreAction: true);
             }
         }
         catch (Exception ex)
@@ -75,13 +100,150 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void OnPackageSelectionChanged(object sender, SelectionChangedEventArgs e)
+    private string PackageGroupOf(PackageEntry entry) =>
+        _grouping.GetPackageGroup(entry.Manifest.Id ?? string.Empty)
+        ?? (string.IsNullOrWhiteSpace(entry.Manifest.Category) ? "未分组" : entry.Manifest.Category!);
+
+    private string ActionGroupOf(ManifestAction action) =>
+        _grouping.GetActionGroup(_manifest?.Id ?? string.Empty, action.Id ?? string.Empty)
+        ?? (string.IsNullOrWhiteSpace(action.Category) ? "未分组" : action.Category!);
+
+    /// <summary>按分组重建左侧工具包列表。分组顺序按名称，未分组排最后。</summary>
+    private void RebuildPackageList()
     {
-        if (PackageList.SelectedItem is not PackageEntry entry)
+        var filter = FilterBox?.Text?.Trim() ?? string.Empty;
+
+        var visible = _packages
+            .Where(p => Matches(filter, p.Display, p.Manifest.Description, p.Manifest.Id))
+            .ToList();
+
+        PackageGroupsPanel.Children.Clear();
+
+        foreach (var group in GroupBy(visible, PackageGroupOf))
+        {
+            PackageGroupsPanel.Children.Add(BuildGroup(group.Key, group.Items, entry =>
+            {
+                var selected = ReferenceEquals(entry.Manifest, _manifest);
+                return (entry.Display, selected, (Action)(() => SelectPackage(entry, restoreAction: false)),
+                    (Action)(() => _ = SetGroupAsync(isPackage: true, packageId: entry.Manifest.Id!, actionId: null, current: PackageGroupOf(entry))));
+            }));
+        }
+    }
+
+    private void RebuildActionList()
+    {
+        var filter = FilterBox?.Text?.Trim() ?? string.Empty;
+
+        var visible = _actions
+            .Where(a => Matches(filter, a.Display, a.Action.Title, a.Action.Command, a.Action.Description))
+            .ToList();
+
+        ActionGroupsPanel.Children.Clear();
+
+        if (_manifest is null)
         {
             return;
         }
 
+        foreach (var group in GroupBy(visible, a => ActionGroupOf(a.Action)))
+        {
+            ActionGroupsPanel.Children.Add(BuildGroup(group.Key, group.Items, entry =>
+            {
+                var selected = ReferenceEquals(entry.Action, _action);
+                return (entry.Display, selected, (Action)(() => SelectAction(entry)),
+                    (Action)(() => _ = SetGroupAsync(isPackage: false, packageId: _manifest!.Id!, actionId: entry.Action.Id!, current: ActionGroupOf(entry.Action))));
+            }));
+        }
+    }
+
+    /// <summary>把条目按分组名聚合，并让"未分组"排在最后。</summary>
+    private static List<(string Key, List<T> Items)> GroupBy<T>(List<T> items, Func<T, string> groupSelector) =>
+        items
+            .GroupBy(groupSelector, StringComparer.CurrentCulture)
+            .OrderBy(g => g.Key == "未分组" ? 1 : 0)
+            .ThenBy(g => g.Key, StringComparer.CurrentCulture)
+            .Select(g => (g.Key, g.ToList()))
+            .ToList();
+
+    private static bool Matches(string filter, params string?[] candidates) =>
+        filter.Length == 0
+        || candidates.Any(c => c is not null && c.Contains(filter, StringComparison.CurrentCultureIgnoreCase));
+
+    /// <summary>
+    /// 生成一个可折叠的分组：标题 + 组内条目。
+    /// 条目是按钮而不是 ListViewItem —— 这样跨分组的单选状态由自己维护，逻辑更直白，
+    /// 而且可以在每个条目上挂右键菜单（用来改分组）。
+    /// </summary>
+    private static Expander BuildGroup<T>(
+        string title,
+        List<T> items,
+        Func<T, (string Text, bool Selected, Action Select, Action ChangeGroup)> describe)
+    {
+        var list = new StackPanel { Spacing = 1 };
+
+        foreach (var item in items)
+        {
+            var (text, selected, select, changeGroup) = describe(item);
+
+            var button = new Button
+            {
+                Content = text,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Left,
+                Padding = new Thickness(8, 4, 8, 4),
+                Background = null,
+                BorderThickness = new Thickness(0),
+                FontWeight = selected ? FontWeights.SemiBold : FontWeights.Normal,
+            };
+            button.Click += (_, _) => select();
+
+            // 右键：把这一项移到别的分组（或清空以恢复清单里的默认分组）
+            var menu = new MenuFlyout();
+            var move = new MenuFlyoutItem { Text = "设置分组…" };
+            move.Click += (_, _) => changeGroup();
+            menu.Items.Add(move);
+            button.ContextFlyout = menu;
+
+            // 选中项左侧加一小段强调色，比整块高亮更稳妥（不依赖主题资源名）
+            var marker = new Border
+            {
+                Width = 3,
+                Background = selected
+                    ? (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"]
+                    : new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                CornerRadius = new CornerRadius(2),
+            };
+
+            var row = new Grid { ColumnSpacing = 6 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            Grid.SetColumn(marker, 0);
+            Grid.SetColumn(button, 1);
+            row.Children.Add(marker);
+            row.Children.Add(button);
+
+            list.Children.Add(row);
+        }
+
+        return new Expander
+        {
+            Header = $"{title}（{items.Count}）",
+            Content = list,
+            IsExpanded = true,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Margin = new Thickness(0, 2, 0, 0),
+        };
+    }
+
+    private void OnFilterChanged(object sender, TextChangedEventArgs e)
+    {
+        RebuildPackageList();
+        RebuildActionList();
+    }
+
+    private void SelectPackage(PackageEntry entry, bool restoreAction)
+    {
         _manifest = entry.Manifest;
         _executablePath = null;
 
@@ -93,34 +255,90 @@ public sealed partial class MainWindow : Window
                 action));
         }
 
-        ActionList.ItemsSource = null;
-        ActionList.ItemsSource = _actions;
+        _action = null;
         ActionTitle.Text = "请选择一个动作";
         ActionDescription.Text = string.Empty;
         FormPanel.Children.Clear();
         CommandLineBox.Text = string.Empty;
+        NextStepsPanel.Children.Clear();
+        NextStepsPanel.Visibility = Visibility.Collapsed;
         RunButton.IsEnabled = false;
 
+        RebuildPackageList();
+        RebuildActionList();
+
         StatusText.Text = $"{_manifest.Name} {_manifest.AppVersion} —— {_actions.Count} 个动作";
+        _lastValues.Set(UiStateScope, "state", "lastPackage", _manifest.Id);
 
         // 自动化冒烟用的钩子：设了 SWPJ_SELECT_ACTION=<序号> 就自动选中该动作并生成表单。
         // 存在的理由：动态表单是最容易在运行时出错的地方，需要一个不靠人点鼠标的验证入口。
-        if (int.TryParse(Environment.GetEnvironmentVariable("SWPJ_SELECT_ACTION"), out var index)
-            && index >= 0 && index < _actions.Count)
+        var hook = Environment.GetEnvironmentVariable("SWPJ_SELECT_ACTION");
+        if (int.TryParse(hook, out var index) && index >= 0 && index < _actions.Count)
         {
-            ActionList.SelectedIndex = index;
+            SelectAction(_actions[index]);
+            return;
+        }
+
+        if (restoreAction)
+        {
+            var lastAction = _lastValues.Get(UiStateScope, "state", $"lastAction:{_manifest.Id}");
+            var previous = _actions.FirstOrDefault(a => a.Action.Id == lastAction);
+            if (previous is not null)
+            {
+                SelectAction(previous);
+            }
         }
     }
 
-    private void OnActionSelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void SelectAction(ActionEntry entry, IReadOnlyDictionary<string, object?>? presets = null)
     {
-        if (ActionList.SelectedItem is not ActionEntry entry)
+        _action = entry.Action;
+        _pendingPresets = presets;
+        _lastValues.Set(UiStateScope, "state", $"lastAction:{_manifest?.Id}", entry.Action.Id);
+
+        BuildForm();
+        RebuildActionList();
+    }
+
+    /// <summary>设置某个工具包/动作的分组。留空表示恢复清单里的默认分组。</summary>
+    private async Task SetGroupAsync(bool isPackage, string packageId, string? actionId, string current)
+    {
+        var input = new TextBox
+        {
+            Text = current == "未分组" ? string.Empty : current,
+            PlaceholderText = "输入分组名；留空 = 用清单里的默认分组",
+        };
+
+        var dialog = new ContentDialog
+        {
+            Title = isPackage ? $"「{packageId}」的分组" : $"「{actionId}」的分组",
+            Content = input,
+            PrimaryButtonText = "保存",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = (Content as FrameworkElement)?.XamlRoot,
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
         {
             return;
         }
 
-        _action = entry.Action;
-        BuildForm();
+        if (isPackage)
+        {
+            _grouping.SetPackageGroup(packageId, input.Text);
+            RebuildPackageList();
+        }
+        else
+        {
+            _grouping.SetActionGroup(packageId, actionId!, input.Text);
+            RebuildActionList();
+        }
+
+        _grouping.Save();
+        StatusText.Text = string.IsNullOrWhiteSpace(input.Text)
+            ? "已恢复默认分组"
+            : $"已归入分组「{input.Text.Trim()}」";
     }
 
     // ------------------------------------------------------------------ 动态表单
@@ -130,6 +348,12 @@ public sealed partial class MainWindow : Window
         FormPanel.Children.Clear();
         _values.Clear();
         _valueSync.Clear();
+        _fieldControls.Clear();
+        _pathBoxes.Clear();
+
+        // 换了动作，上一轮的"下一步"建议就过期了
+        NextStepsPanel.Children.Clear();
+        NextStepsPanel.Visibility = Visibility.Collapsed;
 
         if (_action is null)
         {
@@ -140,9 +364,9 @@ public sealed partial class MainWindow : Window
         ActionTitle.Text = _action.Title ?? string.Empty;
         ActionDescription.Text = _action.Description ?? string.Empty;
 
-        if (_action.Danger != DangerLevel.None)
+        if (_action.DangerOrDefault != DangerLevel.None)
         {
-            ActionDescription.Text += _action.Danger == DangerLevel.Destructive
+            ActionDescription.Text += _action.DangerOrDefault == DangerLevel.Destructive
                 ? "\n⚠ 此动作会不可逆地修改数据，执行前会再次确认。"
                 : "\n⚠ 此动作会覆盖已有文件。";
         }
@@ -211,6 +435,7 @@ public sealed partial class MainWindow : Window
         RunButton.IsEnabled = true;
         CancelButton.IsEnabled = false;
         ProgressIndicator.Value = 0;
+        _pendingPresets = null;   // 预填值已经进到控件里了，别留着影响下次重建
         UpdateCommandLine();
         StatusText.Text = "填好后点执行";
     }
@@ -242,6 +467,16 @@ public sealed partial class MainWindow : Window
         var saved = field.Save && field.Type != "password" && field.Id is not null
             ? _lastValues.Get(_manifest?.Id ?? string.Empty, _action?.Id ?? string.Empty, field.Id)
             : null;
+
+        // "下一步"按钮带过来的预填值优先于上次的值：它是这一轮明确要用的参数
+        if (_pendingPresets is not null && field.Id is not null
+            && _pendingPresets.TryGetValue(field.Id, out var presetValue))
+        {
+            saved = ToStoredText(presetValue);
+        }
+
+        // 能接受拖放的输入框（路径类与文本类都算：文本里填路径也很常见）
+        TextBox? dropTarget = null;
 
         switch (field.Type)
         {
@@ -353,6 +588,7 @@ public sealed partial class MainWindow : Window
                     box.Text = saved;   // 回填上次用过的多值（每行一项）
                 }
 
+                dropTarget = box;
                 box.TextChanged += (_, _) => UpdateCommandLine();
                 stack.Children.Add(box);
 
@@ -414,6 +650,7 @@ public sealed partial class MainWindow : Window
                 box.Text = saved
                     ?? (field.Default is not null ? field.Default.ToString() ?? string.Empty : string.Empty);
 
+                dropTarget = box;
                 box.TextChanged += (_, _) => UpdateCommandLine();
 
                 if (field.Type is "file" or "directory")
@@ -456,7 +693,273 @@ public sealed partial class MainWindow : Window
             }
         }
 
+        // 登记控件（必填校验要高亮它）与拖放目标（资源管理器拖来的文件直接填进去）
+        if (field.Id is not null)
+        {
+            _fieldControls[field.Id] = dropTarget is not null ? dropTarget : stack;
+
+            if (dropTarget is not null)
+            {
+                _pathBoxes[field.Id] = dropTarget;
+                AttachDrop(dropTarget, field);
+            }
+        }
+
         return stack;
+    }
+
+    /// <summary>
+    /// 让输入框接受从资源管理器拖来的文件/文件夹。
+    ///
+    /// 拖放本身没法自动化验证，所以"拖进来之后文本变成什么"被抽成了
+    /// <see cref="PathDropLogic"/> 并单测覆盖；这里只负责事件接线与视觉反馈。
+    /// </summary>
+    private void AttachDrop(TextBox box, ManifestField field)
+    {
+        var multiValue = field.Repeatable || field.Type is "multiselect" or "files" or "paths" or "directories";
+        var originalBorder = box.BorderBrush;
+
+        box.AllowDrop = true;
+
+        box.DragOver += (_, e) =>
+        {
+            if (e.DataView.Contains(StandardDataFormats.StorageItems))
+            {
+                e.AcceptedOperation = DataPackageOperation.Copy;
+                e.DragUIOverride.Caption = multiValue ? "追加到这里" : "填到这里";
+                e.DragUIOverride.IsCaptionVisible = true;
+            }
+        };
+
+        box.DragEnter += (_, _) =>
+            box.BorderBrush = (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"];
+
+        box.DragLeave += (_, _) => box.BorderBrush = originalBorder;
+
+        box.Drop += async (_, e) =>
+        {
+            box.BorderBrush = originalBorder;
+
+            if (!e.DataView.Contains(StandardDataFormats.StorageItems))
+            {
+                return;
+            }
+
+            var paths = await ReadDroppedPathsAsync(e);
+            if (paths.Count == 0)
+            {
+                return;
+            }
+
+            box.Text = PathDropLogic.Apply(box.Text, paths, multiValue);
+            StatusText.Text = PathDropLogic.DescribeDrop(paths) + $"（填在「{field.Label}」）";
+        };
+    }
+
+    private static async Task<List<string>> ReadDroppedPathsAsync(DragEventArgs e)
+    {
+        var items = await e.DataView.GetStorageItemsAsync();
+
+        return items
+            .Select(item => item.Path)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .ToList();
+    }
+
+    /// <summary>
+    /// 必填校验：现在 required 不再只是标签上的一个星号。
+    /// 缺必填时直接拦住并高亮那个字段，避免生成一条少参数的"看起来对"的命令。
+    /// </summary>
+    private bool TryValidateRequired(out string message)
+    {
+        message = string.Empty;
+
+        if (_action is null)
+        {
+            return true;
+        }
+
+        foreach (var field in _action.Fields ?? [])
+        {
+            if (field.Required != true || field.Id is null)
+            {
+                continue;
+            }
+
+            _values.TryGetValue(field.Id, out var value);
+
+            var empty = value switch
+            {
+                null => true,
+                string text => string.IsNullOrWhiteSpace(text),
+                System.Collections.IEnumerable items => !items.GetEnumerator().MoveNext(),
+                _ => false,
+            };
+
+            if (!empty)
+            {
+                continue;
+            }
+
+            message = $"「{field.Label}」是必填项，请先填好再执行";
+
+            if (_fieldControls.TryGetValue(field.Id, out var control))
+            {
+                // FrameworkElement 本身没有边框属性，得落到 Control 上
+                if (control is Control target)
+                {
+                    target.BorderThickness = new Thickness(2);
+                    target.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.IndianRed);
+                }
+
+                _ = control.Focus(FocusState.Programmatic);
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private void ClearValidationMarks()
+    {
+        foreach (var control in _fieldControls.Values)
+        {
+            if (control is TextBox box)
+            {
+                box.BorderThickness = new Thickness(1);
+                box.ClearValue(Control.BorderBrushProperty);
+            }
+        }
+    }
+
+    /// <summary>执行完之后，按清单里声明的 nextSteps 呈现"下一步"按钮。</summary>
+    private void ShowNextSteps(string output)
+    {
+        NextStepsPanel.Children.Clear();
+
+        if (_action is null || _manifest is null)
+        {
+            NextStepsPanel.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var suggestions = NextStepMatcher.Match(_action, _manifest.Actions ?? [], output);
+
+        if (suggestions.Count == 0)
+        {
+            NextStepsPanel.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        NextStepsPanel.Children.Add(new TextBlock
+        {
+            Text = "下一步",
+            FontWeight = FontWeights.SemiBold,
+            Opacity = 0.75,
+        });
+
+        foreach (var suggestion in suggestions)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            var button = new Button { Content = suggestion.Title };
+            var captured = suggestion;
+            button.Click += async (_, _) => await RunSuggestionAsync(captured);
+            row.Children.Add(button);
+
+            if (!string.IsNullOrWhiteSpace(suggestion.Reason))
+            {
+                row.Children.Add(new TextBlock
+                {
+                    Text = suggestion.Reason,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Opacity = 0.75,
+                    TextWrapping = TextWrapping.Wrap,
+                });
+            }
+
+            NextStepsPanel.Children.Add(row);
+        }
+
+        NextStepsPanel.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>点"下一步"：切到目标动作、预填参数、直接执行。</summary>
+    private async Task RunSuggestionAsync(NextStepSuggestion suggestion)
+    {
+        var entry = _actions.FirstOrDefault(a => ReferenceEquals(a.Action, suggestion.Target));
+
+        if (entry is null)
+        {
+            StatusText.Text = "找不到这个动作（工具包可能变了）";
+            return;
+        }
+
+        SelectAction(entry, suggestion.Values);
+
+        // 从推荐"一键执行"时比手点更谨慎：只要目标动作会改动数据就先确认一次。
+        // 手点执行时 overwrite 不额外确认（用户已经明确选了这个动作），
+        // 但推荐只是"顺手一点"，不该让一次误触就去改系统——比如 scoop status 推荐的一键更新，
+        // 那会真的更新用户已安装的软件。
+        if (entry.Action.DangerOrDefault != DangerLevel.None)
+        {
+            var dialog = new ContentDialog
+            {
+                Title = entry.Action.Title,
+                Content = "这一步会改动数据："
+                    + (suggestion.Reason ?? "它是推荐的下一步")
+                    + "\n\n" + (entry.Action.ConfirmText ?? "确定现在执行？"),
+                PrimaryButtonText = "执行",
+                CloseButtonText = "取消",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = (Content as FrameworkElement)?.XamlRoot,
+            };
+
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                StatusText.Text = "已取消，动作已切好但没有执行";
+                return;
+            }
+        }
+
+        StatusText.Text = $"已切到「{entry.Action.Title}」，正在执行…";
+
+        await Task.Yield();
+        OnRunClicked(this, new RoutedEventArgs());
+    }
+
+    private void OnCopyCommandClicked(object sender, RoutedEventArgs e) =>
+        CopyToClipboard(CommandLineBox.Text, "命令");
+
+    private void OnCopyOutputClicked(object sender, RoutedEventArgs e) =>
+        CopyToClipboard(OutputBox.Text, "输出");
+
+    private void CopyToClipboard(string text, string what)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            StatusText.Text = $"没有可复制的{what}";
+            return;
+        }
+
+        var package = new DataPackage();
+        package.SetText(text);
+        Clipboard.SetContent(package);
+
+        StatusText.Text = $"已复制{what}（{text.Length} 字符）";
+    }
+
+    /// <summary>
+    /// 执行期间把会改变输入的控件禁掉，避免用户在跑的时候改参数造成困惑。
+    /// 面板是 StackPanel（不是 Control，没有 IsEnabled），所以用 IsHitTestVisible + 变暗来表示。
+    /// </summary>
+    private void SetBusy(bool busy)
+    {
+        FormPanel.IsHitTestVisible = !busy;
+        PackageGroupsPanel.IsHitTestVisible = !busy;
+        ActionGroupsPanel.IsHitTestVisible = !busy;
+        FilterBox.IsEnabled = !busy;
+        FormPanel.Opacity = busy ? 0.6 : 1.0;
     }
 
     private static void AppendLines(TextBox box, IEnumerable<string> lines)
@@ -611,7 +1114,28 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (_action.Danger == DangerLevel.Destructive)
+        // 防重入：见 _running 的说明（重复进入会让"取消"取消错对象）
+        if (_running)
+        {
+            StatusText.Text = "已经有一个任务在执行，请等它结束或先点取消";
+            return;
+        }
+
+        _running = true;
+
+        try
+        {
+            await RunCoreAsync();
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+
+    private async Task RunCoreAsync()
+    {
+        if (_action.DangerOrDefault == DangerLevel.Destructive)
         {
             var dialog = new ContentDialog
             {
@@ -630,6 +1154,15 @@ public sealed partial class MainWindow : Window
         }
 
         SyncValues();
+        ClearValidationMarks();
+
+        // 必填校验放在最前面：宁可不执行，也不要生成一条少参数的"看起来对"的命令
+        if (!TryValidateRequired(out var validationMessage))
+        {
+            StatusText.Text = validationMessage;
+            return;
+        }
+
         RememberValues();   // 记下这次真正用到的值（标了 save: true 的字段），供下次回填
 
         if (_executablePath is null)
@@ -676,6 +1209,7 @@ public sealed partial class MainWindow : Window
         _cancellation = new CancellationTokenSource();
         RunButton.IsEnabled = false;
         CancelButton.IsEnabled = true;
+        SetBusy(true);
         ProgressIndicator.Value = 0;
 
         // 先转圈，等真的解析到百分比再切成确定进度。
@@ -763,6 +1297,12 @@ public sealed partial class MainWindow : Window
 
         StatusText.Text = $"{verdict.Meaning}（退出码 {result.ExitCode}）";
 
+        // 按清单里声明的规则推荐下一步（例如 scoop status 跑完 → 一键更新）
+        // 用执行结果里权威的输出行，**不要**读 OutputBox.Text：
+        // 界面上的行是由 Progress<T> 异步投递过来的，跑到这里时末尾几行可能还没落地，
+        // 拿它去匹配推荐规则会漏判（实测过：scoop status 明明有更新，却什么也没推荐）。
+        ShowNextSteps(string.Join(Environment.NewLine, result.Lines.Select(line => line.Text)));
+
         if (string.Equals(_action.Output?.OpenOnFinish, "explorer", StringComparison.Ordinal))
         {
             var target = workingDirectory ?? _values.GetValueOrDefault("outputDir")?.ToString();
@@ -778,17 +1318,42 @@ public sealed partial class MainWindow : Window
 
     private void OnCancelClicked(object sender, RoutedEventArgs e)
     {
-        StatusText.Text = "正在取消…";
-        _cancellation?.Cancel();
+        // 原先这里无条件显示"正在取消…"——结果"其实没取消成"也会显示同一句话，把问题掩盖了。
+        // 现在如实报告：没有在跑的任务 / 取消请求已发出 / 取消出错。
+        if (_cancellation is null)
+        {
+            StatusText.Text = "当前没有正在执行的任务（可能已经结束）";
+            return;
+        }
+
+        try
+        {
+            _cancellation.Cancel();
+            StatusText.Text = "正在取消…";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = "取消失败：" + ex.Message;
+        }
     }
 
     private void FinishRun()
     {
         RunButton.IsEnabled = true;
         CancelButton.IsEnabled = false;
+        SetBusy(false);
         _cancellation?.Dispose();
         _cancellation = null;
     }
+
+    /// <summary>
+    /// 防重入：一次只能有一个任务在跑。
+    ///
+    /// 这不只是"保险"——没有它会出现一个很隐蔽的 bug：第二次进入会 new 一个新的 CTS 覆盖字段，
+    /// 而**真正在跑的那个任务持有的是第一个 token**；此时点"取消"取消的是新 CTS，
+    /// 老任务照样跑完（界面还显示"正在取消…"）。实测踩过这个坑，很难从现象上看出来。
+    /// </summary>
+    private bool _running;
 
     private string? ResolveWorkingDirectory()
     {

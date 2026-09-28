@@ -37,6 +37,10 @@
       "items": { "type": "string" },
       "uniqueItems": true
     },
+    "category": {
+      "type": "string",
+      "description": "这个工具包在宿主左侧列表里的默认分组（例如「包管理」「压缩归档」）。用户可以自己改分组，改了以用户的为准。注意与字段级的 group 区分：那个是表单内的小节。"
+    },
     "sources": {
       "type": "array",
       "description": "参数知识的来源清单。整个工具包级别的来源。",
@@ -186,6 +190,15 @@
           "description": "destructive 表示会不可逆地破坏用户数据，宿主必须二次确认。"
         },
         "confirmText": { "type": "string" },
+        "category": {
+          "type": "string",
+          "description": "这个动作在左侧列表里的默认分组（例如「查询」「安装」「缓存」）。用户可以自己改。不写则归入「未分组」。"
+        },
+        "nextSteps": {
+          "type": "array",
+          "description": "执行完之后可以推荐给用户的下一步。宿主只做正则匹配与按钮呈现，不理解任何具体软件的语义——这样推荐逻辑可审计、可评审，也不需要往宿主里塞特例。",
+          "items": { "$ref": "#/$defs/nextStep" }
+        },
         "workingDirectory": {
           "enum": ["inherit", "outputDir", "userSelected"],
           "description": "覆盖工具包级的 workingDirectory。7z 的 x/e 默认解压到当前目录，必须覆盖。"
@@ -336,6 +349,34 @@
         "pattern": { "type": "string" },
         "unit": { "enum": ["percent", "bytes", "count", "unknown"] },
         "group": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "nextStep": {
+      "type": "object",
+      "required": ["title", "action"],
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "按钮上的文字，例如「一键更新全部」。"
+        },
+        "action": {
+          "type": "string",
+          "description": "要点哪个动作（同一工具包内的动作 id）。写错的话宿主会静默忽略这条，不会点了才报错。"
+        },
+        "when": {
+          "type": "string",
+          "description": "可选的正则：在刚执行完的输出里命中才推荐（多行匹配）。不写则总是推荐。正则本身写错时这条被忽略，不会让界面崩。"
+        },
+        "reason": {
+          "type": "string",
+          "description": "给用户看的理由，例如「检测到有可用更新」。"
+        },
+        "values": {
+          "type": "object",
+          "description": "可选：执行目标动作前预填的字段值（字段 id → 值）。",
+          "additionalProperties": true
+        }
       }
     },
     "example": {

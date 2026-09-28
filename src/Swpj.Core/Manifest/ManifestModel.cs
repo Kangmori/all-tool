@@ -16,6 +16,13 @@ public sealed class ToolManifest
     public string? Description { get; init; }
     public string? Homepage { get; init; }
     public string? License { get; init; }
+
+    /// <summary>
+    /// 工具包在界面上的默认分组（例如"包管理""压缩归档"）。可被用户在宿主里自定义覆盖。
+    /// 注意与字段级的 <c>group</c> 区分：那个是"表单内的小节"，这个是"左侧列表的分组"。
+    /// </summary>
+    public string? Category { get; init; }
+
     public List<string>? Tags { get; init; }
     public List<ManifestSource>? Sources { get; init; }
     public LocateSpec? Locate { get; init; }
@@ -85,7 +92,25 @@ public sealed class ManifestAction
     public List<string>? CommandArgs { get; init; }
     public List<ManifestSource>? Sources { get; init; }
     public string? Danger { get; init; }
+
+    /// <summary>
+    /// 规范化后的危险级别：**没写 danger 就是 none**。
+    ///
+    /// 别直接用 <see cref="Danger"/> 去比 —— 它是可空的，`null != "none"` 在 C# 里是 true，
+    /// 于是每个没标 danger 的只读动作都会被当成"会覆盖数据"（实测踩过：scoop status 也挂着
+    /// "⚠ 此动作会覆盖已有文件。"）。界面一律用这个属性判断。
+    /// </summary>
+    public string DangerOrDefault =>
+        string.IsNullOrWhiteSpace(Danger) ? DangerLevel.None : Danger.Trim();
+
     public string? ConfirmText { get; init; }
+
+    /// <summary>动作在左侧列表里的默认分组（例如"查询""安装""缓存"）。可被用户自定义覆盖。</summary>
+    public string? Category { get; init; }
+
+    /// <summary>执行完之后可以推荐的下一步（见 <see cref="NextStepSpec"/>）。</summary>
+    public List<NextStepSpec>? NextSteps { get; init; }
+
     public string? WorkingDirectory { get; init; }
     public List<ManifestField>? Fields { get; init; }
     public List<string>? FixedArgs { get; init; }
@@ -155,6 +180,31 @@ public sealed class ManifestExample
     public string? Title { get; init; }
     public List<string>? Args { get; init; }
     public int ExpectExitCode { get; init; }
+}
+
+/// <summary>
+/// 一条"执行完之后可以推荐什么"的规则。
+///
+/// 它是**声明式**的：宿主只做正则匹配与按钮呈现，不需要理解任何具体软件的语义。
+/// 这样推荐逻辑既可审计（有出处、可评审），又不必在宿主里为每个软件写特例——
+/// 与本项目"清单里不写代码"的底线一致。
+/// </summary>
+public sealed class NextStepSpec
+{
+    /// <summary>按钮上的文字，例如"一键更新全部"。</summary>
+    public string? Title { get; init; }
+
+    /// <summary>要点哪个动作（同一工具包内的动作 id）。</summary>
+    public string? Action { get; init; }
+
+    /// <summary>可选的正则：在刚执行完的输出里命中才推荐（多行匹配）。不填则总是推荐。</summary>
+    public string? When { get; init; }
+
+    /// <summary>给用户看的理由，例如"检测到有可用更新"。</summary>
+    public string? Reason { get; init; }
+
+    /// <summary>可选：执行目标动作前预填的字段值（字段 id → 值）。</summary>
+    public Dictionary<string, object?>? Values { get; init; }
 }
 
 /// <summary>字段风格的字符串常量（与 schema 的 enum 一致）。</summary>

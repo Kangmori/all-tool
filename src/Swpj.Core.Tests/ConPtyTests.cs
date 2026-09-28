@@ -11,6 +11,7 @@ namespace Swpj.Core.Tests;
 /// 并断言进度百分比确实出现了。因为"7z 被重定向时不报进度"正是引入 ConPTY 的唯一理由，
 /// 这条断言就是那个理由的证明。
 /// </summary>
+[Collection(RealProcessCollection.Name)]
 public class ConPtyTests
 {
     private static string CmdExe => Path.Combine(Environment.SystemDirectory, "cmd.exe");

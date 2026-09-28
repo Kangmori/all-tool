@@ -5,19 +5,19 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="swpj —— 命令行软件的可视化宿主">
 
-    <!-- 结构尽量简单：左侧选工具包与动作，中间是自动生成的表单，下面是实时输出。
-         表单控件由代码按清单动态生成（见 MainWindow.xaml.cs 的 BuildForm）。 -->
+    <!-- 结构：左侧是可分组的工具包/动作列表，中间是自动生成的表单，下面是实时输出。
+         列表与表单都由代码按清单动态生成（见 MainWindow.xaml.cs）。 -->
     <Grid Padding="12" RowSpacing="10" ColumnSpacing="14">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="300" />
+            <ColumnDefinition Width="320" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
-            <RowDefinition Height="240" />
+            <RowDefinition Height="220" />
         </Grid.RowDefinitions>
 
-        <!-- 左：工具包与动作 -->
+        <!-- ============ 左：工具包与动作（按分组展示） ============ -->
         <Grid Grid.Row="0" Grid.Column="0" RowSpacing="6">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -26,23 +26,27 @@
                 <RowDefinition Height="3*" />
             </Grid.RowDefinitions>
 
-            <TextBlock Text="工具包" Style="{StaticResource SubtitleTextBlockStyle}" />
-            <ListView x:Name="PackageList" Grid.Row="1" SelectionMode="Single"
-                      SelectionChanged="OnPackageSelectionChanged"
-                      DisplayMemberPath="Display" />
+            <TextBox x:Name="FilterBox" PlaceholderText="筛选工具包与动作…"
+                     TextChanged="OnFilterChanged" />
 
-            <TextBlock Grid.Row="2" Text="动作" Style="{StaticResource SubtitleTextBlockStyle}" />
-            <ListView x:Name="ActionList" Grid.Row="3" SelectionMode="Single"
-                      SelectionChanged="OnActionSelectionChanged"
-                      DisplayMemberPath="Display" />
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="PackageGroupsPanel" Spacing="2" />
+            </ScrollViewer>
+
+            <TextBlock Grid.Row="2" Text="动作" Style="{StaticResource SubtitleTextBlockStyle}"
+                       Margin="0,6,0,0" />
+            <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="ActionGroupsPanel" Spacing="2" />
+            </ScrollViewer>
         </Grid>
 
-        <!-- 中：表单与执行 -->
+        <!-- ============ 中：表单、下一步、执行 ============ -->
         <Grid Grid.Row="0" Grid.Column="1" RowSpacing="8">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -60,24 +64,33 @@
             <TextBox Grid.Row="3" x:Name="CommandLineBox" Header="将要执行的命令（只读，便于核对）"
                      IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" />
 
-            <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="10">
+            <!-- 执行完之后按清单里的 nextSteps 呈现"下一步"按钮 -->
+            <StackPanel Grid.Row="4" x:Name="NextStepsPanel" Spacing="6" Visibility="Collapsed" />
+
+            <StackPanel Grid.Row="5" Orientation="Horizontal" Spacing="10">
                 <Button x:Name="RunButton" Content="执行" Click="OnRunClicked"
                         Style="{StaticResource AccentButtonStyle}" IsEnabled="False" />
                 <Button x:Name="CancelButton" Content="取消" Click="OnCancelClicked" IsEnabled="False" />
+                <Button x:Name="CopyCommandButton" Content="复制命令" Click="OnCopyCommandClicked" />
                 <TextBlock x:Name="StatusText" VerticalAlignment="Center" TextWrapping="Wrap" />
             </StackPanel>
 
-            <ProgressBar Grid.Row="5" x:Name="ProgressIndicator" Minimum="0" Maximum="100" ShowError="False" />
+            <ProgressBar Grid.Row="6" x:Name="ProgressIndicator" Minimum="0" Maximum="100" ShowError="False" />
         </Grid>
 
-        <!-- 下：实时输出 -->
+        <!-- ============ 下：实时输出 ============ -->
         <Grid Grid.Row="1" Grid.ColumnSpan="2" RowSpacing="4">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <TextBlock Text="输出" Style="{StaticResource SubtitleTextBlockStyle}" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="输出" Style="{StaticResource SubtitleTextBlockStyle}" VerticalAlignment="Center" />
+                <Button x:Name="CopyOutputButton" Content="复制输出" Click="OnCopyOutputClicked"
+                        Padding="8,2,8,2" FontSize="12" />
+            </StackPanel>
+
             <TextBox Grid.Row="1" x:Name="OutputBox" IsReadOnly="True" AcceptsReturn="True"
                      TextWrapping="NoWrap" FontFamily="Consolas"
                      ScrollViewer.VerticalScrollBarVisibility="Auto"

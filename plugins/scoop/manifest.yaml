@@ -23,6 +23,7 @@ description: "Scoop —— Windows 上的命令行安装器（Git 风格）。�
 homepage: https://scoop.sh/
 license: "Unlicense 或 MIT（软件自带 LICENSE 的 SPDX 标识：UNLICENSE or MIT）"
 tags: [包管理, 安装器, 系统工具]
+category: 包管理
 
 sources:
   - title: "scoop 0.5.3 本机帮助快照（28 个命令的结构化帮助输出）"
@@ -78,6 +79,7 @@ actions:
 
   # =================================================================== help
   - id: help
+    category: 其它
     title: 查看帮助
     description: "列出全部命令，或查看某个命令的完整帮助（scoop help）"
     command: help
@@ -109,6 +111,7 @@ actions:
 
   # =================================================================== alias
   - id: alias-list
+    category: 别名
     title: 别名 —— 列出
     description: "列出已定义的自定义子命令（scoop alias list）"
     command: alias
@@ -135,6 +138,7 @@ actions:
       - { title: "列出别名并显示描述", args: ["alias", "list", "--verbose"], expectExitCode: 0 }
 
   - id: alias-add
+    category: 别名
     title: 别名 —— 新增
     description: "新增一个自定义 scoop 子命令（scoop alias add）"
     command: alias
@@ -172,6 +176,7 @@ actions:
       showCommandLine: true
 
   - id: alias-rm
+    category: 别名
     title: 别名 —— 删除
     description: "删除一个自定义 scoop 子命令（scoop alias rm）。会删除 shim 目录里的 scoop-<name>.ps1 并清掉配置项。"
     command: alias
@@ -197,6 +202,7 @@ actions:
 
   # =================================================================== bucket
   - id: bucket-list
+    category: 桶管理
     title: Bucket —— 列出
     description: "列出本机已添加的 bucket（scoop bucket list）"
     command: bucket
@@ -220,6 +226,7 @@ actions:
       - { title: "列出已添加的 bucket", args: ["bucket", "list"], expectExitCode: 0 }
 
   - id: bucket-known
+    category: 桶管理
     title: Bucket —— 列出已知 bucket
     description: "列出社区已知的 bucket 名（scoop bucket known）"
     command: bucket
@@ -243,6 +250,7 @@ actions:
       - { title: "列出已知 bucket", args: ["bucket", "known"], expectExitCode: 0 }
 
   - id: bucket-add
+    category: 桶管理
     title: Bucket —— 添加
     description: "添加一个 bucket（git 仓库）（scoop bucket add）"
     command: bucket
@@ -278,6 +286,7 @@ actions:
       showCommandLine: true
 
   - id: bucket-rm
+    category: 桶管理
     title: Bucket —— 删除
     description: "删除一个 bucket 及其本地清单（scoop bucket rm）。会递归删除 bucket 目录。"
     command: bucket
@@ -303,6 +312,7 @@ actions:
 
   # =================================================================== cache
   - id: cache-show
+    category: 缓存
     title: 缓存 —— 查看
     description: "查看下载缓存（scoop cache show），可只显示某些应用"
     command: cache
@@ -329,6 +339,7 @@ actions:
       - { title: "查看全部缓存", args: ["cache", "show"], expectExitCode: 0 }
 
   - id: cache-rm
+    category: 缓存
     title: 缓存 —— 删除
     description: "删除下载缓存（scoop cache rm）。删除后相关安装需要重新下载。"
     command: cache
@@ -363,6 +374,7 @@ actions:
 
   # =================================================================== cat
   - id: cat
+    category: 定位与查看
     title: 查看应用清单
     description: "显示指定应用的 manifest JSON（scoop cat）"
     command: cat
@@ -388,6 +400,11 @@ actions:
 
   # =================================================================== checkup
   - id: checkup
+    nextSteps:
+      - title: 更新全部应用
+        action: update
+        reason: 检查完就可以顺手更新
+    category: 诊断
     title: 环境体检
     description: "运行一组诊断检查，找出可能导致 scoop 出问题的地方（scoop checkup）"
     command: checkup
@@ -406,6 +423,7 @@ actions:
 
   # =================================================================== cleanup
   - id: cleanup
+    category: 应用管理
     title: 清理旧版本
     description: "删除应用的旧版本目录与过期缓存（scoop cleanup）"
     command: cleanup
@@ -464,6 +482,7 @@ actions:
 
   # =================================================================== config
   - id: config-get
+    category: 配置
     title: 配置 —— 读取
     description: "读取全部配置，或某个配置项的值（scoop config）"
     command: config
@@ -528,6 +547,7 @@ actions:
       - { title: "读取 scoop_branch", args: ["config", "scoop_branch"], expectExitCode: 0 }
 
   - id: config-set
+    category: 配置
     title: 配置 —— 写入
     description: "设置一个配置项的值（scoop config <name> <value>）"
     command: config
@@ -596,6 +616,7 @@ actions:
       showCommandLine: true
 
   - id: config-rm
+    category: 配置
     title: 配置 —— 删除
     description: "删除一个配置项（scoop config rm <name>）"
     command: config
@@ -659,6 +680,7 @@ actions:
 
   # =================================================================== create
   - id: create
+    category: 其它
     title: 生成应用清单骨架
     description: "根据一个下载 URL 生成自定义 manifest 骨架（scoop create）。该命令是交互式向导，会依次询问应用名与版本。"
     command: create
@@ -690,6 +712,7 @@ actions:
 
   # =================================================================== depends
   - id: depends
+    category: 应用管理
     title: 查看依赖
     description: "按安装顺序列出某个应用的依赖（scoop depends）"
     command: depends
@@ -720,6 +743,7 @@ actions:
 
   # =================================================================== download
   - id: download
+    category: 应用管理
     title: 只下载不安装
     description: "把应用下载到缓存并校验哈希，但不安装（scoop download）"
     command: download
@@ -791,6 +815,7 @@ actions:
 
   # =================================================================== export
   - id: export
+    category: 导入导出
     title: 导出安装清单
     description: "把已安装的应用、bucket（以及可选的配置）导出成 JSON 打到屏幕上（scoop export）"
     command: export
@@ -824,6 +849,7 @@ actions:
 
   # =================================================================== hold
   - id: hold
+    category: 应用管理
     title: 锁定应用版本
     description: "锁定应用，使其不再被 scoop update 更新（scoop hold）"
     command: hold
@@ -860,6 +886,7 @@ actions:
       showCommandLine: true
 
   - id: unhold
+    category: 应用管理
     title: 解除版本锁定
     description: "解除锁定，让应用重新参与更新（scoop unhold）"
     command: unhold
@@ -897,6 +924,7 @@ actions:
 
   # =================================================================== home
   - id: home
+    category: 应用管理
     title: 打开主页
     description: "用默认浏览器打开应用的主页（scoop home）"
     command: home
@@ -919,6 +947,7 @@ actions:
 
   # =================================================================== import
   - id: import
+    category: 导入导出
     title: 导入安装清单
     description: "按 scoopfile.json 复刻安装：设置配置、添加 bucket、安装应用（scoop import）"
     command: import
@@ -950,6 +979,7 @@ actions:
 
   # =================================================================== info
   - id: info
+    category: 应用管理
     title: 应用信息
     description: "显示应用的信息（已装版本、来源、官网、bin、快捷方式等）（scoop info）"
     command: info
@@ -989,6 +1019,7 @@ actions:
 
   # =================================================================== install
   - id: install
+    category: 应用管理
     title: 安装应用
     description: "安装一个或多个应用（scoop install）"
     command: install
@@ -1085,6 +1116,11 @@ actions:
 
   # =================================================================== list
   - id: list
+    nextSteps:
+      - title: 看看有没有可用更新
+        action: status
+        reason: 先查状态，再决定要不要更新
+    category: 应用管理
     title: 已安装列表
     description: "列出已安装的应用，可按查询词过滤（scoop list）"
     command: list
@@ -1114,6 +1150,7 @@ actions:
 
   # =================================================================== prefix
   - id: prefix
+    category: 定位与查看
     title: 应用安装路径
     description: "返回应用的安装路径（scoop prefix）"
     command: prefix
@@ -1144,6 +1181,7 @@ actions:
 
   # =================================================================== reset
   - id: reset
+    category: 应用管理
     title: 重置（切换版本）
     description: "把某个应用重新设为激活版本，解决 shim / 环境变量冲突（scoop reset）"
     command: reset
@@ -1182,6 +1220,7 @@ actions:
 
   # =================================================================== search
   - id: search
+    category: 应用管理
     title: 搜索应用
     description: "在本地 bucket 里搜索可安装的应用（scoop search）"
     command: search
@@ -1213,6 +1252,7 @@ actions:
 
   # =================================================================== shim
   - id: shim-list
+    category: Shim 管理
     title: Shim —— 列出
     description: "列出 shim（可用正则过滤）（scoop shim list）"
     command: shim
@@ -1248,6 +1288,7 @@ actions:
       - { title: "列出全部 shim", args: ["shim", "list"], expectExitCode: 0 }
 
   - id: shim-info
+    category: Shim 管理
     title: Shim —— 查看信息
     description: "显示某个 shim 的来源、类型与可用备选（scoop shim info）"
     command: shim
@@ -1284,6 +1325,7 @@ actions:
       - { title: "查看 7z shim 的信息", args: ["shim", "info", "7z"], expectExitCode: 0 }
 
   - id: shim-add
+    category: Shim 管理
     title: Shim —— 新增
     description: "为某个可执行文件新增自定义 shim（scoop shim add）"
     command: shim
@@ -1341,6 +1383,7 @@ actions:
       showCommandLine: true
 
   - id: shim-alter
+    category: Shim 管理
     title: Shim —— 切换来源
     description: "在多个提供同名命令的应用之间切换 shim 的默认来源（scoop shim alter）"
     command: shim
@@ -1375,6 +1418,7 @@ actions:
       showCommandLine: true
 
   - id: shim-rm
+    category: Shim 管理
     title: Shim —— 删除
     description: "删除 shim（scoop shim rm）。帮助原文警告：可能删掉应用清单添加的 shim。"
     command: shim
@@ -1409,6 +1453,23 @@ actions:
 
   # =================================================================== status
   - id: status
+    nextSteps:
+      # when 的正则是**对着真实输出验证过**的（2026-09-27，scoop 0.5.3）：
+      # `scoop status --local` 打印的是表格，形如
+      #     Name        Installed Version Latest Version   Missing Dependencies Info
+      #     ffmpeg      9.0.1             9.0.2
+      # 下面这条只命中"已装版本 + 最新版本"两列都有值的数据行（实测命中当时有更新的 5 行），
+      # 不会命中表头与分隔行。最初凭印象写的 "Updates are available" 在真实输出里 0 命中——
+      # 所以这里必须写经过实测的模式，不能靠猜。
+      - title: 一键更新全部
+        action: update
+        when: '(?m)^\S+\s+\d\S*\s+\d'
+        reason: 表格里有"已装版本 ≠ 最新版本"的应用
+      - title: 清掉旧版本释放空间
+        action: cleanup
+        when: '(?m)^\S+\s+\d\S*\s+\d'
+        reason: 更新之后通常会留下旧版本
+    category: 应用管理
     title: 状态检查
     description: "显示已安装应用的状态与可更新版本（scoop status）"
     command: status
@@ -1441,6 +1502,7 @@ actions:
 
   # =================================================================== uninstall
   - id: uninstall
+    category: 应用管理
     title: 卸载应用
     description: "卸载一个或多个应用（scoop uninstall）"
     command: uninstall
@@ -1492,6 +1554,7 @@ actions:
 
   # =================================================================== update
   - id: update
+    category: 应用管理
     title: 更新应用 / 更新 scoop
     description: "更新指定应用；不填应用时更新 scoop 自身（scoop update）"
     command: update
@@ -1591,6 +1654,7 @@ actions:
 
   # =================================================================== virustotal
   - id: virustotal
+    category: 应用管理
     title: VirusTotal 查询
     description: "在 virustotal.com 上查询应用的哈希或下载 URL（scoop virustotal）。需要先配置 virustotal_api_key。"
     command: virustotal
@@ -1657,6 +1721,7 @@ actions:
 
   # =================================================================== which
   - id: which
+    category: 定位与查看
     title: 定位程序
     description: "定位用 scoop 安装的 shim / 可执行文件路径（scoop which）"
     command: which

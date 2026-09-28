@@ -73,7 +73,9 @@ pwsh -File scripts/capture-app-window.ps1 -ActionIndex 1   # 只截应用窗口
 
 ## 6. 当前进度（一句话）
 
-规范 v1 已定稿；**宿主（WinUI 3）可工作并经界面冒烟验证**（UIA 填表 → 点执行 → 真实 7z 解压 →
-**进度条走到 100** → 输出与产物均正确）；工具包有 **7-Zip**（11 动作 / 64 字段）与 **Scoop**（40 动作 / 80 字段）；
-CI 与每周文档漂移检测均已接入。**下一步动作以 `docs/ai/project-state.json` 的 `nextActions` 为准**
-（当前是 N7 第三个工具包 uv、N8 界面验收「取消」）。
+规范 v1 已定稿（含 `category` 分组与 `nextSteps` 推荐下一步）；**宿主（WinUI 3）可工作并经界面冒烟验证**
+（UIA 填表 → 点执行 → 真实 7z 解压 → **进度条走到 100** → 输出与产物均正确；另有取消场景）；
+界面支持**拖放文件填路径、分组（用户可自定义）、执行后一键执行推荐、必填校验、记住上次输入**；
+工具包有 **7-Zip**（11 动作 / 64 字段）、**Scoop**（40 动作 / 80 字段）、**uv**（26 动作 / 125 字段）；
+CI 与每周文档漂移检测均已接入；`pwsh -File scripts/publish-app.ps1` 可产出可交付目录。
+**下一步动作以 `docs/ai/project-state.json` 的 `nextActions` 为准。**

@@ -45,9 +45,13 @@ if (-not (Test-Path $archive)) { throw "准备测试压缩包失败" }
 Write-Host "测试数据：$archive ($([math]::Round((Get-Item $archive).Length/1MB)) MB) → 解压到 $outDir"
 
 # ------------------------------------------------------------------ 2. 启动应用
+# 必须同时钉住工具包：宿主现在会"恢复上次选中的工具包/动作"，
+# 只设 SWPJ_SELECT_ACTION 的话，序号会被套用到上次那个包上（脚本会失灵）。
+$env:SWPJ_SELECT_PACKAGE = '7zip'
 $env:SWPJ_SELECT_ACTION = "$ActionIndex"
 $process = Start-Process -FilePath $Exe -PassThru
 Remove-Item Env:\SWPJ_SELECT_ACTION -ErrorAction SilentlyContinue
+Remove-Item Env:\SWPJ_SELECT_PACKAGE -ErrorAction SilentlyContinue
 
 $automation = [System.Windows.Automation.AutomationElement]
 $scope = [System.Windows.Automation.TreeScope]
@@ -83,12 +87,34 @@ public static class SwpjUiWin32 {
     # ------------------------------------------------------------------ 3. 列出输入框
     $editCondition = New-Object System.Windows.Automation.PropertyCondition(
         $automation::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit)
-    $edits = $window.FindAll($scope::Descendants, $editCondition)
-    Write-Host "找到 $($edits.Count) 个输入框："
+
+    # 只取"表单字段"：按 AutomationId 排掉界面固定控件（筛选框、命令预览、输出区）。
+    # 不能按序号硬取——界面加一个输入框就会全部错位（踩过）。
+    function Get-FieldEdits {
+        $all = $window.FindAll($scope::Descendants, $editCondition)
+        $fields = @()
+        foreach ($e in $all) {
+            $id = $e.Current.AutomationId
+            if ($id -in @('FilterBox', 'CommandLineBox', 'OutputBox')) { continue }
+            $fields += $e
+        }
+        return $fields
+    }
+
+    # 输出区同样按 AutomationId 找，不靠"最后一个输入框"这种位置假设
+    function Get-OutputBox {
+        foreach ($e in $window.FindAll($scope::Descendants, $editCondition)) {
+            if ($e.Current.AutomationId -eq 'OutputBox') { return $e }
+        }
+        return $null
+    }
+
+    $edits = Get-FieldEdits
+    Write-Host "找到 $($edits.Count) 个表单输入框："
     for ($i = 0; $i -lt $edits.Count; $i++) {
         $value = ''
         try { $value = $edits[$i].GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value } catch { $value = '<读不到>' }
-        Write-Host ("  [{0}] name='{1}' value='{2}'" -f $i, $edits[$i].Current.Name, $value)
+        Write-Host ("  [{0}] id='{1}' value='{2}'" -f $i, $edits[$i].Current.AutomationId, $value)
     }
 
     if ($edits.Count -lt 2) { throw "输入框数量不足，无法填表" }
@@ -133,10 +159,10 @@ public static class SwpjUiWin32 {
             } catch { }
         }
 
-        $editsNow = $window.FindAll($scope::Descendants, $editCondition)
-        if ($editsNow.Count -gt 0) {
+        $editsNow = Get-FieldEdits
+        if ($editsNow.Count -gt 0 -and (Get-OutputBox)) {
             try {
-                $outputText = $editsNow[$editsNow.Count - 1].GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
+                $outputText = (Get-OutputBox).GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
             } catch { }
         }
         if ($outputText -match '退出码|失败|取消') { break }
@@ -187,7 +213,7 @@ public static class SwpjUiWin32 {
     Start-Sleep -Milliseconds 1200
 
     # 「添加到压缩包」的表单：0=压缩包，1=要压缩的文件/文件夹（每行一项）
-    $edits = $window.FindAll($scope::Descendants, $editCondition)
+    $edits = Get-FieldEdits
     $edits[0].GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($cancelArchive)
     $edits[1].GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($big)
     Start-Sleep -Milliseconds 600
@@ -212,9 +238,9 @@ public static class SwpjUiWin32 {
     $cancelOutput = ''
     while ((Get-Date) -lt $cancelDeadline) {
         Start-Sleep -Milliseconds 500
-        $editsNow = $window.FindAll($scope::Descendants, $editCondition)
-        if ($editsNow.Count -gt 0) {
-            try { $cancelOutput = $editsNow[$editsNow.Count - 1].GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value } catch { }
+        $editsNow = Get-FieldEdits
+        if ($editsNow.Count -gt 0 -and (Get-OutputBox)) {
+            try { $cancelOutput = (Get-OutputBox).GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value } catch { }
         }
         if ($cancelOutput -match '取消') { break }
     }

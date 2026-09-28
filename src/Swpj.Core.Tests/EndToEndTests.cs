@@ -11,6 +11,7 @@ namespace Swpj.Core.Tests;
 /// 这正是界面点「执行」时走的路径，只是把 WinUI 控件换成了直接调用。
 /// 若本机没装 7-Zip，用例会直接返回（视为通过），以便在没有该软件的环境里也能跑测试。
 /// </summary>
+[Collection(RealProcessCollection.Name)]
 public class EndToEndTests
 {
     /// <summary>

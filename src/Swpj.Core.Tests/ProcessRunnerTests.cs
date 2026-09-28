@@ -6,6 +6,7 @@ namespace Swpj.Core.Tests;
 /// <summary>
 /// 进程执行引擎的测试。会真的启动子进程（cmd / powershell），因此每个用例都自带超时上限。
 /// </summary>
+[Collection(RealProcessCollection.Name)]
 public class ProcessRunnerTests
 {
     private static ProcessRunRequest Request(params string[] arguments) => new()
