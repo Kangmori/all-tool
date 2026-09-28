@@ -1,3 +1,7 @@
+<!-- 本文档是本项目自己写的实测记录，**不是**第三方文档快照。
+     docs/reference/ 下那些第三方快照（7-Zip CHM 提取、scoop wiki、uv 文档、Microsoft Learn 页面）
+     在转公开仓库前会被清理，本文档放在 docs/ai/ 下不受影响。 -->
+
 # Windows 自带命令工具包 —— 共用事实与实测记录
 
 > 本文档是这一批 12 个工具包（`ping` / `ipconfig` / `tracert` / `nslookup` / `netstat` /

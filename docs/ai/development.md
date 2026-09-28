@@ -184,12 +184,12 @@ uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py
 5. **开关溯源（启发式，只提示不阻断）**：把该工具包的参考文档快照拼成语料
    （约定：`docs/reference/` 下**目录名以工具包 id 开头**的都算它的文档，
    例如 `uv-help` / `uv-docs` 之于 `uv`），检查清单里用到的每个开关能否在语料里找到。
-   当前 **195/195 全部命中**（7zip 64 字段 / scoop 80 / uv 125）。
+   当前 **300 个开关查了 298 个命中**（含 12 个 Windows 命令包的 `/xxx` 开关——校验器原先只认 `-` 前缀，那批包一个开关都没被查过，属"假完整"，已修）。
    不做成门禁的原因：语料可能不全，短开关（`-n`）也容易在正文里偶然命中；
    真正的门禁是第 3 层那种**从官方文档逐命令提取的白名单**。
 6. **冒烟测试（手动）**：把 `examples` 在临时目录里真跑一遍，结果记入 `NOTES.md`。
 
-**当前结果**：三个工具包 `269/269 字段出处标注 100%`，开关溯源 195/195 命中。
+**当前结果**：15 个工具包 `419/419 字段出处标注 100%`；开关溯源 300 查 298 命中（2 条待确认是启发式误报：nslookup 的 `-timeout`/`-retry` 在官方 HTML 里其实有）。
 **反向验证**（把只允许用于解压的 `-o` 挂到 `a` 命令上）确认白名单能拦住。
 
 ---
@@ -234,15 +234,26 @@ uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py
 | P19 | **ConPTY（伪控制台）路径拿不到任何子进程输出**（已解决，根因值得记住） | 根因：**子进程的标准句柄是从父进程复制过去的**——即使 `bInheritHandles = FALSE`，句柄"值"照样被填进子进程的标准句柄槽，而 ConPTY 只负责提供控制台、**不会覆盖**这些继承来的句柄。于是构成三种截然不同的表现：父进程是控制台程序 → 子进程直接写到父进程的控制台（绕过 ConPTY）；父进程的 stdout 被重定向（如 `dotnet test`）→ 子进程写到那个看不见的管道；父进程是无控制台的 GUI 程序（真实的 WinUI 宿主）→ 没有可继承的句柄，ConPTY 正常工作 | 修法：创建子进程时加 `STARTF_USESTDHANDLES`，并把三个标准句柄显式置为 NULL（见 `ConPtyProcessRunner`）。定位过程同样值得记：先逐一排除 8 项假设（结构体尺寸 / 继承标志 / 管道安全属性 / PTY 句柄关闭时机 / `ResizePseudoConsole` / 渲染时机 / 读循环吞异常 / 字段错位），再用**独立 GUI 子系统探针**（`spike/conpty-probe`）复现出"无控制台父进程下 ConPTY 正常"，最后用 `GetFileType` 在子进程内部确认句柄类型，才锁定"继承"这一条 |
 | P20 | 代码改了、也"构建成功"了，但运行的程序行为没变 | 两个原因各踩过一次：① 项目声明了 `<Platforms>x64</Platforms>`，**经解决方案构建**的产物落在 `bin\x64\Debug\` 而不是 `bin\Debug\`，脚本与启动器却指向后者（旧 exe 一直在被启动）；② `Swpj.App` 曾经不在 `src/Swpj.slnx` 里，于是 `dotnet build src\Swpj.slnx` **从不重建宿主**，清单加了新字段后宿主还在用旧版 `Swpj.Core`，表现为"载入工具包失败：Property 'xxx' not found on type ..." | 已修：加 `<AppendPlatformToOutputPath>false</AppendPlatformToOutputPath>` 固定输出路径，并把 `Swpj.App` 加进解决方案。**通用做法**：改完代码后确认产物时间戳变了再测；"构建成功"不等于"跑的是新代码" |
 | P21 | 界面上填了多个值，命令行里却只出现一个参数 | **WinUI 的 `TextBox` 用 `\r` 表示换行**（不是 `\r\n`，也不是 `\n`）。所有"按行拆成多个值"的地方如果只按 `\n` 拆，整段文本会被当成一行，多值就退化成一个参数（实测：给 7z 的「分卷大小」填三行，生成的是 `"-v10k15k2m"` 一个被引号包住的参数） | 拆分一律写成 `text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)`。`ArgvBuilder` 的 `perLine` 与宿主的三个多值取值器都已按此修，并有专门的单测（`positional_perLine_也能处理只用回车换行的文本`） |
-| P22 | `dotnet publish` 出来的程序**启动即崩**（0xC000027B） | publish 的输出**漏掉了 `Swpj.App.pri` 与 `.xbf`**（编译后的 XAML 资源），XAML 初始化必然失败。WER 会指向 `Microsoft.UI.Xaml.dll` + `combase.dll` 0x80004005(E_FAIL)，看起来像运行时缺件，其实只是资源没拷。对照实测：`dotnet build -c Release` 的产物能正常启动，publish 的不能 | 交付改用「构建 + 拷贝」（`scripts/publish-app.ps1` 已实现，并会校验关键文件存在）。排查这类「构建能跑、发布不能跑」的问题时，**先 diff 两个目录的文件清单**，比猜运行时依赖快得多 |
+| P22 | `dotnet publish` 出来的程序**启动即崩**（0xC000027B） | publish 的输出**漏掉了 `Swpj.App.pri` 与 `*.xbf`**（编译后的 XAML 资源），XAML 初始化必然失败。WER 会指向 `Microsoft.UI.Xaml.dll` + `combase.dll` 0x80004005(E_FAIL)，看起来像运行时缺件，其实只是资源没拷 | **已在 `Swpj.App.csproj` 里用 `CopyXamlResourcesToPublish` 目标补齐**（发布后把 `$(TargetDir)` 下的 `*.pri`/`*.xbf` 拷进 `$(PublishDir)`）。补上之后**独立发布也能用了**：`--self-contained true -p:WindowsAppSDKSelfContained=true` 出来的目录不依赖目标机器预装任何运行时，`scripts/publish-app.ps1` 默认就走这条路。排查这类"构建能跑、发布不能跑"的问题时，**先 diff 两个目录的文件清单**，比猜运行时依赖快得多 |
 | P23 | 执行完之后按输出做判断（如"推荐下一步"）却什么都没匹配到 | 界面上的输出行是 `Progress<T>` **异步投递**到 UI 线程的；跑到 `await RunAsync` 之后，最后几行可能还没落进 `OutputBox.Text`，拿它去匹配就会漏判（实测：scoop status 明明有更新，界面却什么也不推荐）。`System.Progress<T>` 在测试里同样会造成偶发失败 | 判断一律用**执行结果里权威的输出行**（`result.Lines`），不要读控件文本；测试里用同步的 `SyncProgress<T>` |
 | P24 | 点"取消"界面显示"正在取消…"，任务却照样跑完 | 两个坑叠加：① `OnCancelClicked` 原来**无条件**打"正在取消…"，`_cancellation` 为 null 时也这么说，把失败掩盖了；② 一次执行**没有防重入**——第二次进入会 new 一个新 CTS 覆盖字段，而真正在跑的任务持有的是旧 token，于是取消取消的是另一个对象 | ① 状态提示如实报告（没有任务 / 已发取消 / 取消出错）；② `OnRunClicked` 用 `_running` 防重入；③ 补了一条**用真实命令**的取消回归测试（`CancelRealCommandTests`：scoop shim 的 7z 压 48 MB 不可压缩数据，2 秒后取消），原先只有 `cmd + powershell` 的单测，覆盖不到真实被包装程序 |
 | P25 | 界面加了一个输入框，界面冒烟脚本就失灵 | 脚本原来按**序号**取控件（`$edits[0]`）；新增"筛选框"之后所有序号错位。同理，宿主"恢复上次选中的工具包"会让 `SWPJ_SELECT_ACTION` 的序号套到别的包上 | 脚本改成按 `AutomationId` 取（排除 `FilterBox` / `CommandLineBox` / `OutputBox`），并新增 `SWPJ_SELECT_PACKAGE` 显式钉住工具包。**凡是自动化脚本，都不要依赖控件序号或"最后一个输入框"这类位置假设** |
-| P26 | 界面拖放/右键菜单这类交互"没法自动化验证" | 拖动条目改分组、把工具包拖进来安装、右键菜单——UIA 都模拟不了（OLE 拖放与 ContextFlyout 不在自动化树里） | 把**判定逻辑**从交互里抽出来放到 Core 并用单测钉死：拖放填充 → `PathDropLogic`；安装/卸载 → `PackageInstaller`（11 个测试）；推荐下一步 → `NextStepMatcher`。交互本身仍需人工点一次（记进 project-state 的 nextActions，别当作已验证） |
+| P26 | 有些交互"没法自动化验证"，于是**做出来了但其实不能用**也没人发现 | 典型是**鼠标拖动**：UIA 读不到 ContextFlyout；合成的鼠标右键又因为 `SetForegroundWindow` 从非前台进程调用会被系统拒绝而落空（实测模拟右键落在了别的窗口上）。结果是"拖动改分组"实现了两轮、用户两次反馈拖不动，而我这边一次都没真正验证过 | ① **别把关键操作只挂在没法自动验证的交互上**——同一个功能要有一条"能自动点通"的入口（工具包分组因此补了「分组…」按钮，并有 `scripts/ui-verify-grouping.ps1` 作为回归）。② 把**判定逻辑**抽到 Core 用单测钉死：拖文件填路径 → `PathDropLogic`；安装/卸载 → `PackageInstaller`（11 个测试）；推荐下一步 → `NextStepMatcher`。③ 交互本身若确实没法验证，就**诚实地标注"未经自动化验证"**，不要当成"已完成" |
 | P27 | 测试偶发失败（"单独跑必过、全量跑偶尔红"） | 两个原因叠加：① 用**固定延时**去触发取消/超时——机器一快，被测任务在你取消之前就结束了，断言随之偶发失败（`CancelRealCommandTests` 踩过：固定等 2 秒，而 7z 有时不到 2 秒就压完了）；② 会真启动进程／真压文件的测试默认并行跑，互相抢资源 | ① 不要用固定延时，**等到可观察的信号**（例如"收到第一行输出"）再触发；断言里带上诊断信息（耗时／退出码／已收行数），好区分"任务已跑完"与"取消没生效"；② 把真实进程测试放进同一个 `[CollectionDefinition(DisableParallelization = true)]` 集合 |
 | P28 | 选中一个条目后，它所在的分组"迅速折叠又展开"（视觉闪烁） | 选中时为了换高亮把**整个列表重建**了一遍：`Children.Clear()` + 新建 Expander。新建的 Expander 会从 0 高度播放展开动画，看起来就是一缩一放 | **选中态原地更新，不要重建控件**：把每个条目的（按钮 + 高亮标记）登记到字典里，选中时只改这两个属性。验证方法很直接：**比较控件的 UIA RuntimeId**——控件被重建时它必然变化，没变就说明没有动画可播 |
 
 ---
+
+## 8.5 docs/reference 里什么是我们的、什么是别人的（转公开前必读）
+
+`docs/reference/` 混了两类东西，**清理时只能删后一类**：
+
+| 类别 | 内容 | 转公开时 |
+|---|---|---|
+| **我们自己的** | `README.md`（抓取步骤与出处）、`7zip-switch-matrix.json`（从 CHM 提取的开关矩阵，校验器第 3 层依赖它） | **保留**（若要整体清空该目录，先把它们挪到 `docs/ai/`） |
+| **第三方快照** | `7zip-chm/`、`7zip-md/`、`scoop-help/`、`scoop-wiki/`、`uv-docs/`、`uv-help/`、`win-docs/`（Microsoft Learn 页面）、`win-help/`（命令 `/?` 文本） | **必须清掉**（含 git 历史），否则等于发布别家的文档副本 |
+
+自己写的实测记录不要放在这里：Windows 命令集的公共事实已经移到 `docs/ai/windows-commands.md`。
 
 ## 9. 未决问题（影响后续实现，改规范前需要拍板）
 

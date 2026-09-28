@@ -611,6 +611,27 @@
       "command": "读执行层代码：ProcessRunner 的 ProcessStartInfo 与 ConPTY 的 CreateProcess",
       "result": "都**不经过任何 shell**：管道路径 UseShellExecute=false + FileName=可执行文件；ConPTY 路径自己拼命令行调 CreateProcess。即 ping 是直接跑 C:\\Windows\\System32\\PING.EXE。cmd 内建命令需要显式用 cmd.exe + command:/c + commandArgs",
       "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "windows-packages-load-and-run",
+      "claim": "12 个 Windows 命令包在真实宿主里能载入、能生成正确命令",
+      "command": "UIA 启动宿主（SWPJ_SELECT_PACKAGE）并读命令行预览；dotnet test 的 RealManifestTests 也会加载 plugins 下全部清单",
+      "result": "15 个包全部载入（未分组（15）），无「载入工具包失败」；ping 的动作分组「连通性测试（3）」正常；命令行预览是 `ping.exe`——**空 command 被正确跳过**，没有多出空段；chkdsk 的动作分组为「只读检查(1)/修复(3)/联机扫描(1)」",
+      "verifiedAt": "2026-09-28"
+    },
+    {
+      "id": "selection-no-rebuild",
+      "claim": "选中条目不会再重建列表（因此不会有折叠/展开闪烁）",
+      "command": "UIA 比较分组控件的 RuntimeId：展开分组 → 记 RuntimeId → 点选另一个动作 → 再记",
+      "result": "RuntimeId 完全相同（42.1903448.4.22），展开状态仍是 Expanded ⇒ 控件没被重建，不可能播放动画",
+      "verifiedAt": "2026-09-28"
+    },
+    {
+      "id": "grouping-via-button",
+      "claim": "工具包分组可以新建/移入/移出（不依赖鼠标拖动）",
+      "command": "pwsh -File scripts/ui-verify-grouping.ps1",
+      "result": "点「分组…」→ 输入新分组名 → 应用：未分组 15 → 14，出现「我的常用（1）」；再用下拉框选「未分组」→ 应用：回到未分组 15。脚本可作为回归测试重复跑",
+      "verifiedAt": "2026-09-28"
     }
   ],
   "completedMilestones": [
@@ -697,6 +718,25 @@
       "doneAt": "2026-09-27",
       "evidence": "① 分组默认折叠（界面实测：初始可见动作条目 0 条，展开「应用管理」出现 15 条）。② 分组由清单 category 声明；用户的调整改为**把条目拖到分组标题上**（拖到「工具包」/「动作」标题 = 恢复默认分组），不再用右键改分组。③ 在「工具包」/「动作」标题上右键可新建空分组、全部展开/收起、恢复默认分组。④ 工具包右键菜单：通用项（打开所在目录/打开官网/版本信息/重新载入/卸载）+ 清单声明的 quickActions（scoop 3 条、uv 3 条、7zip 2 条）。⑤ 安装/卸载：可把工具包文件夹/.zip/manifest.yaml 直接拖到「工具包」区域安装，也可用「文件 → 安装工具包…」；卸载是**移到 plugins\\.trash\\ 而不是删除**，同名安装视为升级并先备份旧版本。⑥ 菜单栏「文件」「帮助」+ 关于对话框（实测读出：宿主版本、运行环境、3 个工具包及版本、工具包目录）。",
       "note": "安装/卸载的文件语义放在 Core（PackageInstaller）并有 11 个测试覆盖——界面上的拖放没法自动化，但装到哪、同名怎么办、清单不合规要不要收、卸载是删还是留后路都能钉死。"
+    },
+    {
+      "id": "N11",
+      "task": "按 uv 与 Windows 两批工具包的实战反馈修订 playbook",
+      "doneAt": "2026-09-28",
+      "evidence": "两批共 23 条反馈逐条回灌：§0.1 判据改成\"你要覆盖那条路径上的开关数\"（子命令树型工具不再被误判）；§0.2 补\"多来源冲突时官方文档为字段依据、实测为行为依据、差异记 NOTES\"；§5.2 新增两种标准做法用不了的情况（没有版本命令 / 内置帮助拿不到）；§5.1 补\"只读但带参数\"的结构判定并要求自检与执行同一套判定；§6 补批量做同族工具包时抽共享文档的约定；§7 补\"宿主与 schema 冲突时先按 schema 写正确、把宿主的问题写进报告而不是编造参数\"，并把提交步骤标注为\"仅当被授权\"；新增附 C（Windows 自带命令的特殊性 9 条）"
+    },
+    {
+      "id": "N13",
+      "task": "做出零预装的独立交付",
+      "doneAt": "2026-09-28",
+      "evidence": "根因是 publish 丢 XAML 资源（P22）。在 csproj 里加 CopyXamlResourcesToPublish 把 *.pri/*.xbf 补进发布目录后，`--self-contained true -p:WindowsAppSDKSelfContained=true` 出来的目录（231 MB）实测能启动、能载入 15 个工具包、菜单栏与分组正常，且**不依赖目标机器预装 .NET 或 Windows App Runtime**。publish-app.ps1 默认走这条路"
+    },
+    {
+      "id": "N17",
+      "task": "Windows 自带命令工具包（12 个包 / 70 动作）",
+      "doneAt": "2026-09-28",
+      "evidence": "ping ipconfig tracert nslookup netstat tasklist systeminfo chkdsk sfc robocopy cleanmgr powercfg；字段出处 100%；冒烟 28 条只读命令按预期退出码通过（白名单 30 条红线自检误判 0）；反查出宿主一个真 bug：校验层拒绝 command:\"\" 而执行层与 schema 都允许（已修）；还让校验器露出\"假完整\"：开关溯源只认 - 前缀，12 个包一个开关都没被查过（已修，现在 300 查 298 命中）",
+      "note": "公共实测事实移到 docs/ai/windows-commands.md（原在 docs/reference 下，会随第三方快照一起被清）"
     }
   ],
   "plugins": [
@@ -908,17 +948,21 @@
       "question": "要不要实现 requiresAdmin（提示/拦截需要管理员权限的动作）",
       "impact": "现在声明了但没人用。chkdsk /f、sfc /scannow、diskpart 都需要管理员，而当前账号不是；不实现的话用户只会看到一句程序自己吐的权限错误。最小实现：清单声明 → 界面上标出来，非管理员执行前提示『这个动作通常需要管理员权限』（并在结果里给出同样的结论）",
       "status": "待拍板（建议实现，做 Windows 命令集之前做掉更省事）"
+    },
+    {
+      "id": "D14",
+      "question": "要不要给 locate 加 versionSource: fileVersion（读 exe 的文件版本）",
+      "impact": "Windows 自带命令没有版本开关，只能用 `(Get-Item $exe).VersionInfo.FileVersion` 取（实测 ping = 10.0.26100.8115）。现在这件事只能写在 NOTES 里、宿主界面上显示不出这些包的版本（15 个包里 12 个是这种）。加上它之后，工具包列表与「关于」里就能显示这些命令的实际版本",
+      "status": "待拍板（Windows 命令集的实际需求）"
+    },
+    {
+      "id": "D15",
+      "question": "转公开时 docs/reference 里\"我们的\"文件要不要一起搬家",
+      "impact": "该目录混了两类内容：我们自己的（README.md、7zip-switch-matrix.json）与第三方快照（7zip-chm/7zip-md/scoop-help/scoop-wiki/uv-docs/uv-help/win-docs/win-help）。只清后者即可。7zip-switch-matrix.json 是校验器第 3 层的输入，绝不能删",
+      "status": "已定（清理清单见 development.md §8.5 与 nextAction N18）"
     }
   ],
   "nextActions": [
-    {
-      "id": "N11",
-      "task": "按 uv 的实测反馈修订 playbook-tool-package.md",
-      "why": "uv 是第二个作者写的第三个工具包，暴露出 playbook 的具体缺口；这些反馈本身就是任务产出，应当回灌到手册里，否则第四个工具包还会再踩一遍",
-      "how": "按 plugins/uv/NOTES.md §11 逐条处理：(1) 冒烟脚本只读白名单 + 自检骨架（含 PowerShell -eq 在数组上是过滤而非相等这个坑）；(2) 【重要】『先确认被包装程序的 argv 边界，再决定字段声明顺序』，并点明 uv run / uv tool run 是开关必须在位置参数之前的典型；(3) 来源冲突时以内置帮助为准；(4) 退出码文档不存在时用实测并标明推断；(5) §5 的 versionPattern 验证要覆盖 executable 与每一个 alternativeNames（uvx 打印的名字不同这个实证）；(6) NOTES 推荐目录结构直接引用 plugins/scoop/NOTES.md；(7) §1 情况 C（网页快照）的 HTML 原件保留策略；(8) §7 收尾脚本块加『若上级指令禁止提交则跳过』",
-      "doneWhen": "playbook 里上述各处都有明确规则，且用 uv 的实证作为例子",
-      "priority": 1
-    },
     {
       "id": "N12",
       "task": "把 uv 加进文档漂移检测（docs/ai/drift-watch.json）",
@@ -928,27 +972,11 @@
       "priority": 2
     },
     {
-      "id": "N13",
-      "task": "解决「自包含交付」——目前交付依赖目标机器预装 .NET 10 与 Windows App Runtime",
-      "why": "用户要的是能随手运行的程序。实测两条自包含路线都失败：WinAppSDK 自包含、以及 .NET 自包含 + WinAppSDK 框架依赖，均为启动即崩 0xC000027B。更根本的是 dotnet publish 的输出缺 Swpj.App.pri 与 .xbf（XAML 资源），所以现在的交付走「dotnet build -c Release + 拷贝」",
-      "how": "查 WinUI 3 的 publish 为什么漏掉 .pri/.xbf（可能是 MarkupCompilePass2 与 publish 布局的交互），或者在 csproj 里显式把 $(TargetDir)$(TargetName).pri 与 *.xbf 加入发布项；也可评估 MSIX 打包（个人自用需自签证书，是另一个取舍）",
-      "doneWhen": "dotnet publish 出来的目录能直接启动，且不需要目标机器预装 Windows App Runtime",
-      "priority": 3
-    },
-    {
-      "id": "N15",
-      "task": "人工验证本轮易用性改动里无法自动化的部分",
-      "why": "拖放（OLE 拖放没法用 UIA 模拟）、右键改分组、筛选框的组合行为，都只能人点一次；填充规则与分组存储本身已有单测覆盖",
-      "how": "按 docs/ai/project-state.json 里 N14 的说明逐条点一遍；发现问题记下来（若是宿主 bug，先写一条失败的回归测试再修）",
-      "doneWhen": "拖放、右键改分组、筛选三条都确认可用（或发现的缺陷已修并有测试）",
-      "priority": 1
-    },
-    {
-      "id": "N17",
-      "task": "做 Windows 自带命令集的工具包（只针对 Windows 10/11，先覆盖最常见的）",
-      "why": "用户指定的下一阶段重点",
-      "how": "按 docs/ai/playbook-tool-package.md 做。关键事实（已实测）：绝大多数自带命令本身就是 exe（ping/chkdsk/cleanmgr/ipconfig/tasklist/sfc/diskpart/netstat/systeminfo/tracert/nslookup/shutdown/robocopy/netsh/schtasks/powercfg 在 C:\\Windows\\System32 下都有）；cmd 内建命令（dir/echo/copy/del/cls/type）要用 cmd.exe + command:/c + commandArgs。文档出处用 `命令 /?` 的输出（可离线复核），并把需要管理员权限的动作标出来（D13 若先做掉更好）。注意 cleanmgr/diskpart 是 GUI/交互型，输出为空或需要输入，要在 NOTES.md 里说清楚",
-      "doneWhen": "校验全绿 + 每个动作都对着 `命令 /?` 的真实输出核对过 + NOTES.md 记录实测（含哪些需要管理员）+ 界面冒烟",
+      "id": "N18",
+      "task": "收尾迁移：改名 All Tool / 清第三方快照 / MIT / 转公开 / 发开发测试版 Release",
+      "why": "产品负责人已批准（选择 A 方案），并要求推送由我自行完成；授权在 D:\\AI\\All Tool 与 D:\\AI\\swpj 操作",
+      "how": "① 在 D:\\AI\\All Tool 克隆 → `git filter-repo --path <第三方快照目录> --invert-paths` 清历史；**只清第三方快照，保留 docs/reference/README.md 与 7zip-switch-matrix.json**（后者是校验器第 3 层的输入）；另把清单 sources 里的 file:///D:/... 路径换成官方网页 URL。② 改名：仓库名、窗口标题、About、AllTool.exe、命名空间 AllTool.Core/App、环境变量 ALLTOOL_*、`%APPDATA%\\AllTool`（**旧设置做一次性迁移**，别让用户丢记住的参数与分组）；本机目录 D:\\AI\\swpj 保留不动，免得会话工作区失效。③ MIT LICENSE + 转公开。④ Release 附件用 `scripts/publish-app.ps1` 的独立包（zip），说明写清 Win10/11 x64、解压即用、已知限制",
+      "doneWhen": "公开仓库可访问、Release 可下载、另一台 Win10/11 机器解压即用、文档里的名字与链接都指向 All Tool",
       "priority": 1
     }
   ],

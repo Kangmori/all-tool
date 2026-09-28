@@ -42,13 +42,19 @@ pwsh -File scripts/check-env.ps1
 # 重新抓取参考文档
 pwsh -File scripts/fetch-scoop-help.ps1          # scoop 的结构化帮助（28 个命令）
 pwsh -File scripts/extract-7zip-matrix.ps1       # 从 7z CHM 提取"命令 x 可用开关"矩阵
+pwsh -File scripts/fetch-win-help.ps1            # Windows 自带命令的 /? 快照（带超时保护，快照不入库）
 
 # 问上游"你的版本和文档变了吗"（CI 每周也会跑，见 .github/workflows/doc-drift.yml）
 pwsh -File scripts/check-doc-drift.ps1
 
-# 界面验收：UIA 自动填表并真的点「执行」，校验输出与产物
-pwsh -File scripts/ui-smoke.ps1
+# 界面验收（UIA 自动点，不需要人看）
+pwsh -File scripts/ui-smoke.ps1                  # 填表 → 点执行 → 校验进度/产物；场景二验证「取消」
+pwsh -File scripts/ui-verify-grouping.ps1        # 工具包分组：分组… → 新建并移入 → 移回未分组
+pwsh -File scripts/smoke-win-cmds.ps1            # Windows 命令集的只读冒烟（含白名单自检）
 pwsh -File scripts/capture-app-window.ps1 -ActionIndex 1   # 只截应用窗口
+
+# 产出可交付目录（默认独立模式：目标机器不需要预装任何运行时）
+pwsh -File scripts/publish-app.ps1
 
 # 编译 WinUI 3（不需要打开 Visual Studio）
 & dotnet build src\Swpj.slnx
@@ -75,7 +81,23 @@ pwsh -File scripts/capture-app-window.ps1 -ActionIndex 1   # 只截应用窗口
 
 规范 v1 已定稿（含 `category` 分组与 `nextSteps` 推荐下一步）；**宿主（WinUI 3）可工作并经界面冒烟验证**
 （UIA 填表 → 点执行 → 真实 7z 解压 → **进度条走到 100** → 输出与产物均正确；另有取消场景）；
-界面支持**拖放填路径、分组（默认折叠、拖动条目改分组、标题右键新建分组）、执行后一键执行推荐、必填校验、记住上次输入**；工具包可**直接拖进来安装**（右键可卸载，移到 .trash 不删除），菜单栏含「关于」；
-工具包有 **7-Zip**（11 动作 / 64 字段）、**Scoop**（40 动作 / 80 字段）、**uv**（26 动作 / 125 字段）；
-CI 与每周文档漂移检测均已接入；`pwsh -File scripts/publish-app.ps1` 可产出可交付目录。
-**下一步动作以 `docs/ai/project-state.json` 的 `nextActions` 为准。**
+界面支持**拖文件填路径、工具包分组（默认折叠；用「分组…」按钮或右键菜单增删改移，不做鼠标拖动）、执行后一键执行推荐、必填校验、记住上次输入**；工具包可**直接拖进来安装**（右键可卸载，移到 .trash 不删除），菜单栏含「关于」；
+工具包 **15 个**：7-Zip(11 动作) / Scoop(40) / uv(26) / **Windows 自带命令 12 个**
+（ping ipconfig tracert nslookup netstat tasklist systeminfo chkdsk sfc robocopy cleanmgr powercfg，共 70 动作）；
+字段出处标注 **419/419 = 100%**；开关溯源 300 个查 298 命中（启发式，只提示不阻断）；
+测试 **142 个**全通过；CI 与每周文档漂移检测已接入；
+`scripts/publish-app.ps1` 能产出**零预装的独立交付目录**（目标机器不需要 .NET 或 Windows App Runtime）。
+**待办以 `docs/ai/project-state.json` 的 `nextActions` 为准**（当前主要是：改名 All Tool、清掉第三方文档快照后转公开、加 MIT 许可、发开发测试版 Release）。
+
+## 7. 文档地图（别在错的地方找东西）
+
+| 想了解 | 看 |
+|---|---|
+| 硬规则、入口 | `AGENTS.md`（本文件） |
+| 机器可读状态、待办、待决、实测记录 | `docs/ai/project-state.json` |
+| 架构、环境事实、**全部已知陷阱 P1–P28** | `docs/ai/development.md` |
+| 清单规范（改清单格式前必读） | `docs/spec/manifest-v1.md` + `manifest-v1.schema.json` |
+| 新增工具包怎么做 | `docs/ai/playbook-tool-package.md` |
+| 为什么这么设计（取舍与放弃的方案） | `docs/adr/` |
+| Windows 自带命令的实测事实 | `docs/ai/windows-commands.md` |
+| 第三方文档快照（**不入库；转公开前会清理**） | `docs/reference/`（见其中的 README） |
