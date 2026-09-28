@@ -24,6 +24,13 @@ homepage: https://scoop.sh/
 license: "Unlicense 或 MIT（软件自带 LICENSE 的 SPDX 标识：UNLICENSE or MIT）"
 tags: [包管理, 安装器, 系统工具]
 category: 包管理
+quickActions:
+  - title: 检查可用更新
+    action: status
+  - title: 更新全部应用
+    action: update
+  - title: 查看已安装列表
+    action: list
 
 sources:
   - title: "scoop 0.5.3 本机帮助快照（28 个命令的结构化帮助输出）"

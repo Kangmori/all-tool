@@ -78,6 +78,33 @@ actions:
 **从推荐一键执行时，宿主会更谨慎**：只要目标动作的 `danger` 不是 `none`，就先弹一次确认
 （手点执行时 `overwrite` 不额外确认）。因为推荐只是"顺手一点"，不该让一次误触就去改系统。
 
+### 2.3 工具包右键菜单：`quickActions`
+
+右键左侧的工具包时，宿主提供一批**通用项**（打开所在目录 / 打开官网 / 版本信息 / 重新载入 / 卸载），
+另外还可以按清单声明显示**软件专有**的操作：
+
+```yaml
+quickActions:
+  - title: 检查可用更新     # 菜单项文字
+    action: status          # 点它等于切到这个动作（用户再点执行）
+  - title: 更新全部应用
+    action: update
+```
+
+`action` 必须存在于同一工具包；写错则该项不显示（避免"点了才报错"）。
+
+### 2.4 两个"规范里有、宿主还没实现"的字段（动手前请知悉）
+
+诚实记录，避免作者以为写了就有效：
+
+| 字段 | 现状 |
+|---|---|
+| `runtime.useShell` | **宿主尚未实现**。当前所有命令都是**直接 CreateProcess**（argv 数组，不做 shell 字符串拼接）。需要 cmd 内建命令（`dir` / `echo` / `copy`…）时，正确做法是 `locate.executable: cmd.exe` + `command: /c` + `commandArgs: [dir]`，不必依赖 `useShell`。 |
+| `requiresAdmin` | **宿主尚未实现**（既不提示也不拦截）。需要管理员权限的动作（如 `chkdsk /f`、`sfc /scannow`）目前只会以"权限不足"失败告终。 |
+
+`visibleWhen` 同样属于这一类（见 §4 的说明）。
+
+
 ## 3. 执行模型（宿主怎么用这份清单）
 
 1. **发现**：用 `locate.executable` 在 PATH 中查找，找不到再依次试 `alternativeNames` 与 `searchPaths`（支持 `%ENV%` 展开）。找到后按 `versionArgs` 取版本，用 `versionPattern` 提取版本号，与 `minVersion` 比较；不满足则禁用该工具包并提示。

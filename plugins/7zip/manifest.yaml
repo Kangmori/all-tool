@@ -19,6 +19,11 @@ homepage: https://www.7-zip.org/
 license: LGPL-2.1-or-later（unRAR 部分另有不得用于开发 RAR 压缩器的限制条款）
 tags: [压缩, 归档, 哈希]
 category: 压缩归档
+quickActions:
+  - title: 查看支持的格式
+    action: info
+  - title: CPU 性能测试
+    action: benchmark
 
 sources:
   - title: 7-Zip 帮助文件 —— Command Line Version 章节

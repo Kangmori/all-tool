@@ -576,6 +576,41 @@
       "command": "对照清单与界面文案；并加 DangerOrDefault 单测",
       "result": "原先 Danger 为 null 时 `Danger != DangerLevel.None` 为真，所有只读动作（如 scoop status）都挂着「⚠ 此动作会覆盖已有文件」。已加 DangerOrDefault（空即 none）+ 3 个单测；界面复验描述里不再有该警告",
       "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "groups-collapsed-by-default",
+      "claim": "左侧分组默认是折叠的，展开后才显示条目",
+      "command": "UIA 读界面：初始统计可见动作条目，再用 ExpandCollapsePattern 展开一个分组",
+      "result": "初始可见动作条目 0 条（只看到各组标题与数量）；展开「应用管理（15）」后出现 15 条",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "menu-bar-and-about",
+      "claim": "菜单栏与「关于」可用",
+      "command": "UIA 打开「帮助」→「关于 swpj」",
+      "result": "对话框内容正确：宿主版本 1.0.0.0、.NET 10.0.12 / Windows 10.0.26200、三个工具包及版本与动作数、工具包目录",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "package-install-uninstall",
+      "claim": "工具包能被安装与卸载，且卸载不丢数据",
+      "command": "dotnet test --filter PackageInstallerTests",
+      "result": "11 个测试全过：从目录/从 zip（含多套一层目录）/从单个清单安装；id 决定目录名；清单不合规拒绝安装；同名安装先备份旧版本到 .trash；卸载是移到 .trash 而不是删除；拒绝卸载 plugins 之外的目录；装完能被宿主真实加载器读出",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "spec-vs-host-audit-2",
+      "claim": "规范里声明了但宿主没实现的字段，都已被标注出来",
+      "command": "逐个字段在模型/执行层/界面里数引用次数；实测 useShell 是否真的影响启动方式",
+      "result": "又查出两个：useShell（只在模型里，执行层那处 UseShell 其实是 UseShellExecute=false，属另一回事）与 requiresAdmin（模型里 1 处、执行层 0 处、界面 0 处）。已在规范 §2.4 明确标注「规范里有、宿主还没实现」，并写入待决项 D12/D13",
+      "verifiedAt": "2026-09-27"
+    },
+    {
+      "id": "how-commands-are-executed",
+      "claim": "命令的执行方式（用户问：cmd / Windows PowerShell / PowerShell 7？）",
+      "command": "读执行层代码：ProcessRunner 的 ProcessStartInfo 与 ConPTY 的 CreateProcess",
+      "result": "都**不经过任何 shell**：管道路径 UseShellExecute=false + FileName=可执行文件；ConPTY 路径自己拼命令行调 CreateProcess。即 ping 是直接跑 C:\\Windows\\System32\\PING.EXE。cmd 内建命令需要显式用 cmd.exe + command:/c + commandArgs",
+      "verifiedAt": "2026-09-27"
     }
   ],
   "completedMilestones": [
@@ -655,6 +690,13 @@
       "doneAt": "2026-09-27",
       "evidence": "① 拖放：资源管理器拖文件/文件夹到输入框即填充，多值字段追加且去重；填充规则抽成 PathDropLogic 并有 7 个单测（拖放本身无法自动化，界面上的接线需人工点一次）。② 分组：左侧工具包与动作按分组展示（可折叠），清单用 category 声明默认分组、用户右键可改并存在 %APPDATA%\\swpj\\grouping.json；界面实测：三个工具包分成「包管理／压缩归档／Python 与包管理」，7zip 动作分成查看(4)/解压(2)/维护归档(3)/压缩(1)/诊断(1)，scoop 分成 10 组（应用管理 15、Shim 管理 5…）。③ 推荐下一步：清单声明 nextSteps，跑完按输出正则匹配给出按钮，点了可一键执行；界面实测：scoop list → 推荐「看看有没有可用更新」；scoop status（真有 5 个更新）→ 推荐「一键更新全部」+「清掉旧版本释放空间」。从推荐执行危险动作会先确认（实测弹框并取消，未执行）。④ 其它：必填校验（实测拦住空参数并高亮字段）、筛选框、复制命令/输出、记住上次选中的工具包与动作、执行期间禁用表单、防重入。⑤ 顺带修掉一个真 bug：没写 danger 的动作（Danger 为 null）被当成 overwrite，所有只读动作都挂着「⚠ 此动作会覆盖已有文件」；已加 DangerOrDefault 规范化属性 + 3 个单测。",
       "note": "规范随之扩展：新增工具包级/动作级 category 与动作级 nextSteps（schema、规范文档、playbook 同步）。"
+    },
+    {
+      "id": "N16",
+      "task": "界面细化：分组默认折叠、拖动改分组、标题右键新建分组、工具包右键菜单、安装/卸载、菜单栏与关于",
+      "doneAt": "2026-09-27",
+      "evidence": "① 分组默认折叠（界面实测：初始可见动作条目 0 条，展开「应用管理」出现 15 条）。② 分组由清单 category 声明；用户的调整改为**把条目拖到分组标题上**（拖到「工具包」/「动作」标题 = 恢复默认分组），不再用右键改分组。③ 在「工具包」/「动作」标题上右键可新建空分组、全部展开/收起、恢复默认分组。④ 工具包右键菜单：通用项（打开所在目录/打开官网/版本信息/重新载入/卸载）+ 清单声明的 quickActions（scoop 3 条、uv 3 条、7zip 2 条）。⑤ 安装/卸载：可把工具包文件夹/.zip/manifest.yaml 直接拖到「工具包」区域安装，也可用「文件 → 安装工具包…」；卸载是**移到 plugins\\.trash\\ 而不是删除**，同名安装视为升级并先备份旧版本。⑥ 菜单栏「文件」「帮助」+ 关于对话框（实测读出：宿主版本、运行环境、3 个工具包及版本、工具包目录）。",
+      "note": "安装/卸载的文件语义放在 Core（PackageInstaller）并有 11 个测试覆盖——界面上的拖放没法自动化，但装到哪、同名怎么办、清单不合规要不要收、卸载是删还是留后路都能钉死。"
     }
   ],
   "plugins": [
@@ -854,6 +896,18 @@
       "question": "要不要支持互斥开关的表达（例如 uv sync 的 --only-dev 与 --no-dev）",
       "impact": "v1 没有互斥语义（visibleWhen 只做条件显示）。用户可能同时勾上一对矛盾的开关，程序自己报错——不致命，但界面本可以拦住。当前做法是只收敛更常用的那个",
       "status": "待拍板"
+    },
+    {
+      "id": "D12",
+      "question": "要不要实现 runtime.useShell（把命令包一层 cmd /c）",
+      "impact": "现在声明了但宿主完全忽略。做 Windows 自带命令集时会碰到 cmd 内建命令（dir/echo/copy/del/cls/type），它们不是 exe。**已实测有绕过办法**：locate.executable: cmd.exe + command: /c + commandArgs: [dir]，不需要 useShell。若真要实现 useShell，必须考虑它等于引入一次字符串拼接（注入面），与『argv 是数组、任何情况下不做 shell 拼接』的现有原则冲突",
+      "status": "待拍板（有绕过办法，不阻塞）"
+    },
+    {
+      "id": "D13",
+      "question": "要不要实现 requiresAdmin（提示/拦截需要管理员权限的动作）",
+      "impact": "现在声明了但没人用。chkdsk /f、sfc /scannow、diskpart 都需要管理员，而当前账号不是；不实现的话用户只会看到一句程序自己吐的权限错误。最小实现：清单声明 → 界面上标出来，非管理员执行前提示『这个动作通常需要管理员权限』（并在结果里给出同样的结论）",
+      "status": "待拍板（建议实现，做 Windows 命令集之前做掉更省事）"
     }
   ],
   "nextActions": [
@@ -887,6 +941,14 @@
       "why": "拖放（OLE 拖放没法用 UIA 模拟）、右键改分组、筛选框的组合行为，都只能人点一次；填充规则与分组存储本身已有单测覆盖",
       "how": "按 docs/ai/project-state.json 里 N14 的说明逐条点一遍；发现问题记下来（若是宿主 bug，先写一条失败的回归测试再修）",
       "doneWhen": "拖放、右键改分组、筛选三条都确认可用（或发现的缺陷已修并有测试）",
+      "priority": 1
+    },
+    {
+      "id": "N17",
+      "task": "做 Windows 自带命令集的工具包（只针对 Windows 10/11，先覆盖最常见的）",
+      "why": "用户指定的下一阶段重点",
+      "how": "按 docs/ai/playbook-tool-package.md 做。关键事实（已实测）：绝大多数自带命令本身就是 exe（ping/chkdsk/cleanmgr/ipconfig/tasklist/sfc/diskpart/netstat/systeminfo/tracert/nslookup/shutdown/robocopy/netsh/schtasks/powercfg 在 C:\\Windows\\System32 下都有）；cmd 内建命令（dir/echo/copy/del/cls/type）要用 cmd.exe + command:/c + commandArgs。文档出处用 `命令 /?` 的输出（可离线复核），并把需要管理员权限的动作标出来（D13 若先做掉更好）。注意 cleanmgr/diskpart 是 GUI/交互型，输出为空或需要输入，要在 NOTES.md 里说清楚",
+      "doneWhen": "校验全绿 + 每个动作都对着 `命令 /?` 的真实输出核对过 + NOTES.md 记录实测（含哪些需要管理员）+ 界面冒烟",
       "priority": 1
     }
   ],

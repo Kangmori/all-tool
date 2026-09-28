@@ -41,6 +41,11 @@
       "type": "string",
       "description": "这个工具包在宿主左侧列表里的默认分组（例如「包管理」「压缩归档」）。用户可以自己改分组，改了以用户的为准。注意与字段级的 group 区分：那个是表单内的小节。"
     },
+    "quickActions": {
+      "type": "array",
+      "description": "右键工具包时额外显示的、与这个软件相关的操作（通用项如「打开所在目录」「打开官网」由宿主固定提供，不必在这里写）。",
+      "items": { "$ref": "#/$defs/quickAction" }
+    },
     "sources": {
       "type": "array",
       "description": "参数知识的来源清单。整个工具包级别的来源。",
@@ -349,6 +354,15 @@
         "pattern": { "type": "string" },
         "unit": { "enum": ["percent", "bytes", "count", "unknown"] },
         "group": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "quickAction": {
+      "type": "object",
+      "required": ["title", "action"],
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string", "description": "菜单项文字，例如「检查可用更新」。" },
+        "action": { "type": "string", "description": "要点哪个动作（同一工具包内的动作 id）。写错则菜单里不显示。" }
       }
     },
     "nextStep": {

@@ -25,6 +25,12 @@ public sealed class ToolManifest
 
     public List<string>? Tags { get; init; }
     public List<ManifestSource>? Sources { get; init; }
+
+    /// <summary>
+    /// 右键工具包时额外显示的"与这个软件相关"的操作（例如"检查可用更新"）。
+    /// 这些是**软件专有**的，所以由清单声明；而"打开所在目录""打开官网"这类通用项由宿主固定提供。
+    /// </summary>
+    public List<QuickActionSpec>? QuickActions { get; init; }
     public LocateSpec? Locate { get; init; }
     public RuntimeSpec? Runtime { get; init; }
     public List<ExitCodeSpec>? ExitCodes { get; init; }
@@ -180,6 +186,19 @@ public sealed class ManifestExample
     public string? Title { get; init; }
     public List<string>? Args { get; init; }
     public int ExpectExitCode { get; init; }
+}
+
+/// <summary>
+/// 工具包右键菜单里的一条"软件专有"操作：点它会切到某个动作并执行。
+/// 与 <see cref="NextStepSpec"/> 的区别：这个不看输出，是用户主动发起的入口。
+/// </summary>
+public sealed class QuickActionSpec
+{
+    /// <summary>菜单项文字，例如"检查可用更新"。</summary>
+    public string? Title { get; init; }
+
+    /// <summary>要点哪个动作（同一工具包内的动作 id）。写错则菜单里不显示。</summary>
+    public string? Action { get; init; }
 }
 
 /// <summary>
