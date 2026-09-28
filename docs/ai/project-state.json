@@ -737,6 +737,13 @@
       "doneAt": "2026-09-28",
       "evidence": "ping ipconfig tracert nslookup netstat tasklist systeminfo chkdsk sfc robocopy cleanmgr powercfg；字段出处 100%；冒烟 28 条只读命令按预期退出码通过（白名单 30 条红线自检误判 0）；反查出宿主一个真 bug：校验层拒绝 command:\"\" 而执行层与 schema 都允许（已修）；还让校验器露出\"假完整\"：开关溯源只认 - 前缀，12 个包一个开关都没被查过（已修，现在 300 查 298 命中）",
       "note": "公共实测事实移到 docs/ai/windows-commands.md（原在 docs/reference 下，会随第三方快照一起被清）"
+    },
+    {
+      "id": "N18",
+      "task": "收尾迁移：改名 All Tool / 清第三方快照 / MIT / 转公开 / 发开发测试版 Release",
+      "doneAt": "2026-09-28",
+      "evidence": "① 用 git filter-repo 从全部历史删掉 6 个第三方文档快照目录（7zip-md/scoop-help/scoop-wiki/uv-docs/uv-help/win-docs），保留我们自己的 docs/reference/README.md 与 7zip-switch-matrix.json；.git 1.1MB→0.6MB，提交数不变，远端历史校验为干净。② 出处从本地快照改成可公开形式：scoop-wiki→GitHub wiki 页面、uv→官方 CLI 参考、Windows 包→该包已在用的 Microsoft Learn URL（12 个逐个实测 200）。③ 保留子智能体提取的开关清单作共享语料并把语料规则限成\"win-* 只给引用 Learn 的包\"，待确认从 185 条降到 5 条。④ 改名 All Tool：解决方案/三个项目/命名空间/AllTool.exe/环境变量 ALLTOOL_*/设置目录 %APPDATA%\\AllTool（含从 swpj 目录的一次性复制式迁移，实测迁移成功）。⑤ 新增 MIT LICENSE（Copyright (c) 2026 Kangmori）并重写 README 面向公开。⑥ 仓库改名 Kangmori/swpj → Kangmori/all-tool（force push 清理后的历史）并转为 public。⑦ 发布 v0.1.0-dev：独立版 zip 91.7 MB，匿名可下载（HTTP 200），SHA256 已写进发布说明。",
+      "note": "权威本地工作区改为 D:\\AI\\All Tool；旧目录 D:\\AI\\swpj 已指向同一远端并重置到新历史，不会再误推旧历史"
     }
   ],
   "plugins": [
@@ -972,12 +979,12 @@
       "priority": 2
     },
     {
-      "id": "N18",
-      "task": "收尾迁移：改名 All Tool / 清第三方快照 / MIT / 转公开 / 发开发测试版 Release",
-      "why": "产品负责人已批准（选择 A 方案），并要求推送由我自行完成；授权在 D:\\AI\\All Tool 与 D:\\AI\\All Tool 操作",
-      "how": "① 在 D:\\AI\\All Tool 克隆 → `git filter-repo --path <第三方快照目录> --invert-paths` 清历史；**只清第三方快照，保留 docs/reference/README.md 与 7zip-switch-matrix.json**（后者是校验器第 3 层的输入）；另把清单 sources 里的 file:///D:/... 路径换成官方网页 URL。② 改名：仓库名、窗口标题、About、AllTool.exe、命名空间 AllTool.Core/App、环境变量 ALLTOOL_*、`%APPDATA%\\AllTool`（**旧设置做一次性迁移**，别让用户丢记住的参数与分组）；本机目录 D:\\AI\\All Tool 保留不动，免得会话工作区失效。③ MIT LICENSE + 转公开。④ Release 附件用 `scripts/publish-app.ps1` 的独立包（zip），说明写清 Win10/11 x64、解压即用、已知限制",
-      "doneWhen": "公开仓库可访问、Release 可下载、另一台 Win10/11 机器解压即用、文档里的名字与链接都指向 All Tool",
-      "priority": 1
+      "id": "N19",
+      "task": "继续补 Windows 命令集（第二批）",
+      "why": "第一批 12 个包已经能覆盖诊断与维护的主干；子智能体按价值给了下一批建议",
+      "how": "优先 schtasks（/query 只读且常用）、wevtutil（事件日志查询——chkdsk/sfc 的结果都在事件日志里）、curl 与 tar（Win10 1803+ 自带、跨平台语义清晰）。netsh 面太大要拆；diskpart 是交互式、shutdown 会改系统状态，建议继续不做。做之前先看 docs/ai/windows-commands.md（第一批的实测事实，能省很多重复摸索）",
+      "doneWhen": "校验全绿 + 每个动作对着 `/?` 与官方文档核对 + 冒烟（只读命令）+ NOTES 记录",
+      "priority": 2
     }
   ],
   "readingOrderForNewAgent": [
