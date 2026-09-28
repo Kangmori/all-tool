@@ -193,6 +193,7 @@ public sealed partial class MainWindow : Window
             .ToList();
 
         PackageGroupsPanel.Children.Clear();
+        _packageVisuals.Clear();
 
         foreach (var group in GroupBy(visible, PackageGroupOf, _grouping.GetCustomGroups(forPackages: true)))
         {
@@ -202,11 +203,13 @@ public sealed partial class MainWindow : Window
                 groupName,
                 group.Items,
                 entry => new GroupItem(
+                    entry.Manifest.Id ?? string.Empty,
                     entry.Display,
                     ReferenceEquals(entry.Manifest, _manifest),
                     () => SelectPackage(entry, restoreAction: false),
                     menu => BuildPackageMenu(menu, entry)),
-                isPackageScope: true));
+                isPackageScope: true,
+                _packageVisuals));
         }
     }
 
@@ -219,6 +222,7 @@ public sealed partial class MainWindow : Window
             .ToList();
 
         ActionGroupsPanel.Children.Clear();
+        _actionVisuals.Clear();
 
         if (_manifest is null)
         {
@@ -235,11 +239,13 @@ public sealed partial class MainWindow : Window
                 groupName,
                 group.Items,
                 entry => new GroupItem(
+                    entry.Action.Id ?? string.Empty,
                     entry.Display,
                     ReferenceEquals(entry.Action, _action),
                     () => SelectAction(entry),
                     menu => BuildActionMenu(menu, entry)),
-                isPackageScope: false));
+                isPackageScope: false,
+                _actionVisuals));
         }
     }
 
@@ -293,10 +299,40 @@ public sealed partial class MainWindow : Window
 
     /// <summary>左栏里一个条目的呈现信息。</summary>
     private sealed record GroupItem(
+        string Key,
         string Text,
         bool Selected,
         Action Select,
         Action<MenuFlyout> BuildMenu);
+
+    /// <summary>
+    /// 条目的可视元素（按钮 + 左侧那根强调色标记），用于**原地改高亮**。
+    ///
+    /// 为什么要留着它们：选中一个条目只需要换高亮，如果为此把整个列表重建一遍，
+    /// 新建的 Expander 会从 0 高度播放展开动画——用户看到的就是"分组迅速折叠又展开"（已被反馈）。
+    /// 所以选中时只更新这里登记的元素，绝不重建列表。
+    /// </summary>
+    private readonly Dictionary<string, (Button Button, Border Marker)> _packageVisuals = new(StringComparer.Ordinal);
+
+    private readonly Dictionary<string, (Button Button, Border Marker)> _actionVisuals = new(StringComparer.Ordinal);
+
+    /// <summary>原地刷新选中态（不重建控件、不触发任何展开动画）。</summary>
+    private void UpdateSelectionHighlights(bool forPackages)
+    {
+        var registry = forPackages ? _packageVisuals : _actionVisuals;
+        var accent = (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"];
+        var clear = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+
+        foreach (var (key, visual) in registry)
+        {
+            var selected = forPackages
+                ? string.Equals(key, _manifest?.Id, StringComparison.Ordinal)
+                : ReferenceEquals(_action, _actions.FirstOrDefault(a => a.Action.Id == key)?.Action);
+
+            visual.Button.FontWeight = selected ? FontWeights.SemiBold : FontWeights.Normal;
+            visual.Marker.Background = selected ? accent : clear;
+        }
+    }
 
     /// <summary>
     /// 生成一个可折叠的分组：标题 + 组内条目。
@@ -311,7 +347,8 @@ public sealed partial class MainWindow : Window
         string title,
         List<T> items,
         Func<T, GroupItem> describe,
-        bool isPackageScope)
+        bool isPackageScope,
+        Dictionary<string, (Button Button, Border Marker)> registry)
     {
         var list = new StackPanel { Spacing = 1 };
 
@@ -344,6 +381,12 @@ public sealed partial class MainWindow : Window
                     : new SolidColorBrush(Microsoft.UI.Colors.Transparent),
                 CornerRadius = new CornerRadius(2),
             };
+
+            // 登记起来，之后选中态就靠原地改这两个元素，不再重建列表
+            if (!string.IsNullOrEmpty(info.Key))
+            {
+                registry[info.Key] = (button, marker);
+            }
 
             var row = new Grid { ColumnSpacing = 6 };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -411,7 +454,9 @@ public sealed partial class MainWindow : Window
         NextStepsPanel.Visibility = Visibility.Collapsed;
         RunButton.IsEnabled = false;
 
-        RebuildPackageList();
+        // 工具包列表**不重建**（只换高亮，避免分组播放折叠/展开动画）；
+        // 动作列表必须重建——换了工具包，动作本来就是另一批。
+        UpdateSelectionHighlights(forPackages: true);
         RebuildActionList();
 
         StatusText.Text = $"{_manifest.Name} {_manifest.AppVersion} —— {_actions.Count} 个动作";
@@ -444,7 +489,10 @@ public sealed partial class MainWindow : Window
         _lastValues.Set(UiStateScope, "state", $"lastAction:{_manifest?.Id}", entry.Action.Id);
 
         BuildForm();
-        RebuildActionList();
+
+        // **只改高亮，不重建列表**：重建会让分组重新播放展开动画，
+        // 用户看到的就是"分组迅速折叠又展开"（已被反馈），完全不必要。
+        UpdateSelectionHighlights(forPackages: false);
     }
 
     // ------------------------------------------------------------------ 工具包分组：新建 / 重命名 / 删除 / 拖动改分组

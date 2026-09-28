@@ -240,6 +240,7 @@ uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py
 | P25 | 界面加了一个输入框，界面冒烟脚本就失灵 | 脚本原来按**序号**取控件（`$edits[0]`）；新增"筛选框"之后所有序号错位。同理，宿主"恢复上次选中的工具包"会让 `SWPJ_SELECT_ACTION` 的序号套到别的包上 | 脚本改成按 `AutomationId` 取（排除 `FilterBox` / `CommandLineBox` / `OutputBox`），并新增 `SWPJ_SELECT_PACKAGE` 显式钉住工具包。**凡是自动化脚本，都不要依赖控件序号或"最后一个输入框"这类位置假设** |
 | P26 | 界面拖放/右键菜单这类交互"没法自动化验证" | 拖动条目改分组、把工具包拖进来安装、右键菜单——UIA 都模拟不了（OLE 拖放与 ContextFlyout 不在自动化树里） | 把**判定逻辑**从交互里抽出来放到 Core 并用单测钉死：拖放填充 → `PathDropLogic`；安装/卸载 → `PackageInstaller`（11 个测试）；推荐下一步 → `NextStepMatcher`。交互本身仍需人工点一次（记进 project-state 的 nextActions，别当作已验证） |
 | P27 | 测试偶发失败（"单独跑必过、全量跑偶尔红"） | 两个原因叠加：① 用**固定延时**去触发取消/超时——机器一快，被测任务在你取消之前就结束了，断言随之偶发失败（`CancelRealCommandTests` 踩过：固定等 2 秒，而 7z 有时不到 2 秒就压完了）；② 会真启动进程／真压文件的测试默认并行跑，互相抢资源 | ① 不要用固定延时，**等到可观察的信号**（例如"收到第一行输出"）再触发；断言里带上诊断信息（耗时／退出码／已收行数），好区分"任务已跑完"与"取消没生效"；② 把真实进程测试放进同一个 `[CollectionDefinition(DisableParallelization = true)]` 集合 |
+| P28 | 选中一个条目后，它所在的分组"迅速折叠又展开"（视觉闪烁） | 选中时为了换高亮把**整个列表重建**了一遍：`Children.Clear()` + 新建 Expander。新建的 Expander 会从 0 高度播放展开动画，看起来就是一缩一放 | **选中态原地更新，不要重建控件**：把每个条目的（按钮 + 高亮标记）登记到字典里，选中时只改这两个属性。验证方法很直接：**比较控件的 UIA RuntimeId**——控件被重建时它必然变化，没变就说明没有动画可播 |
 
 ---
 
