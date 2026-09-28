@@ -23,7 +23,6 @@ description: "Scoop —— Windows 上的命令行安装器（Git 风格）。�
 homepage: https://scoop.sh/
 license: "Unlicense 或 MIT（软件自带 LICENSE 的 SPDX 标识：UNLICENSE or MIT）"
 tags: [包管理, 安装器, 系统工具]
-category: 包管理
 quickActions:
   - title: 检查可用更新
     action: status

@@ -72,6 +72,13 @@ public sealed partial class MainWindow : Window
     private string _pluginsRoot = string.Empty;
 
     /// <summary>
+    /// 当前展开着的分组（键形如 <c>pkg:包管理</c> / <c>act:应用管理</c>）。
+    /// 列表会因为"选中条目/筛选/改分组"而重建，展开状态必须跨重建保留，
+    /// 否则用户刚点开的分组会立刻被收起来（实测被反馈过）。启动时是空的 = 全部收起。
+    /// </summary>
+    private readonly HashSet<string> _expandedGroups = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// 接收从资源管理器拖来的**工具包**：文件夹（含 manifest.yaml）、.zip、或单个清单文件。
     /// 与"拖动条目改分组"是两种不同的数据格式，所以互不干扰。
     /// </summary>
@@ -201,7 +208,8 @@ public sealed partial class MainWindow : Window
                     DragKey.Package(entry.Manifest.Id ?? string.Empty, entry.Display),
                     menu => BuildPackageMenu(menu, entry)),
                 DragKey.PackageFormat,
-                key => MovePackageToGroup(key, groupName)));
+                key => MovePackageToGroup(key, groupName),
+                isPackageScope: true));
         }
     }
 
@@ -220,9 +228,9 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var packageId = _manifest.Id ?? string.Empty;
-
-        foreach (var group in GroupBy(visible, a => ActionGroupOf(a.Action), _grouping.GetCustomGroups(forPackages: false)))
+        // 动作的分组**完全由清单定义**（作者最清楚自己的命令该怎么归类），
+        // 所以这里不接收用户新建的分组、也不允许拖动改分组——避免"清单说一套、界面另一套"的矛盾。
+        foreach (var group in GroupBy(visible, a => ActionGroupOf(a.Action)))
         {
             var groupName = group.Key;
 
@@ -233,10 +241,33 @@ public sealed partial class MainWindow : Window
                     entry.Display,
                     ReferenceEquals(entry.Action, _action),
                     () => SelectAction(entry),
-                    DragKey.Action(packageId, entry.Action.Id ?? string.Empty, entry.Display),
-                    _ => { }),
-                DragKey.ActionFormat,
-                key => MoveActionToGroup(key, groupName)));
+                    string.Empty,
+                    menu => BuildActionMenu(menu, entry)),
+                dragFormat: null,
+                _ => { },
+                isPackageScope: false));
+        }
+    }
+
+    /// <summary>
+    /// 动作条目的右键菜单。"联机帮助"用系统默认浏览器去搜这个命令的帮助——
+    /// 工具包不可能把每个开关都写成字段，遇到没覆盖到的开关时这是最直接的出路。
+    /// </summary>
+    private void BuildActionMenu(MenuFlyout menu, ActionEntry entry)
+    {
+        var tool = _manifest?.Name ?? _manifest?.Id ?? string.Empty;
+        var command = entry.Action.Command ?? string.Empty;
+
+        menu.Items.Add(MenuItem("联机帮助（用默认浏览器搜索）", () => OpenSearch($"{tool} {command} 命令 帮助 用法")));
+        menu.Items.Add(MenuItem("复制这个命令", () => CopyToClipboard($"{tool} {command}".Trim(), "命令名")));
+
+        // 清单里如果写了网页地址，就顺手给一个"看出处"的入口
+        var source = (entry.Action.Sources ?? []).FirstOrDefault(s =>
+            !string.IsNullOrWhiteSpace(s.Url) && s.Url!.StartsWith("http", StringComparison.OrdinalIgnoreCase));
+
+        if (source is not null)
+        {
+            menu.Items.Add(MenuItem($"看出处：{source.Title}", () => OpenUrl(source.Url, "出处文档")));
         }
     }
 
@@ -289,17 +320,19 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// 生成一个可折叠的分组：标题 + 组内条目。
     ///
-    /// 交互上有三条约定：
-    ///   1. **默认折叠**——工具包多起来之后全展开会很长；
-    ///   2. 条目可以**拖到别的分组标题上**来改分组（比右键菜单直观）；
-    ///   3. 拖到「工具包」/「动作」标题上 = 恢复清单里的默认分组。
+    /// 交互约定：
+    ///   1. **展开状态跨重建保留**（选中条目会重建列表，不能因此把人家展开的分组收起来）；
+    ///      只有启动时是全部收起的。
+    ///   2. 工具包条目可以**拖到别的分组标题上**来改分组；动作条目不参与（动作分组由清单定义）。
+    ///   3. 拖到「工具包」标题上 = 恢复清单里的默认分组。
     /// </summary>
-    private static Expander BuildGroup<T>(
+    private Expander BuildGroup<T>(
         string title,
         List<T> items,
         Func<T, GroupItem> describe,
-        string dragFormat,
-        Action<string> onItemDropped)
+        string? dragFormat,
+        Action<string> onItemDropped,
+        bool isPackageScope)
     {
         var list = new StackPanel { Spacing = 1 };
 
@@ -316,16 +349,20 @@ public sealed partial class MainWindow : Window
                 Background = null,
                 BorderThickness = new Thickness(0),
                 FontWeight = info.Selected ? FontWeights.SemiBold : FontWeights.Normal,
-                CanDrag = true,
+                CanDrag = dragFormat is not null,
             };
             button.Click += (_, _) => info.Select();
 
-            button.DragStarting += (_, e) =>
+            if (dragFormat is not null)
             {
-                e.Data.SetData(dragFormat, info.DragKey);
-                e.Data.RequestedOperation = DataPackageOperation.Move;
-                e.DragUI.SetContentFromDataPackage();
-            };
+                var format = dragFormat;
+                button.DragStarting += (_, e) =>
+                {
+                    e.Data.SetData(format, info.DragKey);
+                    e.Data.RequestedOperation = DataPackageOperation.Move;
+                    e.DragUI.SetContentFromDataPackage();
+                };
+            }
 
             var menu = new MenuFlyout();
             info.BuildMenu(menu);
@@ -358,35 +395,54 @@ public sealed partial class MainWindow : Window
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
 
+        var scopeKey = (isPackageScope ? "pkg:" : "act:") + title;
+
         var expander = new Expander
         {
             Header = header,
             Content = list,
-            IsExpanded = false,                 // 默认折叠
-            AllowDrop = true,                   // 接收拖来的条目 → 加入本组
+
+            // 展开状态**跨重建保留**：选中一个条目会重建列表，若这里一律写 false，
+            // 用户刚展开的分组就会全部收起（实测被反馈过）。
+            IsExpanded = _expandedGroups.Contains(scopeKey),
+            AllowDrop = dragFormat is not null,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
             Margin = new Thickness(0, 2, 0, 0),
         };
 
-        expander.DragOver += (_, e) =>
-        {
-            if (e.DataView.Contains(dragFormat))
-            {
-                e.AcceptedOperation = DataPackageOperation.Move;
-                e.DragUIOverride.Caption = $"移到「{title}」";
-                e.DragUIOverride.IsCaptionVisible = true;
-            }
-        };
+        expander.Expanding += (_, _) => _expandedGroups.Add(scopeKey);
+        expander.Collapsed += (_, _) => _expandedGroups.Remove(scopeKey);
 
-        expander.Drop += (_, e) =>
+        if (dragFormat is not null)
         {
-            if (e.DataView.Contains(dragFormat))
+            var format = dragFormat;
+
+            expander.DragOver += (_, e) =>
             {
+                if (e.DataView.Contains(format))
+                {
+                    e.AcceptedOperation = DataPackageOperation.Move;
+                    e.DragUIOverride.Caption = $"移到「{title}」";
+                    e.DragUIOverride.IsCaptionVisible = true;
+                }
+            };
+
+            expander.Drop += async (_, e) =>
+            {
+                if (!e.DataView.Contains(format))
+                {
+                    return;
+                }
+
                 e.Handled = true;
-                onItemDropped(e.DataView.GetDataAsync(dragFormat).AsTask().GetAwaiter().GetResult() as string ?? string.Empty);
-            }
-        };
+
+                // **必须 await**：GetDataAsync 是 WinRT 异步操作，在 UI 线程上同步等它
+                // （GetAwaiter().GetResult()）会死锁——现象就是"拖过去毫无反应"（实测踩过）。
+                var payload = await e.DataView.GetDataAsync(format);
+                onItemDropped(payload as string ?? string.Empty);
+            };
+        }
 
         return expander;
     }
@@ -455,7 +511,10 @@ public sealed partial class MainWindow : Window
         RebuildActionList();
     }
 
-    // ------------------------------------------------------------------ 分组：拖动改分组 / 新建分组
+    // ------------------------------------------------------------------ 工具包分组：新建 / 重命名 / 删除 / 拖动改分组
+    //
+    // 为什么只有工具包能自定义分组：**动作怎么分组是工具包作者的事**（清单里的 category），
+    // 让用户再改一套只会产生矛盾；而"我这个工具包算哪一类"是用户自己的事。
 
     /// <summary>把拖过来的工具包放进目标分组（空分组名 = 恢复清单里的默认分组）。</summary>
     private void MovePackageToGroup(string dragKey, string? groupName)
@@ -476,33 +535,23 @@ public sealed partial class MainWindow : Window
             : $"「{packageId}」已移到「{groupName}」";
     }
 
-    private void MoveActionToGroup(string dragKey, string? groupName)
-    {
-        var parts = dragKey.Split('\u0001');
-
-        if (parts.Length < 2 || _manifest?.Id is null)
-        {
-            return;
-        }
-
-        _grouping.SetActionGroup(_manifest.Id, parts[1], groupName);
-        _grouping.Save();
-        RebuildActionList();
-
-        StatusText.Text = string.IsNullOrEmpty(groupName)
-            ? $"「{parts[1]}」已恢复清单里的默认分组"
-            : $"「{parts[1]}」已移到「{groupName}」";
-    }
-
-    /// <summary>在「工具包」/「动作」标题上右键 → 新建一个空分组（然后把条目拖进去）。</summary>
-    private async Task CreateGroupAsync(bool forPackages)
+    /// <summary>在「工具包」标题上右键 → 新建一个空分组（然后把条目拖进去）。</summary>
+    private async Task CreateGroupAsync()
     {
         var input = new TextBox { PlaceholderText = "新分组名，例如「常用」「诊断」" };
 
         var dialog = new ContentDialog
         {
-            Title = forPackages ? "新建工具包分组" : "新建动作分组",
-            Content = input,
+            Title = "新建工具包分组",
+            Content = new StackPanel
+            {
+                Spacing = 6,
+                Children =
+                {
+                    new TextBlock { Text = "建好之后，把工具包拖到这个分组标题上即可归入。", TextWrapping = TextWrapping.Wrap, Opacity = 0.75 },
+                    input,
+                },
+            },
             PrimaryButtonText = "创建",
             CloseButtonText = "取消",
             DefaultButton = ContentDialogButton.Primary,
@@ -514,74 +563,184 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        _grouping.AddCustomGroup(forPackages, input.Text);
+        _grouping.AddCustomGroup(forPackages: true, input.Text);
         _grouping.Save();
+        RebuildPackageList();
 
-        if (forPackages)
-        {
-            RebuildPackageList();
-        }
-        else
-        {
-            RebuildActionList();
-        }
-
-        StatusText.Text = $"已新建分组「{input.Text.Trim()}」，把条目拖进去即可";
+        StatusText.Text = $"已新建分组「{input.Text.Trim()}」，把工具包拖到它上面即可";
     }
 
-    /// <summary>删掉一个用户新建的分组（里面的条目回到清单默认分组）。</summary>
-    private async Task RemoveGroupAsync(bool forPackages, string name)
+    /// <summary>重命名一个分组。清单定义的分组也能改（改名后其成员会写上覆盖值）。</summary>
+    private async Task RenameGroupAsync()
     {
+        var groups = CurrentPackageGroups();
+
+        if (groups.Count == 0)
+        {
+            StatusText.Text = "现在没有分组";
+            return;
+        }
+
+        var picker = new ComboBox { ItemsSource = groups, HorizontalAlignment = HorizontalAlignment.Stretch };
+        picker.SelectedIndex = 0;
+
+        var input = new TextBox { PlaceholderText = "新的分组名" };
+
         var dialog = new ContentDialog
         {
-            Title = $"删除分组「{name}」？",
-            Content = "分组里的条目会回到清单里声明的默认分组，条目本身不会被删掉。",
+            Title = "重命名工具包分组",
+            Content = new StackPanel
+            {
+                Spacing = 8,
+                Children =
+                {
+                    new TextBlock { Text = "要改哪个分组：", Opacity = 0.75 },
+                    picker,
+                    new TextBlock { Text = "改成：", Opacity = 0.75 },
+                    input,
+                },
+            },
+            PrimaryButtonText = "重命名",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = (Content as FrameworkElement)?.XamlRoot,
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary
+            || picker.SelectedItem is not string oldName
+            || string.IsNullOrWhiteSpace(input.Text))
+        {
+            return;
+        }
+
+        var newName = input.Text.Trim();
+
+        if (string.Equals(oldName, newName, StringComparison.CurrentCulture))
+        {
+            return;
+        }
+
+        // 原分组的成员全部写上覆盖值指向新名字（这样"改清单定义的分组名"也成立）
+        foreach (var package in _packages.Where(p => string.Equals(PackageGroupOf(p), oldName, StringComparison.CurrentCulture)))
+        {
+            _grouping.SetPackageGroup(package.Manifest.Id ?? string.Empty, newName);
+        }
+
+        _grouping.AddCustomGroup(forPackages: true, newName);
+
+        if (_grouping.GetCustomGroups(forPackages: true).Contains(oldName, StringComparer.CurrentCulture))
+        {
+            _grouping.RemoveCustomGroup(forPackages: true, oldName);
+        }
+
+        _expandedGroups.Remove("pkg:" + oldName);
+        _grouping.Save();
+        RebuildPackageList();
+
+        StatusText.Text = $"分组「{oldName}」已重命名为「{newName}」";
+    }
+
+    /// <summary>删掉一个用户新建的分组（成员回到清单默认分组）。清单定义的分组不在这里删。</summary>
+    private async Task DeleteGroupAsync()
+    {
+        var custom = _grouping.GetCustomGroups(forPackages: true).ToList();
+
+        if (custom.Count == 0)
+        {
+            StatusText.Text = "没有可删除的自定义分组（清单定义的分组请用「全部恢复默认分组」）";
+            return;
+        }
+
+        var picker = new ComboBox { ItemsSource = custom, HorizontalAlignment = HorizontalAlignment.Stretch };
+        picker.SelectedIndex = 0;
+
+        var dialog = new ContentDialog
+        {
+            Title = "删除工具包分组",
+            Content = new StackPanel
+            {
+                Spacing = 8,
+                Children =
+                {
+                    new TextBlock { Text = "要删哪个分组：", Opacity = 0.75 },
+                    picker,
+                    new TextBlock
+                    {
+                        Text = "分组里的工具包会回到「未分组」——工具包本身不会被卸载。",
+                        TextWrapping = TextWrapping.Wrap,
+                        Opacity = 0.75,
+                    },
+                },
+            },
             PrimaryButtonText = "删除分组",
             CloseButtonText = "取消",
             DefaultButton = ContentDialogButton.Close,
             XamlRoot = (Content as FrameworkElement)?.XamlRoot,
         };
 
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary || picker.SelectedItem is not string name)
         {
             return;
         }
 
-        _grouping.RemoveCustomGroup(forPackages, name);
+        _grouping.RemoveCustomGroup(forPackages: true, name);
+        _expandedGroups.Remove("pkg:" + name);
         _grouping.Save();
-
-        if (forPackages)
-        {
-            RebuildPackageList();
-        }
-        else
-        {
-            RebuildActionList();
-        }
+        RebuildPackageList();
 
         StatusText.Text = $"已删除分组「{name}」";
     }
 
-    /// <summary>给「工具包」/「动作」标题装上下文菜单，并让它能接收"拖出来恢复默认分组"。</summary>
+    /// <summary>当前工具包列表里实际出现的分组名（用于重命名时的下拉选择）。</summary>
+    private List<string> CurrentPackageGroups() =>
+        _packages
+            .Select(PackageGroupOf)
+            .Concat(_grouping.GetCustomGroups(forPackages: true))
+            .Distinct(StringComparer.CurrentCulture)
+            .OrderBy(name => name, StringComparer.CurrentCulture)
+            .ToList();
+
+    /// <summary>
+    /// 给「工具包」/「动作」标题装上下文菜单。
+    ///
+    /// 两者的能力**刻意不同**：
+    ///   - 「工具包」：新建/重命名/删除分组 + 展开收起 + 恢复默认，并且能接收拖来的工具包（改分组 / 恢复默认）；
+    ///   - 「动作」：只有展开收起——动作分组由工具包清单定义，界面不掺和，避免"清单一套、界面一套"。
+    /// </summary>
     private void WireSectionTitle(TextBlock title, bool forPackages, StackPanel panel)
     {
         var menu = new MenuFlyout();
-        menu.Items.Add(MenuItem("新建分组…", () => _ = CreateGroupAsync(forPackages)));
-        menu.Items.Add(new MenuFlyoutSeparator());
+
+        if (forPackages)
+        {
+            menu.Items.Add(MenuItem("新建分组…", () => _ = CreateGroupAsync()));
+            menu.Items.Add(MenuItem("重命名分组…", () => _ = RenameGroupAsync()));
+            menu.Items.Add(MenuItem("删除分组…", () => _ = DeleteGroupAsync()));
+            menu.Items.Add(new MenuFlyoutSeparator());
+        }
+
         menu.Items.Add(MenuItem("全部展开", () => SetGroupsExpanded(panel, true)));
         menu.Items.Add(MenuItem("全部收起", () => SetGroupsExpanded(panel, false)));
-        menu.Items.Add(new MenuFlyoutSeparator());
-        menu.Items.Add(MenuItem("全部恢复默认分组", () => ResetGroups(forPackages)));
+
+        if (forPackages)
+        {
+            menu.Items.Add(new MenuFlyoutSeparator());
+            menu.Items.Add(MenuItem("全部恢复默认分组", () => ResetGroups()));
+        }
+
         title.ContextFlyout = menu;
 
-        // 把条目拖到标题上 = 恢复清单里的默认分组
+        if (!forPackages)
+        {
+            return;
+        }
+
+        // 把工具包拖到标题上 = 恢复"未分组"
         title.AllowDrop = true;
 
         title.DragOver += (_, e) =>
         {
-            var format = forPackages ? DragKey.PackageFormat : DragKey.ActionFormat;
-
-            if (e.DataView.Contains(format))
+            if (e.DataView.Contains(DragKey.PackageFormat))
             {
                 e.AcceptedOperation = DataPackageOperation.Move;
                 e.DragUIOverride.Caption = "恢复默认分组";
@@ -589,26 +748,18 @@ public sealed partial class MainWindow : Window
             }
         };
 
-        title.Drop += (_, e) =>
+        title.Drop += async (_, e) =>
         {
-            var format = forPackages ? DragKey.PackageFormat : DragKey.ActionFormat;
-
-            if (!e.DataView.Contains(format))
+            if (!e.DataView.Contains(DragKey.PackageFormat))
             {
                 return;
             }
 
             e.Handled = true;
-            var key = e.DataView.GetDataAsync(format).AsTask().GetAwaiter().GetResult() as string ?? string.Empty;
 
-            if (forPackages)
-            {
-                MovePackageToGroup(key, null);
-            }
-            else
-            {
-                MoveActionToGroup(key, null);
-            }
+            // 同样必须 await（同步等 WinRT 异步会死锁）
+            var key = await e.DataView.GetDataAsync(DragKey.PackageFormat);
+            MovePackageToGroup(key as string ?? string.Empty, null);
         };
     }
 
@@ -620,7 +771,7 @@ public sealed partial class MainWindow : Window
         return item;
     }
 
-    private static void SetGroupsExpanded(Panel panel, bool expanded)
+    private void SetGroupsExpanded(Panel panel, bool expanded)
     {
         foreach (var child in panel.Children.OfType<Expander>())
         {
@@ -628,28 +779,15 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void ResetGroups(bool forPackages)
+    private void ResetGroups()
     {
-        if (forPackages)
+        foreach (var package in _packages)
         {
-            foreach (var package in _packages)
-            {
-                _grouping.SetPackageGroup(package.Manifest.Id ?? string.Empty, null);
-            }
-
-            _grouping.Save();
-            RebuildPackageList();
+            _grouping.SetPackageGroup(package.Manifest.Id ?? string.Empty, null);
         }
-        else if (_manifest?.Id is string packageId)
-        {
-            foreach (var action in _actions)
-            {
-                _grouping.SetActionGroup(packageId, action.Action.Id ?? string.Empty, null);
-            }
 
-            _grouping.Save();
-            RebuildActionList();
-        }
+        _grouping.Save();
+        RebuildPackageList();
 
         StatusText.Text = "已恢复清单里声明的默认分组";
     }
@@ -718,6 +856,24 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             Debug.WriteLine($"{what}打不开：{ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 用系统默认浏览器搜一段文字。
+    /// 用途：工具包不可能把每个开关都做成字段，"这个命令还有什么参数"最直接的出路就是搜一下。
+    /// </summary>
+    private static void OpenSearch(string query)
+    {
+        var url = "https://www.bing.com/search?q=" + Uri.EscapeDataString(query);
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine("打开浏览器失败：" + ex.Message);
         }
     }
 
@@ -862,6 +1018,49 @@ public sealed partial class MainWindow : Window
 
     private void OnExitClicked(object sender, RoutedEventArgs e) => Close();
 
+    /// <summary>
+    /// 以管理员身份重新启动自己（会弹 UAC）。
+    /// 做 Windows 自带命令集时这是刚需：chkdsk /f、sfc /scannow、diskpart 都要提权，
+    /// 而普通启动的宿主拿不到管理员令牌。
+    /// </summary>
+    private void OnRestartElevatedClicked(object sender, RoutedEventArgs e)
+    {
+        var exe = Environment.ProcessPath;
+
+        if (string.IsNullOrEmpty(exe))
+        {
+            StatusText.Text = "拿不到自己的可执行文件路径，无法重启";
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true, Verb = "runas" });
+            Close();
+        }
+        catch (Exception ex)
+        {
+            // 用户点了"否"也会走到这里（Win32Exception: 操作已被用户取消）
+            StatusText.Text = "没有以管理员身份启动：" + ex.Message;
+        }
+    }
+
+    /// <summary>当前进程是否已提权。</summary>
+    private static bool IsElevated()
+    {
+        try
+        {
+            using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+
+            return new System.Security.Principal.WindowsPrincipal(identity)
+                .IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
     private void OnOpenDocsClicked(object sender, RoutedEventArgs e)
     {
         try
@@ -942,6 +1141,15 @@ public sealed partial class MainWindow : Window
 
         ActionTitle.Text = _action.Title ?? string.Empty;
         ActionDescription.Text = _action.Description ?? string.Empty;
+
+        // 需要管理员权限的动作：**提前说清楚**，别让用户跑完只看到一句程序自己吐的权限错误。
+        // （Windows 自带命令里 chkdsk /f、sfc /scannow、diskpart 都属于这类。）
+        if (_action.RequiresAdminEffective(_manifest?.Runtime?.RequiresAdmin ?? false))
+        {
+            ActionDescription.Text += IsElevated()
+                ? "\n✔ 这个动作需要管理员权限，当前已是管理员。"
+                : "\n⚠ 这个动作通常需要管理员权限。当前不是管理员，很可能会失败——可用「文件 → 以管理员身份重新启动」。";
+        }
 
         if (_action.DangerOrDefault != DangerLevel.None)
         {
@@ -1714,6 +1922,12 @@ public sealed partial class MainWindow : Window
 
     private async Task RunCoreAsync()
     {
+        // 守卫放在这里而不是只放调用处：这样编译器也知道后面 _action / _manifest.Locate 非空
+        if (_action is null || _manifest?.Locate is null)
+        {
+            return;
+        }
+
         if (_action.DangerOrDefault == DangerLevel.Destructive)
         {
             var dialog = new ContentDialog
@@ -1776,9 +1990,13 @@ public sealed partial class MainWindow : Window
 
         var workingDirectory = ResolveWorkingDirectory();
         var encoding = EncodingResolver.Resolve(_manifest.Runtime?.Encoding);
-
         ClearOutput();
         AppendOutput($"> {ArgvBuilder.FormatForDisplay(_executablePath, argv)}");
+
+        if (_action.RequiresAdminEffective(_manifest.Runtime?.RequiresAdmin ?? false) && !IsElevated())
+        {
+            AppendOutput("# 注意：这个动作通常需要管理员权限，而当前不是管理员——如果失败，请用「文件 → 以管理员身份重新启动」再试。");
+        }
 
         if (workingDirectory is not null)
         {

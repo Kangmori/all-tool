@@ -22,6 +22,8 @@
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="重新载入全部工具包" Click="OnReloadPackagesClicked" />
                 <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="以管理员身份重新启动" Click="OnRestartElevatedClicked" />
+                <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="退出" Click="OnExitClicked" />
             </MenuBarItem>
             <MenuBarItem Title="帮助">

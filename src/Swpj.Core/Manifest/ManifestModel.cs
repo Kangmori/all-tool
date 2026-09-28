@@ -114,6 +114,17 @@ public sealed class ManifestAction
     /// <summary>动作在左侧列表里的默认分组（例如"查询""安装""缓存"）。可被用户自定义覆盖。</summary>
     public string? Category { get; init; }
 
+    /// <summary>
+    /// 这个动作是否需要管理员权限。不写则跟随工具包级的 <c>runtime.requiresAdmin</c>。
+    ///
+    /// 为什么要动作级：同一个软件往往只有部分动作需要提权
+    /// （例如 `chkdsk` 只读检查不需要，`chkdsk /f` 修盘需要；`sfc /verifyonly` 与 `sfc /scannow` 也是）。
+    /// </summary>
+    public bool? RequiresAdmin { get; init; }
+
+    /// <summary>把工具包级的默认值算进来，得到这个动作最终是否需要管理员。</summary>
+    public bool RequiresAdminEffective(bool packageDefault) => RequiresAdmin ?? packageDefault;
+
     /// <summary>执行完之后可以推荐的下一步（见 <see cref="NextStepSpec"/>）。</summary>
     public List<NextStepSpec>? NextSteps { get; init; }
 

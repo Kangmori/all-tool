@@ -18,7 +18,6 @@ description: 7-Zip 的命令行版本。压缩、解压、查看、测试、计�
 homepage: https://www.7-zip.org/
 license: LGPL-2.1-or-later（unRAR 部分另有不得用于开发 RAR 压缩器的限制条款）
 tags: [压缩, 归档, 哈希]
-category: 压缩归档
 quickActions:
   - title: 查看支持的格式
     action: info

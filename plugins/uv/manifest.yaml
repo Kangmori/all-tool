@@ -21,7 +21,6 @@ description: Astral 的极速 Python 包管理器与环境管理器。管理项�
 homepage: https://docs.astral.sh/uv/
 license: MIT OR Apache-2.0（uv 自身双许可）
 tags: [python, 包管理, 虚拟环境, 依赖]
-category: Python 与包管理
 quickActions:
   - title: 查看已安装的包
     action: pip-list
