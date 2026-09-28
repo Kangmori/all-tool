@@ -50,6 +50,7 @@ public class CancelRealCommandTests
             var runner = new ProcessRunner();
             using var cts = new CancellationTokenSource();
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            var progress = new SyncProgress<ProcessOutputLine>();
 
             var run = runner.RunAsync(
                 new ProcessRunRequest
@@ -60,18 +61,34 @@ public class CancelRealCommandTests
                     OutputEncoding = EncodingResolver.Resolve("gbk"),
                     UsePseudoConsole = true,
                 },
-                progress: null,
+                progress,
                 cts.Token);
 
-            await Task.Delay(2000);
+            // **等到它真的开始输出再取消**，不要用固定的 2 秒延时。
+            // 固定延时是个竞态：机器快的时候 7z 可能已经压完了，"取消"发生在任务结束之后，
+            // 断言就会偶发失败。改成"看到第一行输出才取消"，并且在断言里带上诊断信息，
+            // 好区分两种失败：进程其实已经跑完（测试自己的竞态）vs 取消真的没生效（产品缺陷）。
+            var started = System.Diagnostics.Stopwatch.StartNew();
+
+            while (progress.Items.Count == 0 && started.Elapsed < TimeSpan.FromSeconds(20))
+            {
+                await Task.Delay(50);
+            }
+
             cts.Cancel();
 
             var result = await run;
+            var elapsed = stopwatch.Elapsed;
 
-            Assert.True(result.Canceled, $"取消请求已发出，但执行器报告 Canceled=false（退出码 {result.ExitCode}）");
             Assert.True(
-                stopwatch.Elapsed < TimeSpan.FromSeconds(15),
-                $"取消后过了 {stopwatch.Elapsed.TotalSeconds:F1} 秒才返回，说明没被及时杀掉");
+                result.Canceled,
+                $"取消请求已发出，但执行器报告 Canceled=false。耗时 {elapsed.TotalSeconds:F1} 秒，"
+                + $"退出码 {result.ExitCode}，取消时已收到 {progress.Items.Count} 行输出"
+                + "（退出码 0 且输出很多 = 进程在取消前就跑完了，那是测试自己的竞态）");
+
+            Assert.True(
+                elapsed < TimeSpan.FromSeconds(20),
+                $"取消后过了 {elapsed.TotalSeconds:F1} 秒才返回，说明没被及时杀掉");
         }
         finally
         {
