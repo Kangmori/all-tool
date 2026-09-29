@@ -97,4 +97,61 @@ public class NextStepOptionsTests
 
         Assert.Empty(suggestions);
     }
+
+    [Fact]
+    public void 没有占位符的规则只出一个按钮()
+    {
+        // scoop status 的「一键更新全部」：when 能命中多行，但标题与 values 里都没有占位符，
+        // 所以只能出一个按钮（否则界面上会出现好几个一模一样的按钮——这是实测暴露过的缺陷）。
+        var rule = new NextStepSpec
+        {
+            Title = "一键更新全部",
+            Action = "update",
+            When = @"(?m)^\S+\s+\d\S*\s+\d",
+        };
+
+        var source = Action("status", [rule]);
+        var target = Action("update");
+        var output = "ffmpeg 9.0.1 9.0.2\ngit 2.55.0.5 2.56.0\nnodejs 26.8.2 26.10.0";
+
+        var suggestions = NextStepMatcher.Match(source, [source, target], output);
+
+        var only = Assert.Single(suggestions);
+        Assert.Equal("一键更新全部", only.Title);
+        Assert.Empty(only.Values);
+    }
+
+    [Fact]
+    public void 逐应用规则按命中行数生成选项并填进多选字段()
+    {
+        // 这是 scoop status 的逐应用更新：一行一个应用，填进 update 的 apps（multiselect）字段。
+        // 注意正则**不能要求列之间有两个以上空格**——占满列宽的那一行可能只剩 1 个空格
+        // （实测 mpc-hc-fork 因此被漏掉），所以用「空白 + 版本形态」判断。
+        var rule = new NextStepSpec
+        {
+            Title = "更新 {1}",
+            Action = "update",
+            When = @"(?m)^([A-Za-z0-9][\w.+-]*)\s+\d\S*\s+\d",
+            Values = new Dictionary<string, object?> { ["apps"] = "{1}" },
+            MaxOptions = 12,
+        };
+
+        var source = Action("status", [rule]);
+        var target = Action("update");
+        var output = string.Join("\n",
+            "Name        Installed Version Latest Version",
+            "----        ----------------- --------------",
+            "ffmpeg      9.0.1             9.0.2",
+            "mpc-hc-fork 2.8.1             2.8.2",
+            "nodejs      26.8.2            26.10.0");
+
+        var suggestions = NextStepMatcher.Match(source, [source, target], output);
+
+        Assert.Equal(3, suggestions.Count);
+        Assert.Equal("更新 ffmpeg", suggestions[0].Title);
+        Assert.Equal("ffmpeg", suggestions[0].Values["apps"]);
+        // 占满列宽的那个应用必须也在（这正是当时漏掉的一个）
+        Assert.Contains(suggestions, s => s.Title == "更新 mpc-hc-fork" && (string?)s.Values["apps"] == "mpc-hc-fork");
+        Assert.DoesNotContain(suggestions, s => s.Title.Contains("Name") || s.Title.Contains("----"));
+    }
 }
