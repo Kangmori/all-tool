@@ -98,6 +98,19 @@ public sealed partial class MainWindow : Window
                      + $"运行环境 .NET {Environment.Version} / {Environment.OSVersion.VersionString}");
 
         LoadPackages();
+
+        // 启动欢迎界面：**必须等窗口加载完**——构造函数里 XamlRoot 还没准备好，
+        // 那时调 ContentDialog.ShowAsync 会抛异常（被 catch 吞掉，表现为"欢迎界面不弹"）。
+        if (Content is FrameworkElement root)
+        {
+            void OnLoadedOnce(object? sender, RoutedEventArgs args)
+            {
+                root.Loaded -= OnLoadedOnce;
+                _ = ShowWelcomeAsync();
+            }
+
+            root.Loaded += OnLoadedOnce;
+        }
     }
 
     /// <summary>
@@ -551,7 +564,10 @@ public sealed partial class MainWindow : Window
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Left,
                 Padding = new Thickness(8, 4, 8, 4),
-                Background = null,
+                // 关键：Background = null 时，按钮只有「内容本身的像素」参与命中测试，
+                // 所以必须点在文字上才选得中（产品负责人实测）。改用透明画刷：
+                // 视觉上完全一样，但整块矩形区域都能点。
+                Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
                 BorderThickness = new Thickness(0),
             };
             // 内容换成 StackPanel 之后，按钮的可访问名称不再自动等于文字——
@@ -768,6 +784,148 @@ public sealed partial class MainWindow : Window
         ActionDescription.Text += Environment.NewLine + Environment.NewLine
             + "⚠ " + why + Environment.NewLine
             + "命令已经拼好并且随时可复制；要执行就点「在终端中打开」，它会在真正的命令行窗口里跑同一条命令。";
+    }
+
+    /// <summary>「不再显示欢迎界面」的标记文件。</summary>
+    private static string WelcomeFlagPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AllTool", "welcome-dismissed");
+
+    /// <summary>
+    /// 启动欢迎界面：一句话说清这个软件干什么、可以「继续上次」、按类型列出工具包。
+    ///
+    /// 为什么要它：启动会**恢复上次选中的工具包与动作**（有意的，免得每次重新找），
+    /// 但用户看到的是「一打开就选中了 DiskPart」，分不清是自己上次选的还是程序擅自选的。
+    /// 欢迎界面把这个状态**显式说出来**，并给一个重新挑的入口。
+    ///
+    /// 自动化验收（设了 ALLTOOL_SELECT_*）或勾过「不再显示」时不弹，否则模态框会挡住验收脚本。
+    /// </summary>
+    private async Task ShowWelcomeAsync()
+    {
+        try
+        {
+            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ALLTOOL_SELECT_PACKAGE"))
+                || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ALLTOOL_SELECT_ACTION")))
+            {
+                return;
+            }
+
+            if (File.Exists(WelcomeFlagPath))
+            {
+                return;
+            }
+
+            var panel = new StackPanel { Spacing = 10 };
+
+            panel.Children.Add(new TextBlock
+            {
+                Text = "把 Windows 上已安装的命令行软件，变成可以点的界面。" + Environment.NewLine
+                       + "选一个工具包 → 选一个动作 → 填参数 → 执行；执行前一定能看到完整命令行。",
+                TextWrapping = TextWrapping.Wrap,
+                Opacity = 0.85,
+            });
+
+            ContentDialog? dialog = null;
+
+            if (_manifest is not null)
+            {
+                var lastText = _manifest.Name ?? _manifest.Id ?? string.Empty;
+
+                if (_action is not null)
+                {
+                    lastText += " · " + (_action.Title ?? _action.Id ?? string.Empty);
+                }
+
+                var resume = new Button
+                {
+                    Content = $"继续上次：{lastText}",
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                };
+
+                resume.Click += (_, _) => dialog?.Hide();
+                panel.Children.Add(resume);
+            }
+
+            var kinds = new (string Kind, string Title)[]
+            {
+                ("user", "⚪ 我装的工具"),
+                ("system", "🔵 系统自带"),
+                ("interactive", "🟡 交互式程序"),
+                ("dangerous", "🔴 高危工具"),
+            };
+
+            foreach (var (kind, title) in kinds)
+            {
+                var members = _packages.Where(p => p.Manifest.KindOrDefault == kind).ToList();
+
+                if (members.Count == 0)
+                {
+                    continue;
+                }
+
+                panel.Children.Add(new TextBlock
+                {
+                    Text = $"{title}（{members.Count}）",
+                    FontWeight = FontWeights.SemiBold,
+                    Opacity = 0.75,
+                    Margin = new Thickness(0, 6, 0, 0),
+                });
+
+                var wrap = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+
+                foreach (var entry in members)
+                {
+                    var pick = new Button { Content = entry.Manifest.Name ?? entry.Manifest.Id ?? "?" };
+                    var captured = entry;
+
+                    pick.Click += (_, _) =>
+                    {
+                        SelectPackage(captured, restoreAction: false);
+                        dialog?.Hide();
+                    };
+
+                    wrap.Children.Add(pick);
+                }
+
+                panel.Children.Add(wrap);
+            }
+
+            var hide = new CheckBox { Content = "下次不再显示这个欢迎界面" };
+            panel.Children.Add(hide);
+
+            dialog = new ContentDialog
+            {
+                Title = "欢迎使用 All Tool",
+                Content = new ScrollViewer
+                {
+                    Content = panel,
+                    MaxHeight = 460,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                },
+                PrimaryButtonText = "开始",
+                CloseButtonText = "知道了",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = (Content as FrameworkElement)?.XamlRoot,
+            };
+
+            await dialog.ShowAsync();
+
+            if (hide.IsChecked == true)
+            {
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(WelcomeFlagPath)!);
+                    File.WriteAllText(WelcomeFlagPath, DateTime.Now.ToString("O"));
+                }
+                catch (IOException)
+                {
+                    // 记不住就下次再弹，不影响使用
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Exception("显示欢迎界面时", ex);
+        }
     }
 
     /// <summary>

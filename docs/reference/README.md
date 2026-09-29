@@ -8,7 +8,7 @@
 （7-Zip CHM 的反编译文本、Scoop wiki 全站克隆、`scoop help` / `uv --help` 的输出、
 Microsoft Learn 的页面 HTML）。原因是版权：那些是别人的作品，公开仓库里不能整篇转载。
 
-保留规则（完整口径见 `docs/ai/development.md` §8.7、§8.8）：
+保留规则（完整口径见 `本机专属库的 host-dev/development.md` §8.7、§8.8）：
 
 | 内容 | 能不能入库 | 理由 |
 |---|---|---|
@@ -39,7 +39,7 @@ Microsoft Learn 的页面 HTML）。原因是版权：那些是别人的作品�
 ```
 
 指针文件是仓库根目录的 `.local-vault`（**不入库**），里面写着本机专属库的路径。
-详见 `docs/ai/development.md` §8.8。
+详见 `本机专属库的 host-dev/development.md` §8.8。
 
 ## 怎么重新生成（都是本机操作，产物默认落到本机专属库）
 
@@ -57,7 +57,7 @@ pwsh -File scripts/extract-7zip-matrix.ps1
 
 **抓官方网页时**：三条通道（harness 的 `web_fetch` / PowerShell `Invoke-WebRequest` / `web_search`）
 **一条不通就换下一条**，别在一条上反复试；三条都不通就改用程序自带帮助。细节见
-`docs/ai/development.md` §4.4。
+`本机专属库的 host-dev/development.md` §4.4。
 
 ## 抓取时实测出来的坑（这些是知识，留在公开仓库）
 

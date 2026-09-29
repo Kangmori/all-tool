@@ -30,7 +30,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, pathlib
-          for path in ["docs/spec/manifest-v1.schema.json", "docs/ai/project-state.json"]:
+          for path in ["docs/spec/manifest-v1.schema.json", "本机专属库的 host-dev/project-state.json"]:
               json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
               print(f"OK  {path}")
           PY

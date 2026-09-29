@@ -8,8 +8,8 @@
 
 1. `AGENTS.md` —— 硬规则、必读顺序、命令速查
 2. 运行 `pwsh -File scripts/check-env.ps1` 核对环境
-3. `docs/ai/project-state.json` —— 项目状态、未决问题、下一步动作
-4. `docs/ai/development.md` —— 架构、环境事实、已知陷阱
+3. `本机专属库的 host-dev/project-state.json` —— 项目状态、未决问题、下一步动作
+4. `本机专属库的 host-dev/development.md` —— 架构、环境事实、已知陷阱
 5. 新增工具包 → `docs/ai/playbook-tool-package.md`
 
 改完工具包必须跑：

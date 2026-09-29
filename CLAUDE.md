@@ -8,7 +8,7 @@
 
 1. `AGENTS.md` —— 硬规则（7 条）、必读顺序、命令速查
 2. `pwsh -File scripts/check-env.ps1` —— 核对环境是否与记录一致
-3. `docs/ai/project-state.json` —— 机器可读的项目状态、未决问题、下一步动作
-4. `docs/ai/development.md` —— 架构、环境事实、已知陷阱（**动手前必读陷阱清单**）
+3. `本机专属库的 host-dev/project-state.json` —— 机器可读的项目状态、未决问题、下一步动作
+4. `本机专属库的 host-dev/development.md` —— 架构、环境事实、已知陷阱（**动手前必读陷阱清单**）
 5. 若要新增工具包 → `docs/ai/playbook-tool-package.md`
 6. 若要改清单规范 → `docs/spec/manifest-v1.md`

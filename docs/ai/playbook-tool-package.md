@@ -306,7 +306,7 @@ function Test-ReadOnly([string[]]$argv) {
 ## 阶段 7 — 收尾
 
 ```powershell
-# 1. 更新 docs/ai/project-state.json 的 plugins 段（加一条记录）
+# 1. 更新 本机专属库的 host-dev/project-state.json 的 plugins 段（加一条记录）
 # 2. 校验必须全绿
 uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py
 # 3. 提交（**仅当你被授权提交时**；上级若说"别提交"，就跳过这一步并把改动留在工作区）

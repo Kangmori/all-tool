@@ -58,8 +58,8 @@ pwsh -File scripts/publish-app.ps1
 ## 给 AI 智能体看的文档
 
 本仓库的**唯一入口是 [`AGENTS.md`](AGENTS.md)**：硬规则、接手顺序、文档地图。
-机器可读状态在 [`docs/ai/project-state.json`](docs/ai/project-state.json)，
-已知陷阱（P1–P28）在 [`docs/ai/development.md`](docs/ai/development.md)。
+机器可读状态在 [`本机专属库的 host-dev/project-state.json`](本机专属库的 host-dev/project-state.json)，
+已知陷阱（P1–P28）在 [`本机专属库的 host-dev/development.md`](本机专属库的 host-dev/development.md)。
 设计目标是：**任何一个不了解本项目的 AI 智能体，读完就能安全地继续开发。**
 
 ## 许可
