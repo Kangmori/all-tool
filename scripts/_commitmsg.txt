@@ -1,0 +1,19 @@
+feat(wevtutil): 新增 wevtutil 工具包（18 动作）；记录「单 token vs 两 token」的字段风格规则
+
+子智能体完成 wevtutil：18 动作 / 49 字段 / 出处 100%。实测要点：
+- 编码实测定为 oem（字节级证据：el/ep/gl 全 ASCII 判不出编码，改用 qe /f:text 的原始输出，
+  非 ASCII 字节 bf cd bb a7 b6 cb = GBK 的「客户端」，而严格 UTF-8 解码抛异常）
+- 17 条只读 argv 全绿（含「查 chkdsk 结果」这条：qe Application /q:*[System[Provider[@Name='Chksk']]]
+  命中 4 条完整中文报告）；红线动作（cl/sl/im/um/epl 成功路径）一个没跑
+- 临时对象零个
+
+它发现一条横向风险并交给我核实：wevtutil **只接受 /开关:取值 单 token**，
+而宿主把 style: separate 展开成两个 token → 它最初按规范写 separate，17 条里 9 条 exit 87；
+改成 attached + prefix（冒号进 prefix）后全绿。
+
+我据此实测了另外两个大量使用 separate 的包，结论是**它们不受影响**：
+- curl：`curl --head --location --max-time 20 --user-agent AllTool/1.0 --silent --show-error <url>` → exit 0
+- schtasks：`schtasks /Query /TN "<任务>" /FO LIST` → exit 0
+
+因此新增 playbook §9：定字段风格前**用同一条真实命令把两种写法各试一次**并写进 NOTES；
+这类错误校验器查不出来（开关名与出处都对），只有真机能发现。
