@@ -1,0 +1,841 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# tar（bsdtar）—— Windows 10 1803 起**系统自带**的归档工具（C:\Windows\System32\tar.exe）。
+#
+# 参数知识来源（两个官方来源 + 本机帮助逐条核对，三方一致才写进清单）：
+#   1) 微软官方 Windows 开发者文档 https://learn.microsoft.com/en-us/windows/tar/
+#      （"tar on Windows"，Last-Modified 2026-08-24）：给出"Windows 自带、基于 libarchive 的 bsdtar、
+#      支持的归档格式、常用命令"，并**明确指向 FreeBSD tar 手册作为完整选项参考**。
+#      ⚠️ 注意：Windows Server 的经典页面
+#      https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tar
+#      **实测返回 404**（见 NOTES.md §1），所以出处用的是上面那个仍然存在的官方页。
+#   2) bsdtar 官方手册（微软页面指向的同一份手册）：
+#      https://man.freebsd.org/cgi/man.cgi?query=tar&sektion=1&manpath=FreeBSD+14.3-RELEASE
+#      逐条选项语义以此为准（-c/-r/-t/-u/-x、-a、-C、-f、-k、-m、-O、-P、-p、-v、-w、-z/-j/-J/-Z/
+#      --lzma、--exclude、--exclude-from、--format、--mtime、--clamp-mtime、--strip-components、
+#      @archive、EXIT STATUS）。
+#   3) 本机 `tar --help`（bsdtar 3.8.4，1376 字节）+ 80 余条原型命令实跑（见 NOTES.md §5）。
+#      **本机帮助只有常用项**：`--help` 里根本没提 -a / -P / --strip-components / -X / -p / -o；
+#      这些是"官方手册有 + 本机实跑通过"才收录的。只有一侧有的（例如官方手册里没有的，或
+#      官方有但本机实跑报错的）一律不写。
+#
+# 版本：`tar --version` 实测输出 "bsdtar 3.8.4 - libarchive 3.8.4 …"（首行非空，与 7-Zip 不同）。
+# 编码：**实测为 OEM 代码页（本机 936）**，不是 UTF-8——详见 NOTES.md §4 的字节级证据。
+# 退出码：官方手册 EXIT STATUS 只有一句话（0 = 成功，>0 = 出错），没有像 7-Zip 那样的码表，
+#   所以 exitCodes 只写两条，不自造码表（R1）。
+# 危险动作：解压会覆盖同名文件，标 overwrite；`-P`（--absolute-paths）会关闭 tar 的
+#   `..`/绝对路径安全检查，是本包唯一标 destructive 的动作——官方原文见该动作的 sources。
+#   `-P` 已实跑验证过"关掉检查后真的会写到目录外"（NOTES.md §5 测试 32–33 / M/N）。
+# 本包是纯只读 + 归档读写，**不需要管理员权限**。
+
+spec: 1
+id: tar
+name: tar
+manifestVersion: 0.1.0
+appVersion: bsdtar 3.8.4 / libarchive 3.8.4（Windows 11 26200 自带）
+kind: system
+summary: 系统自带的归档与解压
+description: >-
+  Windows 10 1803 起**系统自带**的归档工具（\Windows\System32\tar.exe），
+  内核是 libarchive 的 bsdtar 3.8.4。不用装任何东西就能创建/查看/解压 .tar、.tar.gz、.zip、
+  .tar.bz2、.tar.xz、.7z 等归档，参数与 Linux/macOS 上的 tar 基本一致。
+  很多人不知道系统里有它，于是为了解压一个 .tar.gz 去装第三方软件。
+homepage: https://learn.microsoft.com/en-us/windows/tar/
+license: 随 Windows 操作系统分发（微软最终用户许可协议）；tar 本体为 libarchive 的 BSD 2-Clause
+tags: [windows, 自带命令, 归档, 压缩, 解压]
+
+sources:
+  - title: Microsoft Learn —— tar on Windows（官方 Windows 开发者文档）
+    url: https://learn.microsoft.com/en-us/windows/tar/
+    retrieved: "2026-09-29"
+    appliesTo: Windows 10 1803 及以上
+    note: >-
+      官方原文要点：tar is a command-line archiving tool that's included with Windows；
+      支持 .tar/.tar.gz/.zip/.7z；The Windows build of tar is based on libarchive's bsdtar and
+      supports the same flags developers already use on Linux and macOS。页面给出四个示例：
+      tar -xf archive.tar.gz、tar -czf archive.tar.gz .\my-folder、tar -caf archive.zip .\my-folder、
+      tar -tf archive.tar.gz，并写明 -a 会按扩展名自动选格式、取代 -z/-j/-J/-Z，
+      以及 For the full list of options, run tar --help or the FreeBSD Tar manual。
+      该页 Last-Modified 2026-08-24（请求头实测）。**经典页面 .../windows-commands/tar 已 404。**
+  - title: bsdtar 官方手册（FreeBSD tar(1)，微软页面指向的同一份手册）
+    url: https://man.freebsd.org/cgi/man.cgi?query=tar&sektion=1&manpath=FreeBSD+14.3-RELEASE
+    retrieved: "2026-09-29"
+    appliesTo: bsdtar 3.8.x（本机 3.8.4）
+    note: >-
+      逐条选项语义来自此页的 OPTIONS 与 EXIT STATUS 两节，例如 -c Create a new archive /
+      -r like -c but new entries are appended … this only works on uncompressed archives stored in
+      regular files / -t List archive contents to stdout / -u Like -r, but new entries are added only
+      if they have a modification date newer than the corresponding entry / -x Extract to disk from
+      the archive。EXIT STATUS 全文只有一句：The tar utility exits 0 on success, and >0 if an error occurs。
+  - title: 本机 `tar --help` 的真实输出快照（**未入库**，可用 `tar --help` 随时重取）
+    url: file:///%SystemRoot%/System32/tar.exe
+    retrieved: "2026-09-29"
+    appliesTo: bsdtar 3.8.4 / libarchive 3.8.4（Windows 11 26200，tar.exe 文件版本 3.8.4.0）
+    note: >-
+      实测 1376 字节，退出码 0，把选项分成 Common / Create / List / Extract 四段。
+      **它只列常用项**：--help 里出现的是 -b -f -v -w -c -r -t -u -x -z -j -J --lzma --format
+      --exclude --mtime --clamp-mtime -C @archive -k -m -O -p；而 -a、-P、--strip-components、-X、
+      --exclude-from 等**没有出现在 --help 里**，是本机逐条实跑确认可用的（见 NOTES.md §5）。
+  - title: 本机原型命令真机冒烟（80 余条，含退出码）
+    url: file:///%TEMP%/tar-smoke/smoke.log
+    retrieved: "2026-09-29"
+    appliesTo: Windows 11 26200 / bsdtar 3.8.4
+    note: >-
+      在 %TEMP%\tar-smoke 与 %TEMP%\tar-smoke2 里建测试目录实跑，记录退出码与关键输出；
+      全部结果抄进 plugins/tar/NOTES.md §5。**原始 log 在临时目录、不入库**，命令都写在 NOTES 里可复现。
+
+locate:
+  executable: tar.exe
+  alternativeNames: [bsdtar.exe]
+  searchPaths:
+    - ${SystemRoot}\System32
+  versionArgs: ["--version"]
+  versionPattern: '(?m)^bsdtar\s+([0-9.]+)'
+  minVersion: "3.5.0"
+  notFoundHint: >-
+    找不到 tar.exe。Windows 10 1803（2018 年 4 月）及以上的 Windows **自带**它，
+    位置在 C:\Windows\System32\tar.exe，不需要安装任何东西。若确实没有，说明系统早于 1803，
+    可考虑升级系统，或临时使用 7-Zip（本仓库另有 7zip 工具包）。
+
+runtime:
+  encoding: oem
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  # 不需要伪控制台：bsdtar 不画进度条，被重定向时输出照样完整（实测列出/解压输出全都在）。
+  usePseudoConsole: false
+
+# 退出码：官方手册 EXIT STATUS 一节只有一句 "exits 0 on success, and >0 if an error occurs"，
+# **没有逐码表**，所以这里只写两条，不编造具体码的语义（R1）。
+# 实测补充：归档不存在、归档里有 '..' 成员、对已压缩归档用 -r 时，退出码都是 1。
+exitCodes:
+  - code: 0
+    meaning: 成功（官方手册 EXIT STATUS：exits 0 on success）
+    severity: ok
+  - code: 1
+    meaning: >-
+      出错（官方手册 EXIT STATUS：>0 if an error occurs）。实测见过的情形：归档不存在
+      （tar: Error opening archive: Failed to open …）、归档里有 '..' 成员时未加 -P
+      （tar: …: Path contains '..'）、把 -a 与 -j 一起给出（-caj）等
+    severity: error
+
+actions:
+
+  - id: version
+    category: 查看
+    title: 查看 tar 版本与支持的压缩库
+    description: 显示 bsdtar 与 libarchive 的版本，以及编译进来的压缩库（zlib/bz2/lzma/zstd）。
+    command: ""
+    commandArgs: ["--version"]
+    fields: []
+    sources:
+      - title: bsdtar 官方手册 —— --version
+        url: https://man.freebsd.org/cgi/man.cgi?query=tar&sektion=1&manpath=FreeBSD+14.3-RELEASE
+        retrieved: "2026-09-29"
+        appliesTo: bsdtar 3.8.x
+        note: 手册原文：--version Print version of tar and libarchive, and exit. 本机实跑输出见 NOTES.md §5 测试 34。
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - title: 查看版本
+        args: ["--version"]
+        expectExitCode: 0
+
+  - id: list
+    category: 查看
+    title: 查看归档内容（不解压）
+    description: 列出归档里有哪些条目。不加 -v 只列文件名；加 -v 输出类似 ls 的详细信息（权限/大小/时间）。
+    command: ""
+    commandArgs: ["-t"]
+    fields:
+      - id: archive
+        label: 归档文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        placeholder: 例如 D:\backup\data.tar.gz
+        help: 压缩格式会被自动识别，不需要加 -z/-j/-J（手册：recognizes … compression automatically when reading archives）。
+        doc: 'bsdtar 手册 -f file, --file file（Read the archive from … the specified file）；-t 的语法形式 tar {-t | -x} [options] [patterns]'
+      - id: verbose
+        label: 显示详细信息（-v）
+        type: bool
+        style: flag
+        prefix: "-v"
+        default: false
+        help: 手册：In list mode, tar will produce output similar to that of ls(1).
+        doc: bsdtar 手册 -v, --verbose
+      - id: members
+        label: 只列出匹配的条目
+        type: text
+        style: positional
+        repeatable: true
+        placeholder: 每行一个通配模式，例如 *.txt
+        help: 手册：In list mode … the entire command line is read and parsed before the archive is opened，模式是 shell 风格通配符。留空则列出全部。
+        doc: 'bsdtar 手册 -t 的语法行 [patterns] 与 OPTIONS 前言的 Patterns are shell-style globbing patterns'
+    sources:
+      - title: bsdtar 官方手册（FreeBSD tar(1)，微软 tar on Windows 页面指向的同一份手册）
+        url: https://man.freebsd.org/cgi/man.cgi?query=tar&sektion=1&manpath=FreeBSD+14.3-RELEASE
+        retrieved: "2026-09-29"
+        appliesTo: bsdtar 3.8.x（本机 3.8.4）
+        note: >-
+          OPTIONS 前言：In extract or list mode, the entire command line is read and parsed before the archive is opened. The pathnames or patterns on the command line indicate which items in the archive should be processed. Patterns are shell-style globbing patterns；-t List archive contents to stdout；-f file, --file file（Read the archive from or write the archive to the specified file）；-v, --verbose（In list mode, tar will produce output similar to that of ls(1)）。
+      - title: 本机 `tar --help` 与本机实跑核对（bsdtar 3.8.4）
+        url: file:///%SystemRoot%/System32/tar.exe
+        retrieved: "2026-09-29"
+        appliesTo: bsdtar 3.8.4（Windows 11 26200）
+        note: >-
+          本机 `tar --help`（1376 字节）+ 原型命令实跑核对：`tar -tf test.tar` 退出码 0、列出 ./ ./a.txt ./b.log ./sub/ 等条目；`tar -tf test.tar '*.txt'` 退出码 0、只列出 ./a.txt 与 ./sub/c.txt。本机 --help 把 -t 与 -v、-f 列在 Common/List 两段里。
+
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - title: 列出归档全部内容
+        args: ["-t", "-f", "test.tar.gz"]
+        expectExitCode: 0
+      - title: 只看 .txt 条目
+        args: ["-t", "-f", "test.tar", "*.txt"]
+        expectExitCode: 0
+
+  - id: extract-text
+    category: 查看
+    title: 把某个文件的内容打到输出区（-O，不落盘）
+    description: 只把归档里指定文件的内容写到标准输出，**不在磁盘上创建任何文件**。用来快速看一眼归档里的小文件。
+    command: ""
+    commandArgs: ["-x"]
+    fields:
+      - id: archive
+        label: 归档文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        doc: bsdtar 手册 -f file, --file file
+      - id: toStdout
+        label: 输出到标准输出（-O）
+        type: bool
+        style: flag
+        prefix: "-O"
+        default: true
+        help: 手册：In extract (-x) mode, files will be written to standard out rather than being extracted to disk.
+        doc: bsdtar 手册 -O, --to-stdout
+      - id: members
+        label: 要看的条目
+        type: text
+        style: positional
+        required: true
+        repeatable: true
+        placeholder: 每行一个，例如 ./README.txt
+        doc: 'bsdtar 手册 -x 的语法行 [patterns]'
+    sources:
+      - title: bsdtar 官方手册（FreeBSD tar(1)，微软 tar on Windows 页面指向的同一份手册）
+        url: https://man.freebsd.org/cgi/man.cgi?query=tar&sektion=1&manpath=FreeBSD+14.3-RELEASE
+        retrieved: "2026-09-29"
+        appliesTo: bsdtar 3.8.x（本机 3.8.4）
+        note: >-
+          OPTIONS 前言（同 list 的 patterns 说明）；-O, --to-stdout（x, t modes only）In extract (-x) mode, files will be written to standard out rather than being extracted to disk；-x Extract to disk from the archive；-f file, --file file。
+      - title: 本机 `tar --help` 与本机实跑核对（bsdtar 3.8.4）
+        url: file:///%SystemRoot%/System32/tar.exe
+        retrieved: "2026-09-29"
+        appliesTo: bsdtar 3.8.4（Windows 11 26200）
+        note: >-
+          本机 `tar --help`（1376 字节）+ 原型命令实跑核对：`tar -xOf test.tar ./a.txt` 退出码 0，输出 hello（文件内容）且磁盘上没有新建文件。本机 --help 把 -O 列在 Extract 段。
+
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - title: 把归档里的 a.txt 打到输出区
+        args: ["-x", "-O", "-f", "test.tar", "./a.txt"]
+        expectExitCode: 0
+
+  # ============================================================ 解压
+  - id: extract
+    category: 解压
+    title: 解压归档（可选解压到指定目录）
+    description: >-
+      解压整个归档，或只解出命令行上列出的条目。保留归档内的目录结构。
+      「解压到」留空表示解压到当前目录（本应用的工作目录）；填了就等价于加 -C。
+    command: ""
+    commandArgs: ["-x"]
+    danger: overwrite
+    confirmText: >-
+      解压会用归档里的同名文件覆盖磁盘上的现有文件，被覆盖的内容无法恢复。
+      如果只想补上缺失的文件、不动已有文件，请改用「解压（不覆盖已存在文件）」，或先用「查看归档内容」确认。
+    fields:
+      - id: outputDir
+        label: 解压到（留空 = 当前目录）
+        type: directory
+        style: separate
+        prefix: "-C"
+        save: true
+        placeholder: 例如 D:\out
+        help: >-
+          手册：In x mode, change directories after opening the archive but before extracting entries from the archive.
+          **注意（本机实测）：tar 的 -C 不会替你建目录**——目标目录必须先存在，否则会以
+          "tar.exe: could not chdir to '…'" 失败（退出码 1）。用「浏览…」选一个已存在的目录即可；
+          留空则解压到当前目录。目录内的文件仍可能被同名文件覆盖。
+        doc: bsdtar 手册 -C directory, --cd directory, --directory directory
+      - id: archive
+        label: 归档文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        help: 压缩格式自动识别，不需要 -z/-j/-J。
+        doc: bsdtar 手册 -f file, --file file
+      - id: stripComponents
+        label: 剥掉最前面的目录层数（--strip-components）
+        type: number
+        style: separate
+        prefix: "--strip-components"
+        group: 高级
+        advanced: true
+        placeholder: 例如 1（去掉最外层的顶层目录）
+        help: 手册：Remove the specified number of leading path elements. Pathnames with fewer elements will be silently skipped.
+        doc: bsdtar 手册 --strip-components count
+      - id: members
+        label: 只解压匹配的条目
+        type: text
+        style: positional
+        repeatable: true
+        placeholder: 每行一个，例如 *.txt
+        help: 留空 = 解压全部。填了就只解出匹配的条目（tar -x 的 [patterns]）。
+        doc: 'bsdtar 手册 -x 的语法行 [patterns]'
+    sources:
+      - title: bsdtar 官方手册（FreeBSD tar(1)，微软 tar on Windows 页面指向的同一份手册）
+        url: https://man.freebsd.org/cgi/man.cgi?query=tar&sektion=1&manpath=FreeBSD+14.3-RELEASE
+        retrieved: "2026-09-29"
+        appliesTo: bsdtar 3.8.x（本机 3.8.4）
+        note: >-
+          -x Extract to disk from the archive. If a file with the same name appears more than once in the archive, each copy will be extracted, with later copies overwriting (replacing) earlier copies；-C directory, --cd directory, --directory directory（In x mode, change directories after opening the archive but before extracting entries from the archive）；--strip-components count（Remove the specified number of leading path elements. Pathnames with fewer elements will be silently skipped）；-f file, --file file。
+      - title: 本机 `tar --help` 与本机实跑核对（bsdtar 3.8.4）
+        url: file:///%SystemRoot%/System32/tar.exe
+        retrieved: "2026-09-29"
+        appliesTo: bsdtar 3.8.4（Windows 11 26200）
+        note: >-
+          本机 `tar --help`（1376 字节）+ 原型命令实跑核对：`tar -xf test.tar.gz -C out1` 退出码 0；`tar -xf test.tar -C out2 --strip-components 1` 退出码 0，out2 下直接得到 a.txt/b.log/sub/（顶层 ./ 被剥掉）。
+
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - title: 解压到指定目录
+        args: ["-C", "out1", "-x", "-f", "test.tar.gz"]
+        expectExitCode: 0
+      - title: 剥掉一层目录后解压
+        args: ["-C", "out2", "-x", "-f", "test.tar", "--strip-components", "1"]
+        expectExitCode: 0
+
+  - id: extract-keep
+    category: 解压
+    title: 解压（不覆盖已存在文件）
+    description: >-
+      用 -k 解压：磁盘上已存在的同名文件一律保留，只解开归档里那些当前不存在的文件。
+      适合"把一个归档铺到已有目录上，但不许动现有文件"。
+    command: ""
+    commandArgs: ["-x"]
+    danger: overwrite
+    confirmText: 只会新增文件、不会覆盖已有文件（-k）；但归档里没有的文件不受影响，也不会被删除。
+    fields:
+      - id: outputDir
+        label: 解压到（留空 = 当前目录）
+        type: directory
+        style: separate
+        prefix: "-C"
+        save: true
+        help: >-
+          目标目录必须**已存在**：tar 的 -C 不会替你创建目录，否则会以 "could not chdir" 失败（本机实测）。
+          留空则解压到当前目录。
+        doc: bsdtar 手册 -C directory, --cd directory, --directory directory
+      - id: archive
+        label: 归档文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        doc: bsdtar 手册 -f file, --file file
+      - id: keepOld
+        label: 不覆盖已存在的文件（-k）
+        type: bool
+        style: flag
+        prefix: "-k"
+        default: true
+        help: 手册：Do not overwrite existing files. In particular, if a file appears more than once in an archive, later copies will not overwrite earlier copies.
+        doc: bsdtar 手册 -k, --keep-old-files
+      - id: stripComponents
+        label: 剥掉最前面的目录层数（--strip-components）
+        type: number
+        style: separate
+        prefix: "--strip-components"
+        group: 高级
+        advanced: true
+        doc: bsdtar 手册 --strip-components count
+    sources:
+      - title: bsdtar 官方手册（FreeBSD tar(1)，微软 tar on Windows 页面指向的同一份手册）
+        url: https://man.freebsd.org/cgi/man.cgi?query=tar&sektion=1&manpath=FreeBSD+14.3-RELEASE
+        retrieved: "2026-09-29"
+        appliesTo: bsdtar 3.8.x（本机 3.8.4）
+        note: >-
+          -k, --keep-old-files（x mode only）Do not overwrite existing files. In particular, if a file appears more than once in an archive, later copies will not overwrite earlier copies；-C directory；--strip-components count；-f file。
+      - title: 本机 `tar --help` 与本机实跑核对（bsdtar 3.8.4）
+        url: file:///%SystemRoot%/System32/tar.exe
+        retrieved: "2026-09-29"
+        appliesTo: bsdtar 3.8.4（Windows 11 26200）
+        note: >-
+          本机 `tar --help`（1376 字节）+ 原型命令实跑核对：先在 out4\a.txt 写入 PRESERVED-BY-K，再 `tar -xf test.tar -C out4 -k`：退出码 0，a.txt 内容仍是 PRESERVED-BY-K（未被覆盖）；把同一归档解到空目录 kout2 时文件全部正常生成。
+
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - title: 解压但不覆盖已有文件
+        args: ["-C", "kout", "-x", "-f", "test.tar", "-k"]
+        expectExitCode: 0
+
+  - id: extract-single
+    category: 解压
+    title: 只解出指定文件
+    description: 按名字或通配模式从归档里挑出若干条目解压，其余条目不动。
+    command: ""
+    commandArgs: ["-x"]
+    danger: overwrite
+    confirmText: 解出的文件若与磁盘上已有文件同名，会被覆盖且无法恢复。
+    fields:
+      - id: outputDir
+        label: 解压到（留空 = 当前目录）
+        type: directory
+        style: separate
+        prefix: "-C"
+        save: true
+        help: >-
+          目标目录必须**已存在**：tar 的 -C 不会替你创建目录，否则会以 "could not chdir" 失败（本机实测）。
+          留空则解压到当前目录。
+        doc: bsdtar 手册 -C directory, --cd directory, --directory directory
+      - id: archive
+        label: 归档文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        doc: bsdtar 手册 -f file, --file file
+      - id: members
+        label: 要解出的条目
+        type: text
+        style: positional
+        required: true
+        repeatable: true
+        placeholder: 每行一个，例如 ./a.txt
+        help: 名字要按归档里的写法（用「查看归档内容」可以看到，通常带 ./ 前缀）；支持通配符。
+        doc: bsdtar 手册 -x 的 [patterns] 与 Patterns are shell-style globbing patterns
+    sources:
+      - title: bsdtar 官方手册（FreeBSD tar(1)，微软 tar on Windows 页面指向的同一份手册）
+        url: https://man.freebsd.org/cgi/man.cgi?query=tar&sektion=1&manpath=FreeBSD+14.3-RELEASE
+        retrieved: "2026-09-29"
+        appliesTo: bsdtar 3.8.x（本机 3.8.4）
+        note: >-
+          OPTIONS 前言（patterns 的说明，同 list）；-x Extract to disk from the archive；-C directory, --cd directory, --directory directory；-f file, --file file。
+      - title: 本机 `tar --help` 与本机实跑核对（bsdtar 3.8.4）
+        url: file:///%SystemRoot%/System32/tar.exe
+        retrieved: "2026-09-29"
+        appliesTo: bsdtar 3.8.4（Windows 11 26200）
+        note: >-
+          本机 `tar --help`（1376 字节）+ 原型命令实跑核对：`tar -xf test.tar -C out3 ./a.txt` 退出码 0，out3 下只有 a.txt，其余条目没有被解出。
+
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - title: 只解出 ./a.txt
+        args: ["-C", "out3", "-x", "-f", "test.tar", "./a.txt"]
+        expectExitCode: 0
+
+  - id: extract-keep-paths
+    category: 解压（危险）
+    title: 解压时保留绝对路径 / 允许 .. （-P，关闭安全检查）
+    description: >-
+      加 -P（--absolute-paths）后，tar **不再剥离**成员名开头的盘符/斜杠，**也不再拒绝**
+      含 .. 的成员。这意味着归档可以把文件写到「解压到」目录**之外**的任何地方——
+      只有在你完全信任这个归档的来源时才使用。
+    command: ""
+    commandArgs: ["-x"]
+    danger: destructive
+    confirmPhrase: 我确认关闭路径安全检查
+    confirmText: >-
+      -P 会关闭 tar 的两道安全防线：(1) 解压目标目录以外的写入不再被拒绝；
+      (2) 成员名里的 .. 不再报错而是照写。一个恶意归档因此能覆盖你磁盘上任意可写位置的文件。
+      本机实测：同一个含 '..' 的归档，不加 -P 时报 "Path contains '..'" 并退出 1，
+      加 -P 后成功写出了解压目录之外的文件。请只在确认归档来源可信时使用。
+    fields:
+      - id: outputDir
+        label: 解压到（留空 = 当前目录）
+        type: directory
+        style: separate
+        prefix: "-C"
+        save: true
+        help: >-
+          即使指定了它，-P 仍允许条目用绝对路径或 .. 写到这个目录之外。
+          另外目标目录必须**已存在**（tar 的 -C 不会替你建目录），留空则解压到当前目录。
+        doc: bsdtar 手册 -C directory
+      - id: archive
+        label: 归档文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        doc: bsdtar 手册 -f file, --file file
+      - id: absolutePaths
+        label: 保留绝对路径（-P）
+        type: bool
+        style: flag
+        prefix: "-P"
+        default: true
+        help: 手册：Preserve pathnames. By default, absolute pathnames … have the leading slash removed … Also, tar will refuse to extract archive entries whose pathnames contain .. … This option suppresses these behaviors.
+        doc: bsdtar 手册 -P, --absolute-paths
+    sources:
+      - title: bsdtar 官方手册（FreeBSD tar(1)，微软 tar on Windows 页面指向的同一份手册）
+        url: https://man.freebsd.org/cgi/man.cgi?query=tar&sektion=1&manpath=FreeBSD+14.3-RELEASE
+        retrieved: "2026-09-29"
+        appliesTo: bsdtar 3.8.x（本机 3.8.4）
+        note: >-
+          -P, --absolute-paths Preserve pathnames. By default, absolute pathnames (those that begin with a / character) have the leading slash removed both when creating archives and extracting from them. Also, tar will refuse to extract archive entries whose pathnames contain .. or whose target directory would be altered by a symlink. This option suppresses these behaviors；-C directory；-f file。
+      - title: 本机 `tar --help` 与本机实跑核对（bsdtar 3.8.4）
+        url: file:///%SystemRoot%/System32/tar.exe
+        retrieved: "2026-09-29"
+        appliesTo: bsdtar 3.8.4（Windows 11 26200）
+        note: >-
+          本机 `tar --help`（1376 字节）+ 原型命令实跑核对：含 `.` 的成员用 `tar -xf` 解压时退出码 1 并打印 `c/../c/target.txt: Path contains '..': Unknown error`（文件没被写出）；同一个归档加 `-P` 后退出码 0 且真的写出了目标文件。另外 `tar -cf pabs.tar -P <绝对路径>` 存下的是 C:/Users/... 完整路径，不加 -P 时 tar 打印 `Removing leading drive letter from member names` 并改写成员名。
+
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - title: 关闭路径安全检查解压（危险，未实跑宿主链路）
+        args: ["-C", "out2", "-x", "-P", "-f", "pabs.tar"]
+
+  # ============================================================ 创建
+  - id: create
+    category: 创建
+    title: 创建归档（可压缩）
+    description: >-
+      把选中的文件/文件夹打包成一个归档。压缩方式可以用「按扩展名自动选择」（-a，官方推荐的现代写法：
+      .zip→zip、.tar.gz→gzip、.tar.bz2→bzip2、.tar.xz→xz），也可以显式指定 gzip/bzip2/xz/lzma。
+    command: ""
+    commandArgs: ["-c"]
+    danger: overwrite
+    confirmText: 归档文件已存在时会被整个覆盖（tar 会重建它）；被覆盖的内容无法恢复。
+    fields:
+      - id: output
+        label: 输出归档文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        placeholder: 例如 D:\backup\data.tar.gz
+        help: 用「按扩展名自动选择」时，扩展名决定格式：.tar/.zip/.tar.gz/.tgz/.tar.bz2/.tar.xz/.7z/.tar.zst 等。
+        doc: 'bsdtar 手册 -f file, --file file；-a 的语义见 -a, --auto-compress 一节'
+      - id: compress
+        label: 压缩方式
+        type: enum
+        style: literal
+        switchBase: "-a"
+        default: "auto"
+        doc: 'bsdtar 手册 -a, --auto-compress（c mode only）与 -z/-j/-J/--lzma/-Z 各节'
+        values:
+          - value: "auto"
+            label: 按扩展名自动选择（-a，官方示例 tar -caf archive.zip）
+            args: ["-a"]
+            isDefault: true
+            help: 手册原文：Use the archive suffix to decide a set of the format and the compressions. 注意 -a 与显式压缩选项同时给出时行为未在手册中定义（本机实测 -caj 会报错），所以这里只允许二选一。
+          - value: gzip
+            label: gzip（-z，.tar.gz）
+            args: ["-z"]
+          - value: bzip2
+            label: bzip2（-j，.tar.bz2）
+            args: ["-j"]
+          - value: xz
+            label: xz（-J，.tar.xz）
+            args: ["-J"]
+          - value: lzma
+            label: lzma（--lzma，.tar.lzma）
+            args: ["--lzma"]
+          - value: compress
+            label: compress（-Z，.tar.Z，老式 LZW）
+            args: ["-Z"]
+          - value: none
+            label: 不压缩（纯 .tar）
+            args: []
+      - id: exclude
+        label: 排除匹配的文件（--exclude）
+        type: text
+        style: repeated
+        prefix: "--exclude"
+        repeatable: true
+        group: 高级
+        advanced: true
+        placeholder: 每行一个模式，例如 *.log
+        help: 手册：Do not process files or directories that match the specified pattern. Note that exclusions take precedence over patterns or filenames specified on the command line. 模式按本机命令行解析，匹配的是归档成员名。
+        doc: bsdtar 手册 --exclude pattern
+      - id: chdir
+        label: 先切换到目录（-C）
+        type: directory
+        style: separate
+        prefix: "-C"
+        group: 高级
+        advanced: true
+        save: true
+        help: 手册：In c and r mode, this changes the directory before adding the following files。勾选它能让归档里只存相对路径，而不是一长串绝对路径。
+        doc: bsdtar 手册 -C directory, --cd directory, --directory directory
+      - id: inputs
+        label: 要归档的文件/文件夹
+        type: paths
+        style: positional
+        required: true
+        repeatable: true
+        placeholder: 每行一个，例如 D:\data 或 .
+        help: 目录会被递归归档；条目的名字与你写的形式一致（写 . 就存成 ./…，写完整路径就存成完整路径，这也是为什么常配合上面的 -C）。
+        doc: 'bsdtar 手册 -c 的 [files | directories] 与 In -c … mode, each specified file or directory is added to the archive in the order specified on the command line'
+    sources:
+      - title: bsdtar 官方手册（FreeBSD tar(1)，微软 tar on Windows 页面指向的同一份手册）
+        url: https://man.freebsd.org/cgi/man.cgi?query=tar&sektion=1&manpath=FreeBSD+14.3-RELEASE
+        retrieved: "2026-09-29"
+        appliesTo: bsdtar 3.8.x（本机 3.8.4）
+        note: >-
+          -c Create a new archive containing the specified items；-a, --auto-compress（c mode only）Use the archive suffix to decide a set of the format and the compressions；-z, --gunzip, --gzip（c mode only）Compress the resulting archive with gzip(1)；-j, --bzip, --bzip2；-J, --xz；--lzma（c mode only）；-Z, --compress, --uncompress；--exclude pattern（Do not process files or directories that match the specified pattern. Note that exclusions take precedence over patterns or filenames specified on the command line）；-C directory, --cd directory, --directory directory（In c and r mode, this changes the directory before adding the following files）；-f file, --file file；In -c, -r, or -u mode, each specified file or directory is added to the archive in the order specified on the command line. By default, the contents of each directory are also archived。
+      - title: 本机 `tar --help` 与本机实跑核对（bsdtar 3.8.4）
+        url: file:///%SystemRoot%/System32/tar.exe
+        retrieved: "2026-09-29"
+        appliesTo: bsdtar 3.8.4（Windows 11 26200）
+        note: >-
+          本机 `tar --help`（1376 字节）+ 原型命令实跑核对：`tar -cf test.tar -C src .`、`-czf`、`-cjf`、`-cJf`、`-caf test.zip`、`-cf fmt.zip --format zip` 退出码全为 0；用文件头字节确认格式：a.zip=50 4b 03 04（zip）、.tar.gz=1f 8b、.tar.bz2=42 5a 68 39（BZh9）、.tar.xz=fd 37 7a 58、.7z=37 7a bc af、.tar.zst=28 b5 2f fd、.tar.Z=1f 9d。**反例**：`tar -caj g.zip` 把 -a 与 -j 一起给出时退出码 1、归档没生成，所以本字段把 -a 与显式压缩做成互斥的选项。
+
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - title: 打成纯 .tar
+        args: ["-c", "-f", "test.tar", "-C", "src", "."]
+        expectExitCode: 0
+      - title: 打成 gzip 压缩的 .tar.gz
+        args: ["-c", "-z", "-f", "test.tar.gz", "-C", "src", "."]
+        expectExitCode: 0
+      - title: 直接打成 .zip（按扩展名自动选择）
+        args: ["-c", "-a", "-f", "test.zip", "-C", "src", "."]
+        expectExitCode: 0
+
+  - id: create-exclude
+    category: 创建
+    title: 创建归档并排除某些文件
+    description: 打归档时按模式跳过文件（例如跳过日志、临时文件、.git 目录）。
+    command: ""
+    commandArgs: ["-c"]
+    danger: overwrite
+    confirmText: 归档文件已存在时会被整个覆盖（tar 会重建它）；被覆盖的内容无法恢复。
+    fields:
+      - id: output
+        label: 输出归档文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        placeholder: 例如 D:\backup\src-no-log.tar.gz
+        doc: 'bsdtar 手册 -f file, --file file'
+      - id: compress
+        label: 压缩方式
+        type: enum
+        style: literal
+        switchBase: "-a"
+        default: "auto"
+        doc: 'bsdtar 手册 -a, --auto-compress 与 -z/-j/-J 各节'
+        values:
+          - value: "auto"
+            label: 按扩展名自动选择（-a）
+            args: ["-a"]
+            isDefault: true
+          - value: gzip
+            label: gzip（-z）
+            args: ["-z"]
+          - value: bzip2
+            label: bzip2（-j）
+            args: ["-j"]
+          - value: xz
+            label: xz（-J）
+            args: ["-J"]
+          - value: none
+            label: 不压缩（纯 .tar）
+            args: []
+      - id: exclude
+        label: 排除匹配的文件（--exclude）
+        type: text
+        style: repeated
+        prefix: "--exclude"
+        repeatable: true
+        required: true
+        placeholder: 每行一个模式，例如 *.log
+        help: 手册：Do not process files or directories that match the specified pattern … exclusions take precedence over patterns or filenames specified on the command line.
+        doc: bsdtar 手册 --exclude pattern
+      - id: excludeFrom
+        label: 从文件读取排除列表（-X）
+        type: file
+        style: separate
+        prefix: "-X"
+        group: 高级
+        advanced: true
+        help: 手册：Read a list of exclusion patterns from the specified file. See --exclude for more information.（一行一个模式）
+        doc: bsdtar 手册 -X filename, --exclude-from filename
+      - id: chdir
+        label: 先切换到目录（-C）
+        type: directory
+        style: separate
+        prefix: "-C"
+        save: true
+        doc: bsdtar 手册 -C directory, --cd directory, --directory directory
+      - id: inputs
+        label: 要归档的文件/文件夹
+        type: paths
+        style: positional
+        required: true
+        repeatable: true
+        placeholder: 每行一个，例如 .
+        doc: 'bsdtar 手册 -c 的 [files | directories]'
+    sources:
+      - title: bsdtar 官方手册（FreeBSD tar(1)，微软 tar on Windows 页面指向的同一份手册）
+        url: https://man.freebsd.org/cgi/man.cgi?query=tar&sektion=1&manpath=FreeBSD+14.3-RELEASE
+        retrieved: "2026-09-29"
+        appliesTo: bsdtar 3.8.x（本机 3.8.4）
+        note: >-
+          --exclude pattern（Do not process files or directories that match the specified pattern. Note that exclusions take precedence over patterns or filenames specified on the command line）；-X filename, --exclude-from filename（Read a list of exclusion patterns from the specified file. See --exclude for more information about the handling of exclusions）；-c Create a new archive；-a, --auto-compress；-C directory；-f file。
+      - title: 本机 `tar --help` 与本机实跑核对（bsdtar 3.8.4）
+        url: file:///%SystemRoot%/System32/tar.exe
+        retrieved: "2026-09-29"
+        appliesTo: bsdtar 3.8.4（Windows 11 26200）
+        note: >-
+          本机 `tar --help`（1376 字节）+ 原型命令实跑核对：`tar -cf noexcl.tar --exclude '*.log' -C src .` 退出码 0，列出来没有 ./b.log；`tar -cf xexcl.tar -X ex.txt -C src .`（ex.txt 内容 *.log）退出码 0，同样没有 ./b.log。
+
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - title: 排除 *.log 后打 .tar
+        args: ["-c", "-f", "noexcl.tar", "--exclude", "*.log", "-C", "src", "."]
+        expectExitCode: 0
+      - title: 从文件读排除列表并打归档
+        args: ["-c", "-a", "-f", "xexcl.zip", "--exclude-from", "ex.txt", "-C", "src", "."]
+        expectExitCode: 0
+
+  # ============================================================ 追加/更新
+  - id: append
+    category: 追加/更新
+    title: 往已有归档里追加文件（-r，仅未压缩的 .tar）
+    description: >-
+      把新文件追加到已有归档的末尾。**只对未压缩的普通 .tar 文件有效**——
+      对 .tar.gz/.zip 用 -r 会失败，请改用「创建归档」重建。
+    command: ""
+    commandArgs: ["-r"]
+    danger: overwrite
+    confirmText: 会就地修改这个归档文件。若归档里已有同名条目，会**同时存在两份**（解压时后一份覆盖前一份）。
+    fields:
+      - id: archive
+        label: 要修改的归档（必须是未压缩的 .tar）
+        type: file
+        style: positional
+        required: true
+        save: true
+        accept: [.tar]
+        help: 手册：-r … Note that this only works on uncompressed archives stored in regular files. The -f option is required.
+        doc: 'bsdtar 手册 -r（Like -c, but new entries are appended to the archive）与 -f file'
+      - id: chdir
+        label: 先切换到目录（-C）
+        type: directory
+        style: separate
+        prefix: "-C"
+        save: true
+        doc: bsdtar 手册 -C directory, --cd directory, --directory directory
+      - id: inputs
+        label: 追加进去的文件/文件夹
+        type: paths
+        style: positional
+        required: true
+        repeatable: true
+        doc: 'bsdtar 手册 -r 的 [files | directories]'
+    sources:
+      - title: bsdtar 官方手册（FreeBSD tar(1)，微软 tar on Windows 页面指向的同一份手册）
+        url: https://man.freebsd.org/cgi/man.cgi?query=tar&sektion=1&manpath=FreeBSD+14.3-RELEASE
+        retrieved: "2026-09-29"
+        appliesTo: bsdtar 3.8.x（本机 3.8.4）
+        note: >-
+          -r Like -c, but new entries are appended to the archive. Note that this only works on uncompressed archives stored in regular files. The -f option is required；-C directory；-f file。语法行：tar {-r | -u} -f archive-file [options] [files | directories]。
+      - title: 本机 `tar --help` 与本机实跑核对（bsdtar 3.8.4）
+        url: file:///%SystemRoot%/System32/tar.exe
+        retrieved: "2026-09-29"
+        appliesTo: bsdtar 3.8.4（Windows 11 26200）
+        note: >-
+          本机 `tar --help`（1376 字节）+ 原型命令实跑核对：`tar -rf test.tar -C src a.txt` 退出码 0（test.tar 是未压缩 .tar）；随后 `tar -tvf test.tar` 里能看到 a.txt 出现两次，印证手册说的“追加会产生重复条目”。
+
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - title: 往 test.tar 追加 a.txt
+        args: ["-r", "-f", "test.tar", "-C", "src", "a.txt"]
+        expectExitCode: 0
+
+  - id: update
+    category: 追加/更新
+    title: 只更新比归档里更新的文件（-u，仅未压缩的 .tar）
+    description: >-
+      类似追加，但只有当磁盘上的文件修改时间**比归档里的对应条目新**时才写入。
+      适合对一份备份 .tar 做增量刷新。同样只支持未压缩的 .tar。
+    command: ""
+    commandArgs: ["-u"]
+    danger: overwrite
+    confirmText: 会就地修改这个归档文件：修改时间更新的文件对应的旧条目会被替换（旧内容随之丢失）。
+    fields:
+      - id: archive
+        label: 要更新的归档（必须是未压缩的 .tar）
+        type: file
+        style: positional
+        required: true
+        save: true
+        accept: [.tar]
+        help: 手册：-u … Note that this only works on uncompressed archives stored in regular files. The -f option is required.
+        doc: 'bsdtar 手册 -u（Like -r, but new entries are added only if they have a modification date newer than the corresponding entry）与 -f file'
+      - id: chdir
+        label: 先切换到目录（-C）
+        type: directory
+        style: separate
+        prefix: "-C"
+        save: true
+        doc: bsdtar 手册 -C directory, --cd directory, --directory directory
+      - id: inputs
+        label: 要检查更新的文件/文件夹
+        type: paths
+        style: positional
+        required: true
+        repeatable: true
+        doc: 'bsdtar 手册 -u 的 [files | directories]'
+    sources:
+      - title: bsdtar 官方手册（FreeBSD tar(1)，微软 tar on Windows 页面指向的同一份手册）
+        url: https://man.freebsd.org/cgi/man.cgi?query=tar&sektion=1&manpath=FreeBSD+14.3-RELEASE
+        retrieved: "2026-09-29"
+        appliesTo: bsdtar 3.8.x（本机 3.8.4）
+        note: >-
+          -u Like -r, but new entries are added only if they have a modification date newer than the corresponding entry in the archive. Note that this only works on uncompressed archives stored in regular files. The -f option is required；-C directory；-f file。
+      - title: 本机 `tar --help` 与本机实跑核对（bsdtar 3.8.4）
+        url: file:///%SystemRoot%/System32/tar.exe
+        retrieved: "2026-09-29"
+        appliesTo: bsdtar 3.8.4（Windows 11 26200）
+        note: >-
+          本机 `tar --help`（1376 字节）+ 原型命令实跑核对：`tar -uf test.tar -C src a.txt` 退出码 0；`tar -uvf test.tar -C src .` 退出码 0 并打印 a 开头的文件名，说明该次运行确实把条目写了进去（源文件的 mtime 与归档内条目同为创建时的时刻）。
+
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - title: 增量更新 test.tar
+        args: ["-u", "-f", "test.tar", "-C", "src", "a.txt"]
+        expectExitCode: 0
