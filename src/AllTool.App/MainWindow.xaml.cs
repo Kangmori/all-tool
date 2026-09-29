@@ -2964,7 +2964,7 @@ public sealed partial class MainWindow : Window
             var sessionCommand = SessionScriptBuilder.Substitute(_action.SessionCommand ?? string.Empty, _values);
             var fullOutput = string.Join(Environment.NewLine, result.Lines);
 
-            if (SessionStateUpdater.Apply(_manifest.Session, _action.Id ?? string.Empty, sessionCommand, fullOutput, _sessionState, out var established, _values))
+            if (SessionStateUpdater.Apply(_manifest.Session, _action.Id ?? string.Empty, _action.Establishes, sessionCommand, fullOutput, _sessionState, out var established, _values))
             {
                 _logger.Info($"会话状态已更新：{established} = {_sessionState.Captures.GetValueOrDefault(established!)}");
                 AppendOutput($"# 会话状态：{_sessionState.Describe(_manifest.Session.State)}");

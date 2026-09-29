@@ -73,3 +73,48 @@
 
 > ⚠️ 这几个正则**没有在真机上验证过**（需要管理员才能跑起来）。第一次提权使用后，
 > 请把 `select disk` 的真实输出贴进 `NOTES.md` 核对一次；如果格式不同，改这里的 `successPattern`。
+
+## 12. 实测反馈修掉的 bug：状态被"不该写状态的动作"覆盖
+
+**产品负责人的现象**：`select disk 0` 之后 `list partition` 成功，但之后别的动作失败、
+会话状态从「已选中磁盘 0」变成「**已选中磁盘 yes**」。
+
+**真因**（不是 exit 的问题，也不是脚本重放的问题）：
+
+`SessionStateUpdater` 原来是这样写的——
+
+```csharp
+foreach (var spec in session.State) { state.Establish(spec.Key, ...); return true; }  // 取第一个状态
+```
+
+于是**任何执行成功的动作**都会去写**第一个**状态（也就是 `disk`）：
+
+| 动作 | 它声明了什么 | 旧行为 | 后果 |
+|---|---|---|---|
+| `select disk 0` | `establishes: disk` | 写 disk = 0（对） | 正常 |
+| `list partition` | 什么都没声明 | **也去写 disk** → 它的字段里没有 `index`，取不到值就回落成 `yes` | 状态被覆盖成 yes |
+| `select volume 3` | `establishes: volume` | **也去写 disk** | volume 没建立、disk 反而被污染 |
+
+**修法**：`Apply` 增加 `establishes` 参数——**只有声明了 `establishes` 的动作才写状态，
+而且只写它声明的那一个**；没声明的动作（list / detail 这类）**什么都不写**。
+回归测试三条（`SessionTests`）：不声明的不污染已有状态、只写自己声明的那个、连续只读动作后状态仍在。
+
+## 13. 还没核实的一件事：中文错误文案
+
+`errorPatterns` 目前只有英文（`Virtual Disk Service error` 等）。本机是中文系统，
+diskpart 的错误提示是中文，所以**失败判定在中文系统上偏弱**：
+
+- 状态值不受影响（现在从字段值取，不解析输出）；
+- 但"选了一个不存在的磁盘"这种情况，可能仍然把状态建立起来。
+
+**要补上只需一步**（需要管理员）：
+
+```powershell
+# 在管理员 PowerShell 里跑，把输出贴回本文件
+diskpart /s <(Set-Content -PassThru "$env:TEMP\dp.txt" "select disk 9999`r`nexit")   # 故意选不存在的磁盘
+# 或者更直接：
+$s="$env:TEMP\dp.txt"; Set-Content $s "list disk`r`nselect disk 9999`r`nexit" -Encoding ascii; diskpart /s $s
+```
+
+把 `select disk 9999` 的中文报错原文抄进 `errorPatterns` 即可（一条正则）。
+本次尝试提权时 UAC 未在 60 秒内确认，所以没有拿到真实文案——**没有编造中文模式**。

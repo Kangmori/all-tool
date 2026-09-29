@@ -113,7 +113,7 @@ public class SessionTests
         var state = new SessionState();
 
         var ok = SessionStateUpdater.Apply(
-            session, "select-disk", "select disk 2",
+            session, "select-disk", "disk", "select disk 2",
             "Microsoft DiskPart 版本 10.0.26100\r\n\r\nDisk 2 is now the selected disk.\r\n",
             state, out var key);
 
@@ -130,7 +130,7 @@ public class SessionTests
         var state = new SessionState();
 
         var ok = SessionStateUpdater.Apply(
-            session, "select-disk", "select disk 99",
+            session, "select-disk", "disk", "select disk 99",
             "Virtual Disk Service error:\r\nThe specified disk is not valid.\r\n",
             state, out _);
 
@@ -149,7 +149,7 @@ public class SessionTests
         var state = new SessionState();
 
         var ok = SessionStateUpdater.Apply(
-            session, "select-disk", "select disk 2",
+            session, "select-disk", "disk", "select disk 2",
             "Microsoft DiskPart 版本 10.0.26100\r\n\r\n磁盘 2 现在是指定的磁盘。\r\n",
             state, out var key);
 
@@ -167,7 +167,7 @@ public class SessionTests
         var fields = new Dictionary<string, object?> { ["index"] = 7 };
 
         var ok = SessionStateUpdater.Apply(
-            session, "select-disk", "select disk 7", "（中文输出，英文正则匹配不到）",
+            session, "select-disk", "disk", "select disk 7", "（中文输出，英文正则匹配不到）",
             state, out _, fields);
 
         Assert.True(ok);
@@ -185,7 +185,7 @@ public class SessionTests
 
         var state = new SessionState();
         var exception = Record.Exception(() =>
-            SessionStateUpdater.Apply(broken, "a", "b", "任意输出", state, out _));
+            SessionStateUpdater.Apply(broken, "a", "x", "b", "任意输出", state, out _));
 
         Assert.Null(exception);
         Assert.Equal("yes", state.Captures["x"]);
@@ -201,5 +201,61 @@ public class SessionTests
 
         Assert.Equal("已选中磁盘 0、已选中卷 3", state.Describe(session.State));
         Assert.Equal("未开始（没有前置条件被满足）", new SessionState().Describe(session.State));
+    }
+
+    [Fact]
+    public void 不声明_establishes_的动作不会污染已有状态()
+    {
+        // 产品负责人实测的 bug：select disk 0 建立 disk=0 之后，跑 list partition（它不建立任何状态）
+        // 会把 disk 覆盖成 yes，界面显示「已选中磁盘 yes」，后续动作随之异常。
+        var session = DiskPartSession();
+        var state = new SessionState();
+
+        SessionStateUpdater.Apply(session, "select-disk", "disk", "select disk 0", "输出", state,
+            out _, new Dictionary<string, object?> { ["index"] = 0 });
+        Assert.Equal("0", state.Captures["disk"]);
+
+        // list partition：没有 establishes → 必须什么都不写
+        var changed = SessionStateUpdater.Apply(session, "list-partition", null, "list partition",
+            "输出", state, out _, null);
+
+        Assert.False(changed);
+        Assert.Equal("0", state.Captures["disk"]);
+        Assert.True(state.Satisfies(["disk"]));
+    }
+
+    [Fact]
+    public void 只写自己声明的那个状态()
+    {
+        // select volume 3 声明的是 volume，不能顺手把 disk 也写了
+        var session = DiskPartSession();
+        var state = new SessionState();
+
+        SessionStateUpdater.Apply(session, "select-volume", "volume", "select volume 3", "输出", state,
+            out var key, new Dictionary<string, object?> { ["index"] = 3 });
+
+        Assert.Equal("volume", key);
+        Assert.Equal("3", state.Captures["volume"]);
+        Assert.False(state.Captures.ContainsKey("disk"));
+        Assert.False(state.Satisfies(["disk"]));
+    }
+
+    [Fact]
+    public void 状态值不会因为后续动作而丢失()
+    {
+        var session = DiskPartSession();
+        var state = new SessionState();
+
+        SessionStateUpdater.Apply(session, "select-disk", "disk", "select disk 0", "输出", state,
+            out _, new Dictionary<string, object?> { ["index"] = 0 });
+
+        // 连续跑几条不建立状态的动作（list partition / detail disk）
+        for (var i = 0; i < 3; i++)
+        {
+            SessionStateUpdater.Apply(session, "detail-disk", null, "detail disk", "输出", state, out _, null);
+        }
+
+        Assert.Equal("0", state.Captures["disk"]);
+        Assert.Equal("已选中磁盘 0", state.Describe(session.State));
     }
 }

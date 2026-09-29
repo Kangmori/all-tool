@@ -19,6 +19,7 @@ public static class SessionStateUpdater
     public static bool Apply(
         SessionSpec? session,
         string actionId,
+        string? establishes,
         string command,
         string? output,
         SessionState state,
@@ -29,17 +30,30 @@ public static class SessionStateUpdater
 
         matchedKey = null;
 
-        if (session?.State is null || session.State.Count == 0)
+        // **只有声明了 establishes 的动作才写状态**，而且只写它声明的那一个。
+        //
+        // 原来这里是"遍历 session.state 取第一个"，结果是：任何执行成功的动作都会去写第一个状态。
+        // 实测后果：select disk 0 建立 disk=0 之后，跑一条 list partition（它本该什么都不建立）
+        // 会把 disk 覆盖成 yes（它的字段里没有 index，取不到值就回落成 yes），
+        // 用户看到状态从「已选中磁盘 0」变成「已选中磁盘 yes」，后续动作随之行为异常。
+        if (string.IsNullOrWhiteSpace(establishes))
+        {
+            return false;
+        }
+
+        var spec = session?.State?.FirstOrDefault(
+            s => string.Equals(s.Key, establishes, StringComparison.Ordinal));
+
+        if (spec is null || string.IsNullOrWhiteSpace(spec.Key))
         {
             return false;
         }
 
         var text = output ?? string.Empty;
 
-        // ---- 失败判定：命中任一条错误模式就算失败（支持多语言多条）----
-        // 这是唯一的失败信号。**不拿成功提示当门槛**：本地化程序（中文系统上的 diskpart）
-        // 根本不会输出英文提示，拿英文正则当门槛会让状态永远不确立（实测踩过）。
-        foreach (var pattern in session.AllErrorPatterns())
+        // 失败判定：命中任一条错误模式就不确立状态（支持多语言多条）。
+        // 成功**不看提示文案**：本地化程序（中文系统上的 diskpart）不输出英文提示。
+        foreach (var pattern in session!.AllErrorPatterns())
         {
             if (SafeMatch(pattern, text))
             {
@@ -47,20 +61,10 @@ public static class SessionStateUpdater
             }
         }
 
-        foreach (var spec in session.State)
-        {
-            if (string.IsNullOrWhiteSpace(spec.Key))
-            {
-                continue;
-            }
+        state.Establish(spec.Key!, CaptureValue(spec, text, fields), actionId, command);
+        matchedKey = spec.Key;
 
-            state.Establish(spec.Key, CaptureValue(spec, text, fields), actionId, command);
-            matchedKey = spec.Key;
-
-            return true;
-        }
-
-        return false;
+        return true;
     }
 
     /// <summary>
