@@ -11,12 +11,17 @@
 ## 1. 接手时按这个顺序做（不要跳）
 
 ```
+0. 看仓库根目录有没有 .local-vault    ← 不入库的指针：有就先去读它指向的**本机专属库**
+                                        （本机环境事实、第三方文档原文、开发流水都在那里）
 1. 读 docs/ai/project-state.json      ← 机器的可读状态：环境事实、已有产物、未决问题、下一步
 2. 跑 scripts/check-env.ps1           ← 用真实探测核对状态文件有没有过期（Windows 更新后会漂移）
 3. 读 docs/ai/development.md          ← 架构、硬规则、全部已知陷阱
 4. 读 docs/spec/manifest-v1.md        ← 要改动清单规范时才需要通读
 5. 要新增工具包 → 读 docs/ai/playbook-tool-package.md（逐步照做）
 ```
+
+> 没有 `.local-vault` 说明这是一台干净的机器：环境事实按 `check-env.ps1` 现测，不要凭记忆。
+> 两个库的分工（什么进公开仓库、什么进本机专属库）见 development.md §8.8。
 
 ## 2. 硬规则（违反即视为错误，任何理由都不例外）
 
@@ -63,7 +68,7 @@ pwsh -File scripts/publish-app.ps1
 
 ## 4. 环境三条要点（细节见 development.md §4）
 
-1. **`web_fetch` 在本机不可用**。Clash Verge 开了 fake-ip DNS，所有域名解析成 `28.0.0.x`，抓取工具会拒绝非公网 IP。**改用 PowerShell 的 `Invoke-WebRequest`**，它能正常出网（已实测）。`web_search` 仍可用。
+1. **抓文档的通道可能被本机网络环境挡住**（DNS 被改写、TLS 被拦之类）。三条通道 （harness 的 `web_fetch` / PowerShell `Invoke-WebRequest` / `web_search`）**一条不通就换下一条，不要反复试**；三条都不通时改用程序自带帮助（`--help` / `/?` / CHM）。本机当前情况见本机专属库（`docs/ai/development.md` §8.8）。
 2. **当前用户不是管理员**，且**没有 C++ 工具链**。纯 C# + P/Invoke 路线，不要引入需要 MSVC 的依赖。
 3. **在 pwsh 里抓中文输出前，先设编码**，否则命令返回的中文是乱码：
 
@@ -105,3 +110,4 @@ N19 补第二批 Windows 命令）。
 | 为什么这么设计（取舍与放弃的方案） | `docs/adr/` |
 | Windows 自带命令的实测事实 | `docs/ai/windows-commands.md` |
 | 第三方文档快照（**不入库；转公开前会清理**） | `docs/reference/`（见其中的 README） |
+| 本机环境事实、第三方文档原文、开发流水（**不入库**，指针见 `.local-vault`） | 本机专属库（见 development.md §8.8） |

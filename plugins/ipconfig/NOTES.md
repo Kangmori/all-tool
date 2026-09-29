@@ -55,8 +55,9 @@
 | `ipconfig /displaydns` | **0** | **1 647 669 B（1.6 MB）** | `Windows IP 配置` |
 | `ipconfig /?` | **1** | 2296 B | `用法:` |
 
-**环境事实**：本机跑 `ipconfig` 会看到一个叫 `Mihomo` 的未知适配器、地址 `28.0.0.1`
-—— 那是 Clash Verge 的 fake-ip DNS 适配器（见 `docs/ai/development.md` §4.4），不是清单的问题。
+**环境事实**：本机装了第三方网络代理软件，它会创建一个**虚拟适配器**（不是 Windows 自带组件），
+所以 `ipconfig /all` 的输出比干净系统多一块。这是环境事实，不是 ipconfig 的行为。
+（该适配器来自本机的代理软件，与 ipconfig 本身无关。）
 
 **未跑**：`/flushdns`、`/registerdns`、`/release`、`/renew`、`/release6`、`/renew6`、
 `/showclassid`、`/setclassid`、`/allcompartments` —— 都会改系统状态或需要管理员（见 §6）。

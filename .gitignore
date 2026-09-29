@@ -36,3 +36,5 @@ dist/
 # 教训（万一拍到别的窗口就会把无关内容带进仓库）；漂移报告是临时输出。两者都不入库。
 spike/*.png
 spike/*.md
+.local-vault
+local-only/

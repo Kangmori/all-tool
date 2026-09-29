@@ -1,190 +1,72 @@
-# 参考文档快照
+# 参考数据（`docs/reference/`）
 
-这个目录存放**参数知识的原始依据**。规范要求 `manifest.yaml` 里出现的每个开关都能在这里找到出处。
+**这个目录现在只放"我们自己提取的事实性数据"，不放别人的文档原文。**
 
-## 为什么要落盘
+## 为什么只剩这些
 
-1. **可溯源**：工具包里的字段能对回具体文档位置。
-2. **可复审**：文档更新后能 diff 出"哪些参数可能变了"。
-3. **离线**：本机开了 fake-ip DNS，一部分工具抓不到网页，落盘后就不依赖网络。
-4. **可追溯版本**：`_meta.json` 记下抓取时的软件版本与日期。
+仓库转公开前做过一次清理：把从第三方软件/文档抓下来的**原文快照**全部从历史里移除了
+（7-Zip CHM 的反编译文本、Scoop wiki 全站克隆、`scoop help` / `uv --help` 的输出、
+Microsoft Learn 的页面 HTML）。原因是版权：那些是别人的作品，公开仓库里不能整篇转载。
 
-## 目录结构
+保留规则（完整口径见 `docs/ai/development.md` §8.7、§8.8）：
+
+| 内容 | 能不能入库 | 理由 |
+|---|---|---|
+| **我们自己提取的事实性数据** | ✅ | "某命令有哪些开关"是接口事实，且提取工作是我们做的 |
+| 官方文档的链接与短引用 | ✅ | 合理引用，便于复核 |
+| 第三方文档的**整篇原文** | ❌ | 等于发布别人的作品 → 放本机专属库 |
+| 软件自带的帮助文件本身（`.chm`） | ❌ | 同上 |
+
+判断口径一句话：**"这是我做的，还是我抄的？"**
+
+## 现在目录里有什么
+
+| 路径 | 是什么 | 谁在用 |
+|---|---|---|
+| `7zip-switch-matrix.json` | 从 7-Zip 官方 CHM 提取的"命令 × 可用开关"矩阵 | 校验器第 3 层：把清单里的开关与这份白名单比对，能抓住"把 `-o` 挂到 `a` 命令上"这类错误 |
+| `win-switches/_switches.json` | 从 Microsoft Learn 各命令页提取的"开关表 + 小节锚点" | 校验器的开关溯源（启发式，只提示不阻断） |
+
+两者都是**提取结果**，不含原文段落，所以可以公开。
+
+## 第三方原文快照放哪
+
+放在**本机专属库**里（仓库之外，不会推送）：
 
 ```
-docs/reference/
-  scoop-help/                 本机 scoop 的帮助输出（版本匹配的权威来源）
-    _meta.json                抓取时的版本、可执行文件路径、日期
-    index.json                28 个命令及其一句话说明
-    <command>.txt             每个命令的详细帮助
-  scoop-wiki/                 scoop 官方 wiki 全站（36 个页面，克隆自 Scoop.wiki.git）
-  uv-help/                    本机 uv 0.11.15 的帮助输出（49 个命令）
-    _meta.json                抓取时的版本、可执行文件路径、日期、抓取失败的命令
-    index.json                49 个命令 / 子命令及其一句话说明
-    <command>.txt             每个命令的简洁帮助（`uv <cmd> --help` 的输出）
-    pip-install.txt 等        二级命令把空格换成 '-'（`uv pip install --help`）
-    _uv.txt                   `uv --help` 的输出（含全局开关）
-  uv-docs/                    uv 官方 CLI 参考（https://docs.astral.sh/uv/reference/cli/）
-    cli-reference.html        原始 HTML（1 165 371 字节，mintlify/mdBook 风格的整页）
-    cli-reference.md          pandoc 转出的 Markdown（832 826 字节，含整页侧栏导航）
-  7zip-md/                    7-zip.chm 反编译+转换后的 Markdown
-    syntax.md                 命令行语法总览
-    commands/*.md             11 个命令
-    switches/*.md             37 个开关
-    exit_codes.md             退出码
-  7zip-switch-matrix.json     从上述文档提取的"命令 × 可用开关"矩阵（供 CI 校验）
-  7zip-chm/                   反编译的原始 HTML（已被 .gitignore 忽略，可重新生成）
-  win-docs/                   Windows 自带命令的官方文档快照（Microsoft Learn）
-    ping.html 等 13 个 HTML    12 个命令的参考页 + cleanmgr 的补充文档 + powercfg（它在另一个目录下）
-    _switches.json            从上述 HTML 提取的"开关表 + 小节锚点"（机器可读）
-  win-help/                   Windows 自带命令的 `/?` 帮助快照（**已 .gitignore，不入库**）
-    _meta.json                抓取时间、每个命令的 exe 路径/文件版本/退出码/所在流/字节数/编码判定
-    _probe.json               真实输出（不是 `/?`）的编码与退出码实测
-    <命令>.txt                每个命令的 `/?` 输出（含 stdout 与 stderr 两段）
-  win-commands-shared.md      Windows 自带命令工具包的**共用事实与实测记录**（编码、退出码、坑、规范缺口）
+<本机专属库>/snapshots/
+├── 7zip-chm/      7-zip.chm 的反编译结果（原始 HTML）
+└── win-help/      Windows 命令的 /? 输出快照（含 stdout/stderr、编码与退出码实测）
 ```
 
-## 关于 Windows 自带命令这批工具包
+指针文件是仓库根目录的 `.local-vault`（**不入库**），里面写着本机专属库的路径。
+详见 `docs/ai/development.md` §8.8。
 
-12 个包（ping / ipconfig / tracert / nslookup / netstat / tasklist / systeminfo / chkdsk / sfc /
-robocopy / cleanmgr / powercfg）的**公共结论**（编码、退出码语义、`/?` 的各种形态、
-宿主与规范的缺口）统一写在 `win-commands-shared.md`；每个包自己的 `plugins/<id>/NOTES.md`
-只写该包特有的内容。
-
-## 如何重新生成
-
-### scoop
+## 怎么重新生成（都是本机操作，产物默认落到本机专属库）
 
 ```powershell
-pwsh -File scripts/fetch-scoop-help.ps1
-```
+# Windows 命令的 /? 快照（每个命令 8 秒超时保护——cleanmgr /? 会弹 GUI 且进程不退出）
+pwsh -File scripts/fetch-win-help.ps1
+# 只抓某几个：pwsh -File scripts/fetch-win-help.ps1 -Commands ping,netstat
 
-之所以不用 wiki 上的命令列表：wiki 的 `Commands` 页面本身就是 `scoop help` 的转抄，
-而本机帮助与已安装版本严格对应，且 `scoop help` 返回的是**结构化对象**（`Command` / `Summary`），比解析文本可靠。
+# 真实输出（不是 /?）的编码与退出码实测
+pwsh -File scripts/probe-win-output.ps1
 
-### scoop wiki
-
-wiki 本身是个 git 仓库，能整站克隆下来：
-
-```powershell
-git clone --depth 1 https://github.com/ScoopInstaller/Scoop.wiki.git docs\reference\scoop-wiki
-```
-
-注意：克隆下来后要**删掉其中的 `.git` 目录**再提交，
-否则 git 会把它当成内嵌仓库（gitlink）而不是普通文件，克隆本仓库的人拿不到内容。
-刷新方式就是删掉整个目录重新克隆一次。
-
-### 7-Zip
-
-```powershell
-# 1. 从 scoop 安装目录反编译 CHM（hh.exe 是 Windows 自带的）
-$chm = '%USERPROFILE%\scoop\apps\7zip\26.03\7-zip.chm'
-hh.exe -decompile docs\reference\7zip-chm $chm
-
-# 2. 转成 Markdown（需要 pandoc）
-Get-ChildItem docs\reference\7zip-chm\cmdline -Recurse -Filter *.htm | ForEach-Object {
-    $rel = $_.FullName.Substring((Resolve-Path docs\reference\7zip-chm\cmdline).Path.Length).TrimStart('\')
-    $dst = Join-Path 'docs\reference\7zip-md' ($rel -replace '\.htm$','.md')
-    New-Item -ItemType Directory -Force -Path (Split-Path $dst) | Out-Null
-    pandoc -f html -t gfm --wrap=none $_.FullName -o $dst
-}
-
-# 3. 提取命令 × 开关矩阵
+# 7-Zip：反编译 CHM → 提取命令×开关矩阵
 pwsh -File scripts/extract-7zip-matrix.ps1
 ```
 
-### uv
+**抓官方网页时**：三条通道（harness 的 `web_fetch` / PowerShell `Invoke-WebRequest` / `web_search`）
+**一条不通就换下一条**，别在一条上反复试；三条都不通就改用程序自带帮助。细节见
+`docs/ai/development.md` §4.4。
 
-两类来源都要抓：官方 CLI 参考（长文档，字段的 `doc` 指它的锚点）+ 本机二进制自带帮助
-（与安装版本严格对应，含每个开关的默认值）。
+## 抓取时实测出来的坑（这些是知识，留在公开仓库）
 
-```powershell
-# 1. 官方 CLI 参考。**必须用 Invoke-WebRequest**：本机 web_fetch 因 fake-ip DNS 不可用（P2）
-$out = 'docs/reference/uv-docs'
-New-Item -ItemType Directory -Force -Path $out | Out-Null
-Invoke-WebRequest 'https://docs.astral.sh/uv/reference/cli/' -UseBasicParsing -OutFile "$out\cli-reference.html"
-# 实测：HTTP 200，1 165 368 字节，689 ms
-
-# 2. 转 Markdown（需要 pandoc）
-pandoc -f html -t gfm --wrap=none "$out\cli-reference.html" -o "$out\cli-reference.md"
-
-# 3. 本机帮助快照（49 个命令）
-pwsh -File scripts/fetch-uv-help.ps1
-```
-
-**注意 `uv help <cmd>` 与 `uv <cmd> --help` 内容不同**，不是同一条帮助：
-前者是 docs 站上的长文档（`uv help sync` 首行 `Update the project's environment.`，带句号），
-后者是二进制内置的简洁帮助（`uv sync --help` 首行 `Update the project's environment`）。
-`fetch-uv-help.ps1` 抓的是**后者**，工具包的参数依据也以后者为准
-（离线、与安装版本严格对应）。理由与差异见 `plugins/uv/NOTES.md` §1.2。
-
-**另一个坑**：`cli-reference.md` 是整页转换的产物，头部上百行都是站点的侧栏导航。
-真正的命令节从 `## <a href="#uv-...">` 这种标题开始（例如 `uv sync` 在第 3393 行）。
-用锚点定位，别整篇读。
-
-**第三个坑**：`uv --help` 与 `uv help` 列出的命令表**不完全一致**——
-0.11.15 上前者是 21 个、后者是 22 个（多了 `generate-shell-completion`）。
-判断"有哪些命令"时两个都看一下。
-
-### Windows 自带命令（win-docs / win-help）
-
-两类来源都要抓，分工是：
-
-- **官方文档（Microsoft Learn）** → `win-docs/*.html`，**入库**。字段的 `doc:` 指向它的锚点。
-- **本机 `/?` 输出** → `win-help/*.txt`，**不入库**（`.gitignore`：微软文本 + 可秒级再生）。
-  用途是核对"官方文档与已安装版本是否一致"（`netstat` 的 `-d` 重复、`tasklist` 的 `/APPS`、
-  `ipconfig` 的 `/allcompartments` 都是这样发现的）。
-
-```powershell
-# 1. `/?` 帮助快照（每个命令有 8 秒超时保护 —— cleanmgr /? 会弹 GUI 并永久等待，没保护会挂死）
-pwsh -File scripts/fetch-win-help.ps1
-#    只抓某几个：pwsh -File scripts/fetch-win-help.ps1 -Commands ping,netstat
-
-# 2. 真实输出（不是 /?）的编码与退出码实测 → win-help/_probe.json
-pwsh -File scripts/probe-win-output.ps1
-
-# 3. 官方文档。**必须用 Invoke-WebRequest**（web_fetch 因 fake-ip DNS 不可用，见 development.md §4.4）
-$out = 'docs/reference/win-docs'
-New-Item -ItemType Directory -Force -Path $out | Out-Null
-$base = 'https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/'
-foreach ($c in 'ping','ipconfig','tracert','nslookup','netstat','tasklist','systeminfo','chkdsk','sfc','robocopy','cleanmgr') {
-    Invoke-WebRequest "$base$c" -UseBasicParsing -OutFile "$out\$c.html"
-}
-# powercfg **不在**上面的目录下（那个路径 404），它在：
-Invoke-WebRequest 'https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options' -UseBasicParsing -OutFile "$out\powercfg.html"
-# cleanmgr 另有补充文档（讲 /sageset + /sagerun 的配合）：
-Invoke-WebRequest 'https://learn.microsoft.com/en-us/troubleshoot/windows-server/backup-and-storage/automating-disk-cleanup-tool' -UseBasicParsing -OutFile "$out\cleanmgr-aux.html"
-
-# 4. 从 HTML 提取"开关表 + 小节锚点" → win-docs/_switches.json
-pwsh -File scripts/extract-win-docs-switches.ps1
-```
-
-**三条实测出来的注意点**：
-
-1. `cleanmgr /?` 是 GUI 对话框，**没有控制台输出且进程不退出** —— 抓取脚本必须带超时。
-2. `sfc` 的**所有**输出都是 **UTF-16LE**（含权限错误），而其余 11 个命令是 OEM 代码页 936
-   （本机 936）。判定 UTF-16LE 不能只看"ASCII 后跟 `00`"（汉字对的第二个字节不是 0）。
-3. 官方文档里的开关用 `/xxx` 斜杠写法，**程序实际接受的是 `-xxx`**（本机 `/?` 用的是减号）。
-   清单里写程序接受的形态，官方写法保留在 `doc` 里。
-
-### 为什么需要矩阵
-
-官方帮助里，每个命令页都有一节 "Switches that can be used with this command"，
-这是官方的**逐命令开关白名单**。把它变成 JSON 后，CI 就能自动发现
-"把 `-o` 挂到 `a` 命令上"这类错误——这种错误光靠人读文档很难发现，但会让用户看到莫名其妙的失败。
-
-矩阵同时记录 `switches`（白名单一节）和 `mentioned`（该页面任何位置提到过的开关）。
-合并两者是必要的：官方白名单只列"有独立帮助页"的开关，像 `-ba`（禁用表头）没有独立页面，
-只在 `hash` 命令的示例里出现，只能从 `mentioned` 里得到。
-
-## 关于 copyright
-
-这些快照来自第三方软件的官方文档，仅用于本机个人开发与查阅，不对外分发。
-如果将来这个仓库要公开，`docs/reference/` 整个目录应当先移除（改用文档链接）。
-
-**已经按这个原则处理的部分**：`docs/reference/win-help/`（Windows 自带命令的 `/?` 文本，
-是微软的文档内容）**已加入 `.gitignore`，不会随仓库发布**，随时可用
-`scripts/fetch-win-help.ps1` 重新生成。
-`docs/reference/win-docs/`（从 Microsoft Learn 抓下来的官方页面）目前**仍在库里** ——
-它同样是微软的文档内容，**若要转公开仓库，这个目录也必须一并移出**（或换成只保留
-`_switches.json` 这种提取结果，不再保留原始 HTML）。
+- `cleanmgr /?` 是 GUI 对话框，**没有控制台输出、进程也不退出** → 抓取脚本必须带超时。
+- `sfc` 的**所有**输出都是 **UTF-16LE**，其余命令用 OEM 代码页；判定 UTF-16LE 不能只看
+  "ASCII 后跟 `00`"（汉字对的第二个字节不是 0）。
+- 微软文档里的开关写 `/xxx`，**程序实际接受的是 `-xxx`**；清单里写程序接受的形态，
+  官方写法保留在字段的 `doc` 里。
+- 官方帮助里每个命令页都有一节 "Switches that can be used with this command"——
+  这是**逐命令的开关白名单**，正是 `7zip-switch-matrix.json` / `_switches.json` 的来源。
+  白名单只列"有独立帮助页"的开关（如 `-ba` 没有独立页面，只在示例里出现），
+  所以提取时要同时收"白名单"与"页面任何位置提到过的开关"两类。

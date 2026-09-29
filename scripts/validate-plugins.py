@@ -158,8 +158,25 @@ def load_reference_corpus(plugin_id: str, manifest: dict) -> tuple[str, int]:
     if not reference.exists():
         return "", 0
 
+    # **本机专属库**（仓库之外，不入库）：第三方文档原文快照放那里。
+    # 指针文件 `.local-vault` 在仓库根目录。CI / 干净机器上没有它 → 这里的语料为空，
+    # 这层启发式检查自然跳过（它本来就不阻断构建）。
+    vault_snapshots = None
+    pointer = ROOT / ".local-vault"
+    if pointer.exists():
+        try:
+            vault = pathlib.Path(pointer.read_text(encoding="utf-8").strip())
+            if (vault / "snapshots").is_dir():
+                vault_snapshots = vault / "snapshots"
+        except OSError:
+            vault_snapshots = None
+
     text = json.dumps(manifest, ensure_ascii=False)
-    uses_learn = "learn.microsoft.com" in text
+
+    # `win-*` 语料只适用于**出自 windows-commands 文档集**的包（那 12 个 Windows 自带命令）。
+    # 光看 "learn.microsoft.com" 不够：winget / 其它微软文档也在 learn 上，
+    # 把它们套进 Windows 命令的开关清单会制造大量假告警（实测 49 条里大半是这么来的）。
+    uses_learn = "windows-server/administration/windows-commands" in text
 
     chunks: list[str] = []
     files = 0
@@ -180,14 +197,20 @@ def load_reference_corpus(plugin_id: str, manifest: dict) -> tuple[str, int]:
 
     prefix = plugin_id.lower()
 
-    for entry in sorted(reference.iterdir()):
-        name = entry.name.lower()
+    def scan(base: pathlib.Path) -> None:
+        for entry in sorted(base.iterdir()):
+            name = entry.name.lower()
 
-        if entry.is_dir():
-            if name.startswith(prefix) or (uses_learn and name.startswith("win-")):
+            if entry.is_dir():
+                if name.startswith(prefix) or (uses_learn and name.startswith("win-")):
+                    collect(entry)
+            elif name.startswith(prefix):
                 collect(entry)
-        elif name.startswith(prefix):
-            collect(entry)
+
+    scan(reference)
+
+    if vault_snapshots is not None:
+        scan(vault_snapshots)
 
     return "\n".join(chunks), files
 

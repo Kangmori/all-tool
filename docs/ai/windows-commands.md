@@ -250,7 +250,7 @@ Windows 自带命令**没有统一的版本开关**：没有 `--version`，`/?` 
 | `netstat -rn` | 4.6 KB | 含 `接口列表` 段，与路由表之间隔了 `====` 行 |
 | `powercfg /query` | 9.9 KB | 每层 GUID 都缩进显示，是拿 GUID 的地方 |
 | `powercfg /aliases` | 1.7 KB | |
-| `ipconfig` | 2.1 KB | 本机有 Clash 的 fake-ip 适配器 `Mihomo`，地址是 `28.0.0.1`（环境事实，不是 bug） |
+| `ipconfig` | 2.1 KB | 本机装有第三方网络代理类软件，它会创建一个**虚拟适配器**（不是 Windows 自带组件），所以 `ipconfig /all` 的输出比干净系统多一块——这是环境事实，不是 ipconfig 的行为 |
 
 ---
 

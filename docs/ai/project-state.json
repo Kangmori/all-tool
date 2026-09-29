@@ -33,11 +33,10 @@
       "winuiWorkloadRequired": true
     },
     "network": {
-      "possiblyBehindFakeIpDnsProxy": true
+      "note": "本机网络环境（是否用代理、DNS 是否被改写）记在本机专属库，不入库；公开仓库只保留通用对策，见 development.md §4.4"
     }
   },
   "environmentNotes": {
-    "fakeIpDns": "Clash Verge (verge-mihomo) 开启 fake-ip，域名解析为 28.0.0.x。后果：harness 的 web_fetch 对所有站点失败（拒绝非公网 IP）。对策：改用 pwsh 的 Invoke-WebRequest。web_search 仍可用。",
     "noAdmin": "当前账号非管理员。需要提权的操作（如某些安装）会失败，不要假设能提权。",
     "noCppToolchain": "未安装 C++ 工作负载与 MSVC。宿主走纯 C# + P/Invoke，不要引入需要编译原生代码的依赖。",
     "vsWorkloadId": "WinUI 开发工作负载的 id 是 Microsoft.VisualStudio.Workload.Universal（显示名 WinUI 应用程序开发）。这是历史改名遗留，不存在名为 WinUI 的 id。",
@@ -46,7 +45,8 @@
     "privacy": "本仓库是公开的：文档里不要写本机用户名、机器名、绝对路径、个人安装目录与邮箱。需要机器相关的事实时，写「用 scripts/check-env.ps1 现测」，而不是抄一份快照进来。",
     "workspaces": "权威工作区只有一个（历史与 GitHub 一致的那个克隆）；改名前的旧克隆必须切断推送能力（git remote remove origin），否则它里面那条含第三方文档快照的旧历史可能被 force push 送回公开仓库。第三方文档快照放在不受版本控制的地方，只在本地核对时用。",
     "copyrightBoundary": "可以入库：自己的文档、自己提取的事实性数据（开关矩阵/清单）、官方文档的链接与短引用。不可入库：第三方文档的整篇副本（CHM 提取文本、wiki 克隆、Learn 页面 HTML）、软件自带帮助文件本身。判断口径：这是我做的（含提取出的事实）还是我抄的？",
-    "webFetch": "2026-09-29 起 web_fetch 可用了：产品负责人把 Clash Verge 的 DNS 覆写从 fake-ip 改成 redir-host。Microsoft Learn 页面能直接抓成 Markdown（页面本身提供 Copy Markdown），比以前的 Invoke-WebRequest + 去标签流程省很多事。若将来又不可用，退回 Invoke-WebRequest 即可。"
+    "documentChannels": "抓官方文档有三条通道（harness 的 web_fetch / PowerShell Invoke-WebRequest / web_search），任何一条都可能因本机网络环境失效：一条不通就换下一条，不要反复试。三条都不通时改用程序自带帮助（--help / /? / CHM）并按 R7 记录实测。本机当前的具体情况见本机专属库。",
+    "localVault": "仓库之外有一个**本机专属库**（存放本机环境事实、第三方文档快照、私有克隆、开发流水），仓库根目录的 `.local-vault`（不入库）指向它。接手时先看这个指针文件；从本机专属库往公开仓库搬内容必须先脱敏。判断口径：换一台机器还成立吗？成立进公开仓库，不成立进本机专属库。详见 development.md §8.8。"
   },
   "artifacts": [
     {
