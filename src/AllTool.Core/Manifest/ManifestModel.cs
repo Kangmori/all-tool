@@ -282,6 +282,13 @@ public sealed class QuickActionSpec
 /// </summary>
 public sealed class NextStepSpec
 {
+    /// <summary>
+    /// 最多生成几个选项（默认 6）。
+    /// 只对"从输出里生成多个选项"的规则有意义：<c>when</c> 命中几次就生成几个按钮，
+    /// 但一次列出几十个按钮会挤满界面，所以要有上限。
+    /// </summary>
+    public int? MaxOptions { get; init; }
+
     /// <summary>按钮上的文字，例如"一键更新全部"。</summary>
     public string? Title { get; init; }
 
@@ -339,8 +346,34 @@ public sealed class SessionSpec
     /// <summary>追加到脚本末尾的命令（例如 exit）。</summary>
     public string? ExitCommand { get; init; }
 
-    /// <summary>命中它就认为这条命令失败了（不确立任何状态）。</summary>
+    /// <summary>
+    /// 命中它就认为这条命令失败了（不确立任何状态）。
+    ///
+    /// **允许写多条**（YAML 里写成数组）：本地化程序在不同语言系统上输出不同，
+    /// 只写一种语言的错误提示，等于在另一种语言下失去保护。
+    /// </summary>
+    public List<string>? ErrorPatterns { get; init; }
+
+    /// <summary>兼容写法：单个错误模式。</summary>
     public string? ErrorPattern { get; init; }
+
+    /// <summary>把字符串与数组两种写法合并成一份错误模式列表。</summary>
+    public IReadOnlyList<string> AllErrorPatterns()
+    {
+        var list = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(ErrorPattern))
+        {
+            list.Add(ErrorPattern!);
+        }
+
+        if (ErrorPatterns is not null)
+        {
+            list.AddRange(ErrorPatterns.Where(p => !string.IsNullOrWhiteSpace(p)));
+        }
+
+        return list;
+    }
 
     /// <summary>可以确立哪些状态。</summary>
     public List<SessionStateSpec>? State { get; init; }
@@ -360,4 +393,12 @@ public sealed class SessionStateSpec
 
     /// <summary>把哪个捕获组存成变量（例如 disk），供后续命令与提示引用。</summary>
     public string? Capture { get; init; }
+
+    /// <summary>
+    /// **从哪个字段的值取状态值**（例如 select-disk 的 index 字段）。
+    ///
+    /// 这是首选做法：值本来就是用户填的，直接拿来用比「从输出里正则捕获」可靠得多，
+    /// 后者在本地化程序上会彻底失效（中文系统上 diskpart 不输出英文提示）。
+    /// </summary>
+    public string? CaptureField { get; init; }
 }

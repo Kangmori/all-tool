@@ -56,33 +56,79 @@ public static class NextStepMatcher
                 continue;
             }
 
-            // 指定了 when 就必须命中（对输出做多行正则匹配）；不指定则总是推荐
-            if (!string.IsNullOrWhiteSpace(step.When))
-            {
-                bool matched;
-                try
-                {
-                    matched = Regex.IsMatch(text, step.When, RegexOptions.Multiline);
-                }
-                catch (ArgumentException)
-                {
-                    // 正则写错属于工具包作者的错：不推荐、也不让界面崩
-                    continue;
-                }
+            var template = step.Values ?? new Dictionary<string, object?>(StringComparer.Ordinal);
 
-                if (!matched)
-                {
-                    continue;
-                }
+            // 没写 when：总是推荐一条（values 原样使用）
+            if (string.IsNullOrWhiteSpace(step.When))
+            {
+                result.Add(new NextStepSuggestion(step.Title!, target, step.Reason, template));
+
+                continue;
             }
 
-            result.Add(new NextStepSuggestion(
-                step.Title!,
-                target,
-                step.Reason,
-                step.Values ?? new Dictionary<string, object?>(StringComparer.Ordinal)));
+            // 写了 when：**命中几次就生成几个选项**，标题与 values 里的 {1}/{2}/{name}
+            // 用该次匹配的捕获组填充。
+            // 这样 list disk 之后可以直接列出"选择磁盘 0 / 1 / 2…"，
+            // 而 scoop status 之后可以直接列出"更新某个应用"——规则仍然只写在清单里。
+            MatchCollection matches;
+            try
+            {
+                matches = Regex.Matches(text, step.When, RegexOptions.Multiline);
+            }
+            catch (ArgumentException)
+            {
+                // 正则写错属于工具包作者的错：不推荐、也不让界面崩
+                continue;
+            }
+
+            if (matches.Count == 0)
+            {
+                continue;
+            }
+
+            var limit = step.MaxOptions is > 0 ? step.MaxOptions!.Value : 6;
+
+            foreach (Match match in matches.Take(limit))
+            {
+                var values = template.ToDictionary(
+                    kv => kv.Key,
+                    kv => (object?)Fill(kv.Value?.ToString(), match),
+                    StringComparer.Ordinal);
+
+                result.Add(new NextStepSuggestion(
+                    Fill(step.Title, match) ?? step.Title!,
+                    target,
+                    step.Reason,
+                    values));
+            }
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// 把模板里的 <c>{1}</c>…<c>{9}</c>（编号组）与 <c>{名字}</c>（命名组）
+    /// 换成这次匹配捕获到的内容。取不到就原样保留——界面上能一眼看出清单写错了。
+    /// </summary>
+    private static string? Fill(string? template, Match match)
+    {
+        if (string.IsNullOrEmpty(template))
+        {
+            return template;
+        }
+
+        return Regex.Replace(template, @"\{(?<name>[A-Za-z0-9_]+)\}", m =>
+        {
+            var key = m.Groups["name"].Value;
+
+            if (int.TryParse(key, out var index) && index > 0 && index < match.Groups.Count)
+            {
+                return match.Groups[index].Value;
+            }
+
+            var named = match.Groups[key];
+
+            return named.Success ? named.Value : m.Value;
+        });
     }
 }

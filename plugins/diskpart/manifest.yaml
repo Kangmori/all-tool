@@ -32,19 +32,27 @@ session:
   scriptArgs: ["/s", "{script}"]
   scriptExtension: .txt
   exitCommand: exit
-  errorPattern: '(?im)^(Virtual Disk Service error|DiskPart has encountered an error|The (specified|selected) [a-z]+ is not|There is no [a-z]+ selected|The disk you specified is not valid)'
+  # 失败判定：命中任一条即算失败。**成功不靠提示文案**（本地化程序会输出别的语言），
+  # 见 SessionStateUpdater：只要没命中错误就算成功，状态值从字段值取。
+  # 下面这条只覆盖英文输出；中文系统上 diskpart 输出中文时它匹配不到——那时的保护是
+  # "下一步命令自己会报错"，以及 NOTES 里留的"实测到中文错误文案后补一条"的清单。
+  errorPatterns:
+    - '(?im)^(Virtual Disk Service error|DiskPart has encountered an error|The (specified|selected) [a-z]+ is not|There is no [a-z]+ selected|The disk you specified is not valid)'
   state:
     - key: disk
       title: 已选中磁盘
       capture: disk
+      captureField: index          # select disk 的 index 字段就是磁盘号，直接用字段值，不靠解析输出
       successPattern: '(?im)^Disk (\d+) is now the selected disk'
     - key: volume
       title: 已选中卷
       capture: volume
+      captureField: index
       successPattern: '(?im)^Volume (\d+) is now the selected volume'
     - key: partition
       title: 已选中分区
       capture: partition
+      captureField: index
       successPattern: '(?im)^Partition (\d+) is now the selected partition'
 
 actions:
@@ -57,6 +65,13 @@ actions:
     execution: run
     sessionCommand: "list disk"
     fields: []
+    nextSteps:
+      - title: "选择磁盘 {1}"
+        action: select-disk
+        when: '(?im)^\s*Disk (\d+)\s'
+        values: { index: "{1}" }
+        reason: 从上面列出的磁盘里选一块（选中后「创建分区 / 清除磁盘」才会变为可用）
+        maxOptions: 8
     output:
       mode: stream
       showCommandLine: true
@@ -75,6 +90,13 @@ actions:
     execution: run
     sessionCommand: "list volume"
     fields: []
+    nextSteps:
+      - title: "选择卷 {1}"
+        action: select-volume
+        when: '(?im)^\s*Volume (\d+)\s'
+        values: { volume: "{1}", index: "{1}" }
+        reason: 从上面列出的卷里选一个（选中后「分配盘符 / 格式化 / 删除卷」才会变为可用）
+        maxOptions: 12
     output:
       mode: stream
       showCommandLine: true
@@ -201,6 +223,13 @@ actions:
         required: true
         help: 磁盘号来自「列出所有磁盘」的输出。
         doc: official create 页示例 select disk <disk-number>；list disk 输出的磁盘号
+    nextSteps:
+      - title: "列出磁盘 {disk} 的分区"
+        action: list-partition
+        reason: 看看这块盘现在有什么分区，再决定是创建还是清除
+      - title: "查看磁盘 {disk} 详情"
+        action: detail-disk
+        reason: 确认分区表类型（MBR / GPT）与占用情况
     output:
       mode: stream
       showCommandLine: true

@@ -22,7 +22,8 @@ public static class SessionStateUpdater
         string command,
         string? output,
         SessionState state,
-        out string? matchedKey)
+        out string? matchedKey,
+        IReadOnlyDictionary<string, object?>? fields = null)
     {
         ArgumentNullException.ThrowIfNull(state);
 
@@ -35,49 +36,77 @@ public static class SessionStateUpdater
 
         var text = output ?? string.Empty;
 
-        // 先看失败：清单给了 errorPattern 且命中，就不确立任何状态
-        if (!string.IsNullOrWhiteSpace(session.ErrorPattern) && SafeMatch(session.ErrorPattern, text))
+        // ---- 失败判定：命中任一条错误模式就算失败（支持多语言多条）----
+        // 这是唯一的失败信号。**不拿成功提示当门槛**：本地化程序（中文系统上的 diskpart）
+        // 根本不会输出英文提示，拿英文正则当门槛会让状态永远不确立（实测踩过）。
+        foreach (var pattern in session.AllErrorPatterns())
         {
-            return false;
+            if (SafeMatch(pattern, text))
+            {
+                return false;
+            }
         }
 
         foreach (var spec in session.State)
         {
-            if (string.IsNullOrWhiteSpace(spec.Key) || string.IsNullOrWhiteSpace(spec.SuccessPattern))
+            if (string.IsNullOrWhiteSpace(spec.Key))
             {
                 continue;
             }
 
-            var match = SafeMatchResult(spec.SuccessPattern, text);
-
-            if (match is null)
-            {
-                continue;
-            }
-
-            // capture 指定了捕获组名，就取那个组的值；否则用第一个组（没有组就记 "yes"）
-            string? value = null;
-
-            if (!string.IsNullOrWhiteSpace(spec.Capture))
-            {
-                var group = match.Groups[spec.Capture];
-
-                value = group.Success
-                    ? group.Value
-                    : match.Groups.Count > 1 && match.Groups[1].Success ? match.Groups[1].Value : null;
-            }
-            else if (match.Groups.Count > 1 && match.Groups[1].Success)
-            {
-                value = match.Groups[1].Value;
-            }
-
-            state.Establish(spec.Key, value ?? "yes", actionId, command);
+            state.Establish(spec.Key, CaptureValue(spec, text, fields), actionId, command);
             matchedKey = spec.Key;
 
             return true;
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// 取这个状态的值：优先用字段值（captureField），其次用 successPattern 的捕获组，
+    /// 都没有就记 yes。值只用于界面展示与 confirmPhrase 占位，不参与判定。
+    /// </summary>
+    private static string CaptureValue(
+        SessionStateSpec spec,
+        string text,
+        IReadOnlyDictionary<string, object?>? fields)
+    {
+        if (!string.IsNullOrWhiteSpace(spec.CaptureField) && fields is not null
+            && fields.TryGetValue(spec.CaptureField!, out var fieldValue) && fieldValue is not null)
+        {
+            var rendered = fieldValue.ToString();
+
+            if (!string.IsNullOrWhiteSpace(rendered))
+            {
+                return rendered!;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(spec.SuccessPattern))
+        {
+            var match = SafeMatchResult(spec.SuccessPattern!, text);
+
+            if (match is not null)
+            {
+                if (!string.IsNullOrWhiteSpace(spec.Capture))
+                {
+                    var group = match.Groups[spec.Capture!];
+
+                    if (group.Success)
+                    {
+                        return group.Value;
+                    }
+                }
+
+                if (match.Groups.Count > 1 && match.Groups[1].Success)
+                {
+                    return match.Groups[1].Value;
+                }
+            }
+        }
+
+        return "yes";
     }
 
     private static bool SafeMatch(string pattern, string text)

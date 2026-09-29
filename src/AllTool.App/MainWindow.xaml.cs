@@ -290,17 +290,19 @@ public sealed partial class MainWindow : Window
     /// 为什么要区分：左栏一眼看过去，用户应该能分清"这是我装的"还是"系统本来就有的"，
     /// 以及哪些点了会弹窗、哪些点了要格外小心。
     /// </summary>
-    private static (string Text, Windows.UI.Text.FontWeight Weight, Windows.UI.Text.FontStyle Style)
+    private static (string Marker, string Text, Windows.UI.Text.FontWeight Weight)
         PackageDisplay(ToolManifest manifest)
     {
         var display = manifest.Name ?? manifest.Id ?? string.Empty;
 
+        // 图标与名称是**两个元素**：图标永远普通字重（不跟着加粗/斜体变），
+        // 所以选中时不会因为字体度量变化而位移或被裁掉。斜体一律不用（很难看，产品负责人反馈）。
         return manifest.KindOrDefault switch
         {
-            "system" => ($"🔵 {display}", FontWeights.Light, Windows.UI.Text.FontStyle.Normal),
-            "interactive" => ($"🟡 {display}", FontWeights.Bold, Windows.UI.Text.FontStyle.Normal),
-            "dangerous" => ($"🔴 {display}", FontWeights.SemiBold, Windows.UI.Text.FontStyle.Italic),
-            _ => (display, FontWeights.Normal, Windows.UI.Text.FontStyle.Normal),
+            "system" => ("🔵", display, FontWeights.Normal),
+            "interactive" => ("🟡", display, FontWeights.Bold),
+            "dangerous" => ("🔴", display, FontWeights.Normal),
+            _ => ("⚪", display, FontWeights.Normal),
         };
     }
 
@@ -362,8 +364,8 @@ public sealed partial class MainWindow : Window
                     () => SelectPackage(entry, restoreAction: false),
                     menu => BuildPackageMenu(menu, entry),
                     TooltipFor(entry.Manifest),
-                    Weight: PackageDisplay(entry.Manifest).Weight,
-                    Style: PackageDisplay(entry.Manifest).Style),
+                    Marker: string.IsNullOrEmpty(entry.Manifest.Kind) ? "⚪" : PackageDisplay(entry.Manifest).Marker,
+                    Weight: PackageDisplay(entry.Manifest).Weight),
                 isPackageScope: true,
                 _packageVisuals));
         }
@@ -464,8 +466,8 @@ public sealed partial class MainWindow : Window
         Action<MenuFlyout> BuildMenu,
         string? Tooltip = null,
         bool Enabled = true,
-        Windows.UI.Text.FontWeight? Weight = null,
-        Windows.UI.Text.FontStyle? Style = null);
+        string? Marker = null,
+        Windows.UI.Text.FontWeight? Weight = null);
 
     /// <summary>
     /// 条目的可视元素（按钮 + 左侧那根强调色标记），用于**原地改高亮**。
@@ -518,21 +520,40 @@ public sealed partial class MainWindow : Window
         {
             var info = describe(item);
 
+            // 名称单独一个 TextBlock：字体效果只作用在名称上，图标不受影响
+            var name = new TextBlock
+            {
+                Text = info.Text,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                FontWeight = info.Weight ?? (info.Selected ? FontWeights.SemiBold : FontWeights.Normal),
+            };
+
+            var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+
+            if (!string.IsNullOrEmpty(info.Marker))
+            {
+                content.Children.Add(new TextBlock
+                {
+                    Text = info.Marker,
+                    // 图标永远是普通字重、不斜体：选中时不会位移或被裁
+                    FontWeight = FontWeights.Normal,
+                    FontStyle = Windows.UI.Text.FontStyle.Normal,
+                    VerticalAlignment = VerticalAlignment.Center,
+                });
+            }
+
+            content.Children.Add(name);
+
             var button = new Button
             {
-                Content = info.Text,
+                Content = content,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Left,
                 Padding = new Thickness(8, 4, 8, 4),
                 Background = null,
                 BorderThickness = new Thickness(0),
-                FontWeight = info.Selected ? FontWeights.SemiBold : FontWeights.Normal,
             };
             button.Click += (_, _) => info.Select();
-
-            // 工具包类型只影响**显示方式**（清单里的 kind）：一眼能分出系统自带 / 交互式 / 高危
-            button.FontWeight = info.Weight ?? (info.Selected ? FontWeights.SemiBold : FontWeights.Normal);
-            button.FontStyle = info.Style ?? Windows.UI.Text.FontStyle.Normal;
 
             // 会话型：前置条件没满足的动作灰显。**不隐藏**——用户要能看到"有这个功能"
             button.IsEnabled = info.Enabled;
@@ -2938,7 +2959,7 @@ public sealed partial class MainWindow : Window
             var sessionCommand = SessionScriptBuilder.Substitute(_action.SessionCommand ?? string.Empty, _values);
             var fullOutput = string.Join(Environment.NewLine, result.Lines);
 
-            if (SessionStateUpdater.Apply(_manifest.Session, _action.Id ?? string.Empty, sessionCommand, fullOutput, _sessionState, out var established))
+            if (SessionStateUpdater.Apply(_manifest.Session, _action.Id ?? string.Empty, sessionCommand, fullOutput, _sessionState, out var established, _values))
             {
                 _logger.Info($"会话状态已更新：{established} = {_sessionState.Captures.GetValueOrDefault(established!)}");
                 AppendOutput($"# 会话状态：{_sessionState.Describe(_manifest.Session.State)}");

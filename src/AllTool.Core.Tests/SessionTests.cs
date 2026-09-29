@@ -20,8 +20,8 @@ public class SessionTests
         ErrorPattern = @"(?im)^(Virtual Disk Service error|DiskPart encountered an error|.*\bnot found\b)",
         State =
         [
-            new SessionStateSpec { Key = "disk", Title = "已选中磁盘", Capture = "disk", SuccessPattern = @"(?im)^Disk (\d+) is now the selected disk" },
-            new SessionStateSpec { Key = "volume", Title = "已选中卷", Capture = "volume", SuccessPattern = @"(?im)^Volume (\d+) is now the selected volume" },
+            new SessionStateSpec { Key = "disk", Title = "已选中磁盘", Capture = "disk", CaptureField = "index", SuccessPattern = @"(?im)^Disk (\d+) is now the selected disk" },
+            new SessionStateSpec { Key = "volume", Title = "已选中卷", Capture = "volume", CaptureField = "index", SuccessPattern = @"(?im)^Volume (\d+) is now the selected volume" },
         ],
     };
 
@@ -140,29 +140,55 @@ public class SessionTests
     }
 
     [Fact]
-    public void 输出里没有成功语句时什么都不变()
+    public void 没有错误输出时就确立状态_成功不靠提示文案()
     {
+        // 这是被实测逼出来的改动：中文系统上 diskpart 输出中文，
+        // 原来拿英文 successPattern 当门槛 → 状态永远不确立 → 依赖它的动作永远灰显。
+        // 现在：只要没命中 errorPattern 就算成功。
         var session = DiskPartSession();
         var state = new SessionState();
 
-        var ok = SessionStateUpdater.Apply(session, "select-disk", "select disk 0", "随便什么输出", state, out _);
+        var ok = SessionStateUpdater.Apply(
+            session, "select-disk", "select disk 2",
+            "Microsoft DiskPart 版本 10.0.26100\r\n\r\n磁盘 2 现在是指定的磁盘。\r\n",
+            state, out var key);
 
-        Assert.False(ok);
-        Assert.True(state.IsEmpty);
+        Assert.True(ok);
+        Assert.Equal("disk", key);
+        Assert.True(state.Satisfies(["disk"]));
     }
 
     [Fact]
-    public void 正则写错时当作没命中而不是崩掉()
+    public void 状态值优先取字段值而不是解析输出()
     {
+        // captureField 是首选做法：值本来就是用户填的。
+        var session = DiskPartSession();
+        var state = new SessionState();
+        var fields = new Dictionary<string, object?> { ["index"] = 7 };
+
+        var ok = SessionStateUpdater.Apply(
+            session, "select-disk", "select disk 7", "（中文输出，英文正则匹配不到）",
+            state, out _, fields);
+
+        Assert.True(ok);
+        Assert.Equal("7", state.Captures["disk"]);
+    }
+
+    [Fact]
+    public void successPattern_写错时不崩且仍按没有错误判定成功()
+    {
+        // successPattern 现在只用来"取值"（可选），不再是门槛；写错了最多取不到值。
         var broken = new SessionSpec
         {
             State = [new SessionStateSpec { Key = "x", SuccessPattern = "([未闭合" }],
         };
 
         var state = new SessionState();
-        var ok = SessionStateUpdater.Apply(broken, "a", "b", "任意输出", state, out _);
+        var exception = Record.Exception(() =>
+            SessionStateUpdater.Apply(broken, "a", "b", "任意输出", state, out _));
 
-        Assert.False(ok);
+        Assert.Null(exception);
+        Assert.Equal("yes", state.Captures["x"]);
     }
 
     [Fact]
