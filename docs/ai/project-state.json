@@ -775,6 +775,12 @@
       "task": "彻底脱敏 + 建立「公开仓库 / 本机专属库」的分工",
       "doneAt": "2026-09-29",
       "evidence": "development.md §4.4 从点名本机代理软件/内网段改成通用对策（三条抓取通道，一条不通换下一条；都不通就改用程序自带帮助）；P2、windows-commands.md、ipconfig/NOTES.md、project-state 的 fakeIpDns、AGENTS.md 环境要点、参照 README 一并清理。复查本机信息 0 处。新增 §8.8 写清分工与判断口径（换一台机器还成立吗），并建立本机专属库（environment.md / progress.md / snapshots/）+ 不入库的指针文件 .local-vault。校验器改为也读本机专属库的 snapshots（CI 上自动跳过），并收紧 win-* 语料适用范围。顺带重写了严重过期的 docs/reference/README.md。校验 18/18、字段 554/554。"
+    },
+    {
+      "id": "N28",
+      "task": "并行子智能体产出 tar 与 schtasks 两个工具包",
+      "doneAt": "2026-09-29",
+      "evidence": "两个子智能体各写一个包（plugins/tar 11 动作、plugins/schtasks 12 动作），自己做校验与只读冒烟、不提交，由我复核后分两个提交入库。校验从 18/18 到 20/20，字段出处 632/632 = 100%。tar：11 个动作全部有实跑记录；编码用字节级证据定为 oem(936)；发现官方 tar 页已 404。schtasks：编码实测为 utf-8（与同批其它包相反）；/TN 不支持通配符；权限取决于任务自身 ACL（所以动作级不标 requiresAdmin）。**委派教训**：我写的是「不要创建/删除/修改任何真实计划任务」，子智能体理解成「不要动用户既有的任务」，为了量化权限矩阵它自建了 3 个探针任务并在收尾前删除、主动申报。我复核后确认零残留（全盘扫 __AllTool* = 0，根目录 9 个任务与原有的一致）。规矩已补进 playbook §8。"
     }
   ],
   "plugins": [
@@ -1041,10 +1047,12 @@
       "how": "建议顺序（按价值/独立性）：① curl（Win10 1803+ 自带，官方手册 curl.se/docs/manpage.html，选项多，只收常用项）② tar（同版本自带，bsdtar 语义，压缩/解压/列表）③ ssh / scp（OpenSSH 客户端，Win10 1809+ 可选功能）④ schtasks（计划任务，只读的 /query 很实用）⑤ wevtutil（事件日志——chkdsk/sfc 的结果都在事件日志里）⑥ certutil / takeown / icacls（证书与权限，需要管理员的多）。注意：curl 的选项是 `-x` 风格且和 url 位置参数混排，写字段时要按官方手册逐个核对。",
       "doneWhen": "每个包：校验全绿 + 只读动作真机冒烟 + NOTES 记录；风险分级按规范 §2.9。",
       "priority": 2,
-      "status": "进行中（curl 已完成；tar / ssh / schtasks / wevtutil 待做）",
+      "status": "进行中（curl / tar / schtasks 已完成）",
       "progress": {
-        "curl": "完成：plugins/curl，14 个动作 / 50 字段 / 出处 100%。本机 curl 8.19.0（System32 自带）。实测：直接跑 curl -I https://example.com → 退出码 0、HTTP 200；宿主里跑 curl --version → 输出完整、退出码 0、编码正确。选项对着官方手册与本机 `curl --help all` 双向核对。",
-        "剩余": "tar（同版本自带，压缩/解压/列表）、ssh/scp（OpenSSH 客户端，Win10 1809+ 可选功能）、schtasks（计划的只读 /query 很实用）、wevtutil（事件日志——chkdsk/sfc 的结果都在里面）、certutil / takeown / icacls（权限类，多数需要管理员）。"
+        "curl": "完成（14 动作）",
+        "tar": "完成（11 动作，全部有实跑记录，编码 oem）",
+        "schtasks": "完成（12 动作，编码 utf-8，权限矩阵已实测）",
+        "剩余": "ssh/scp（OpenSSH 客户端）、wevtutil（事件日志——chkdsk/sfc 的结果都在里面）、certutil / takeown / icacls（证书与权限类，多数需要管理员）。"
       }
     }
   ],
