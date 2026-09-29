@@ -1476,6 +1476,17 @@ actions:
         action: cleanup
         when: '(?m)^\S+\s+\d\S*\s+\d'
         reason: 更新之后通常会留下旧版本
+      # 逐应用更新：把表格里每个「有可用更新」的应用各列一个按钮，点一下就把应用名填进 update 的 apps 字段。
+      # 正则只取「行首应用名 + 至少两个空格 + 以数字开头的版本」，表头与分隔行都命不中；
+      # 依据是本机 scoop 0.5.3 的真实输出（快照存本机专属库 snapshots/scoop-status/status.txt）。
+      # 本规则**用了占位符 {1}**，所以按命中行数展开成多个按钮；
+      # 上面「一键更新全部」没写占位符，因此只出一个按钮（避免出现好几个重复按钮）。
+      - title: 更新 {1}
+        action: update
+        when: '(?m)^([A-Za-z0-9][\w.+-]*)\s+\d\S*\s+\d'
+        values: { apps: "{1}" }
+        reason: 只升级这一个应用
+        maxOptions: 12
     category: 应用管理
     title: 状态检查
     description: "显示已安装应用的状态与可更新版本（scoop status）"

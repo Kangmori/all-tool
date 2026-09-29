@@ -86,6 +86,18 @@ public static class NextStepMatcher
                 continue;
             }
 
+            // **只有用了占位符的规则才按匹配次数展开**。
+            // 否则像 scoop status 的「一键更新全部」（when 能命中好几行、但没写占位符）会被展开成
+            // 好几个一模一样的按钮——这是我引入多选项机制时漏掉的一环。
+            var usesPlaceholder = (step.Title?.Contains('{') ?? false)
+                || template.Values.Any(v => v?.ToString()?.Contains('{') == true);
+
+            if (!usesPlaceholder)
+            {
+                result.Add(new NextStepSuggestion(step.Title!, target, step.Reason, template));
+                continue;
+            }
+
             var limit = step.MaxOptions is > 0 ? step.MaxOptions!.Value : 6;
 
             foreach (Match match in matches.Take(limit))
