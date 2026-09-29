@@ -1384,6 +1384,85 @@ public sealed partial class MainWindow : Window
     private void OnExitClicked(object sender, RoutedEventArgs e) => Close();
 
     /// <summary>打开日志目录。日志里是每个动作的完整输出——出问题时这是第一手材料。</summary>
+    /// <summary>
+    /// 「清理缓存…」：把本软件占用的东西列出来（多大、是什么），让用户自己勾要清哪些。
+    ///
+    /// 刻意把**缓存（日志）**与**用户数据（记住的输入、自定义分组）**分开：
+    /// 混成一个"清理"按钮，很容易让人顺手一按就丢了设置。缓存默认勾上，用户数据默认不勾。
+    /// </summary>
+    private async Task ClearCacheAsync()
+    {
+        FlushOutput(force: true);
+
+        var storage = AppStorage.OpenDefault();
+        var items = storage.Inspect();
+
+        if (items.Count == 0)
+        {
+            StatusText.Text = "没有可清理的内容";
+            return;
+        }
+
+        var panel = new StackPanel { Spacing = 6 };
+        var boxes = new List<(StorageItem Item, CheckBox Box)>();
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = $"占用位置：{storage.Root}",
+            Opacity = 0.75,
+            TextWrapping = TextWrapping.Wrap,
+        });
+
+        foreach (var item in items)
+        {
+            var box = new CheckBox
+            {
+                Content = $"{item.Title} —— {item.SizeText}" + (item.IsCache ? "" : "（用户数据，删了会丢设置）"),
+                IsChecked = item.IsCache,   // 只有缓存默认勾选
+            };
+
+            boxes.Add((item, box));
+            panel.Children.Add(box);
+        }
+
+        var dialog = new ContentDialog
+        {
+            Title = "清理缓存",
+            Content = new ScrollViewer
+            {
+                Content = panel,
+                MaxHeight = 360,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            },
+            PrimaryButtonText = "清理勾选项",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = (Content as FrameworkElement)?.XamlRoot,
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        long freed = 0;
+
+        if (boxes.Any(b => b.Item.IsCache && b.Box.IsChecked == true))
+        {
+            freed += storage.DeleteLogs();
+        }
+
+        if (boxes.Any(b => !b.Item.IsCache && b.Box.IsChecked == true))
+        {
+            freed += storage.DeleteUserData();
+        }
+
+        _logger.Info($"清理缓存：释放 {AppStorage.Describe(freed)}");
+        StatusText.Text = $"已清理，释放 {AppStorage.Describe(freed)}";
+    }
+
+    private void OnClearCacheClicked(object sender, RoutedEventArgs e) => _ = ClearCacheAsync();
+
     private void OnOpenLogFolderClicked(object sender, RoutedEventArgs e)
     {
         FlushOutput(force: true);

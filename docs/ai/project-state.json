@@ -738,6 +738,12 @@
       "doneAt": "2026-09-28",
       "evidence": "① 用 git filter-repo 从全部历史删掉 6 个第三方文档快照目录（7zip-md/scoop-help/scoop-wiki/uv-docs/uv-help/win-docs），保留我们自己的 docs/reference/README.md 与 7zip-switch-matrix.json；.git 1.1MB→0.6MB，提交数不变，远端历史校验为干净。② 出处从本地快照改成可公开形式：scoop-wiki→GitHub wiki 页面、uv→官方 CLI 参考、Windows 包→该包已在用的 Microsoft Learn URL（12 个逐个实测 200）。③ 保留子智能体提取的开关清单作共享语料并把语料规则限成\"win-* 只给引用 Learn 的包\"，待确认从 185 条降到 5 条。④ 改名 All Tool：解决方案/三个项目/命名空间/AllTool.exe/环境变量 ALLTOOL_*/设置目录 %APPDATA%\\AllTool（含从 swpj 目录的一次性复制式迁移，实测迁移成功）。⑤ 新增 MIT LICENSE（Copyright (c) 2026 Kangmori）并重写 README 面向公开。⑥ 仓库改名 Kangmori/swpj → Kangmori/all-tool（force push 清理后的历史）并转为 public。⑦ 发布 v0.1.0-dev：独立版 zip 91.7 MB，匿名可下载（HTTP 200），SHA256 已写进发布说明。",
       "note": "权威本地工作区改为 D:\\AI\\All Tool；旧目录 D:\\AI\\swpj 已指向同一远端并重置到新历史，不会再误推旧历史"
+    },
+    {
+      "id": "N21",
+      "task": "清理缓存功能（日志等）",
+      "doneAt": "2026-09-29",
+      "evidence": "新增 AllTool.Core/Diagnostics/AppStorage.cs（根目录可注入、可单测）+ 5 个测试；界面「文件 → 清理缓存…」列出占用项与大小，缓存（日志）默认勾选、用户数据（记住的输入 / 自定义分组）默认不勾——混成一个按钮很容易误点丢设置。实测：点一次后 logs 清空、两个设置文件保留。另：巨量输出不再拖死界面（批处理刷新，实测 45 秒以上 → 0.4 秒），并加完整落盘日志（按会话轮转、界面留 1000 行、日志全量）。测试 149 → 154。"
     }
   ],
   "plugins": [
@@ -964,6 +970,15 @@
     }
   ],
   "nextActions": [
+    {
+      "id": "N20",
+      "task": "会话型工具包（DiskPart 那种「灰显 + 选中后才允许」）—— 设计已写好，待产品负责人确认后开工",
+      "why": "产品负责人提出的交互式命令方案：动作要能有状态门控（select disk 之后才允许 clean），而且灰显要能说清原因。现有「一个动作一次进程」的模型做不到——diskpart 的选择状态在进程内部。",
+      "how": "设计见 docs/ai/proposal-session-mode.md。分期：S1 规范（session / state / sessionCommand / establishes / requires / requiresHint / confirmPhrase + schema）→ S2 Core 会话执行器（复用 ConPTY 已有的 stdin：保持进程存活 + SendLine + 正则推导状态）→ S3 宿主 UI（状态条、灰显 + 悬浮原因、开始/结束、确认短语输入）→ S4 diskpart 工具包（冒烟只跑只读与 select）。S1 之前不动任何清单，避免出现「规范里写了、宿主没实现」的空承诺。",
+      "doneWhen": "S1–S3 通过各自验收（含「确认短语打错就不执行」），S4 的破坏性动作逐条人工核对文案",
+      "priority": 1,
+      "blockedOn": "设计第 7 节的三个问题要产品负责人确认：逐字确认短语、是否真做 diskpart、会话是否显式开始"
+    },
     {
       "id": "N12",
       "task": "把 uv 加进文档漂移检测（docs/ai/drift-watch.json）",
