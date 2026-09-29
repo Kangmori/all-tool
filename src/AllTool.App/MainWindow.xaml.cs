@@ -1,9 +1,11 @@
 using System.Diagnostics;
 using System.Globalization;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using AllTool.Core.Diagnostics;
 using AllTool.Core.Discovery;
 using AllTool.Core.Execution;
 using AllTool.Core.Manifest;
@@ -22,8 +24,11 @@ namespace AllTool.App;
 /// </summary>
 public sealed partial class MainWindow : Window
 {
-    /// <summary>输出框最多保留多少行（避免超长输出把界面拖慢）。</summary>
+    /// <summary>输出框最多保留多少行（避免超长输出把界面拖慢）。完整输出会写进日志。</summary>
     private const int MaxOutputLines = 1000;
+
+    /// <summary>界面上最多攒多久刷一次输出（毫秒）。见 <see cref="AppendOutput"/> 的说明。</summary>
+    private const int OutputFlushIntervalMs = 150;
 
     private readonly ProcessRunner _runner = new();
     private readonly LastValuesStore _lastValues = LastValuesStore.OpenDefault();
@@ -33,6 +38,23 @@ public sealed partial class MainWindow : Window
     private readonly Dictionary<string, object?> _values = new(StringComparer.Ordinal);
     private readonly List<(string Id, Func<object?> Get)> _valueSync = [];
     private readonly List<string> _outputLines = [];
+
+    /// <summary>
+    /// 界面输出**攒到一定量或一定时间**再刷新的开关。
+    ///
+    /// 为什么必须这么做：原来的写法是"每来一行就 <c>string.Join</c> 出整段文本再赋给 TextBox"，
+    /// 一行一次就等于 O(行数²) 的字符串拷贝 + 一次完整重排。`ipconfig /displaydns` 有 1.6 MB 输出，
+    /// 结果就是界面直接无响应（用户实测反馈）。
+    /// 现在：行只往列表里塞，真正的文本重建由定时器按 <see cref="OutputFlushIntervalMs"/> 触发。
+    /// </summary>
+    private bool _outputDirty;
+
+    private DispatcherQueueTimer? _outputTimer;
+
+    /// <summary>等待写进日志的原始输出行（清单声明的命令输出，完整版）。</summary>
+    private readonly List<string> _pendingLogLines = [];
+
+    private readonly FileLogger _logger = FileLogger.OpenDefault();
 
     /// <summary>字段 id → 生成的控件，用于必填校验时高亮与聚焦。</summary>
     private readonly Dictionary<string, FrameworkElement> _fieldControls = new(StringComparer.Ordinal);
@@ -60,7 +82,69 @@ public sealed partial class MainWindow : Window
         AllowPackageFileDrop(PackageSectionTitle);
         AllowPackageFileDrop(PackageGroupsPanel);
 
+        StartOutputTimer();
+        _logger.Info($"程序启动：{typeof(MainWindow).Assembly.GetName().Version}，"
+                     + $"运行环境 .NET {Environment.Version} / {Environment.OSVersion.VersionString}");
+
         LoadPackages();
+    }
+
+    /// <summary>
+    /// 输出刷新的定时器：把"每行都重建一次界面文本"改成"最多每 150 ms 重建一次"。
+    /// 输出再快也不会让 UI 线程忙死；同时顺便把攒下的原始行批写进日志。
+    /// </summary>
+    private void StartOutputTimer()
+    {
+        _outputTimer = DispatcherQueue.CreateTimer();
+        _outputTimer.Interval = TimeSpan.FromMilliseconds(OutputFlushIntervalMs);
+        _outputTimer.IsRepeating = true;
+        _outputTimer.Tick += (_, _) => FlushOutput(force: false);
+        _outputTimer.Start();
+    }
+
+    /// <summary>把攒下的输出真正写到界面与日志上。</summary>
+    private void FlushOutput(bool force)
+    {
+        if (!_outputDirty && _pendingLogLines.Count == 0)
+        {
+            return;
+        }
+
+        if (!force && !_outputDirty)
+        {
+            // 只有日志待写时不碰界面
+            FlushLogLines();
+            return;
+        }
+
+        if (_outputDirty)
+        {
+            try
+            {
+                var text = string.Join(Environment.NewLine, _outputLines);
+                OutputBox.Text = text;
+                OutputBox.SelectionStart = text.Length;   // 注意：不要写 OutputBox.Text.Length，那会再拷一次整串
+            }
+            catch (Exception ex)
+            {
+                _logger.Exception("刷新输出区时", ex);
+            }
+
+            _outputDirty = false;
+        }
+
+        FlushLogLines();
+    }
+
+    private void FlushLogLines()
+    {
+        if (_pendingLogLines.Count == 0)
+        {
+            return;
+        }
+
+        _logger.WriteLines(LogLevel.Info, _pendingLogLines);
+        _pendingLogLines.Clear();
     }
 
     // ------------------------------------------------------------------ 左栏：工具包与动作（按分组呈现）
@@ -154,6 +238,8 @@ public sealed partial class MainWindow : Window
                 ? $"在 {_pluginsRoot} 里没找到任何工具包（可以把工具包文件夹拖进来安装）"
                 : $"已载入 {_packages.Count} 个工具包，请选择";
 
+            _logger.Info($"载入工具包：{_packages.Count} 个（目录 {_pluginsRoot}）");
+
             // 恢复上次的选择；没有记录就选第一个，省一次点击。
             // 自动化冒烟可以用 ALLTOOL_SELECT_PACKAGE 钉住工具包——只靠 ALLTOOL_SELECT_ACTION 不够，
             // 因为"恢复上次选择"会让那个序号套用到别的包上（脚本会静默失灵，踩过）。
@@ -172,6 +258,7 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             StatusText.Text = "载入工具包失败：" + ex.Message;
+            _logger.Exception("载入工具包时", ex);
         }
     }
 
@@ -182,6 +269,29 @@ public sealed partial class MainWindow : Window
     private string ActionGroupOf(ManifestAction action) =>
         _grouping.GetActionGroup(_manifest?.Id ?? string.Empty, action.Id ?? string.Empty)
         ?? (string.IsNullOrWhiteSpace(action.Category) ? "未分组" : action.Category!);
+
+    /// <summary>
+    /// 工具包条目的悬停说明：优先用清单里的 <c>summary</c>（一句话），
+    /// 没有就退回 <c>description</c> 的第一句——总比什么都不显示强。
+    /// </summary>
+    private static string? TooltipFor(ToolManifest manifest)
+    {
+        if (!string.IsNullOrWhiteSpace(manifest.Summary))
+        {
+            return $"{manifest.Name}：{manifest.Summary}";
+        }
+
+        var description = manifest.Description;
+
+        if (string.IsNullOrWhiteSpace(description))
+        {
+            return manifest.Name;
+        }
+
+        var firstSentence = description.Split(['。', '.', '；', ';'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+
+        return $"{manifest.Name}：{firstSentence?.Trim()}";
+    }
 
     /// <summary>按分组重建左侧工具包列表。</summary>
     private void RebuildPackageList()
@@ -207,7 +317,8 @@ public sealed partial class MainWindow : Window
                     entry.Display,
                     ReferenceEquals(entry.Manifest, _manifest),
                     () => SelectPackage(entry, restoreAction: false),
-                    menu => BuildPackageMenu(menu, entry)),
+                    menu => BuildPackageMenu(menu, entry),
+                    TooltipFor(entry.Manifest)),
                 isPackageScope: true,
                 _packageVisuals));
         }
@@ -243,7 +354,8 @@ public sealed partial class MainWindow : Window
                     entry.Display,
                     ReferenceEquals(entry.Action, _action),
                     () => SelectAction(entry),
-                    menu => BuildActionMenu(menu, entry)),
+                    menu => BuildActionMenu(menu, entry),
+                    entry.Action.Description),
                 isPackageScope: false,
                 _actionVisuals));
         }
@@ -303,7 +415,8 @@ public sealed partial class MainWindow : Window
         string Text,
         bool Selected,
         Action Select,
-        Action<MenuFlyout> BuildMenu);
+        Action<MenuFlyout> BuildMenu,
+        string? Tooltip = null);
 
     /// <summary>
     /// 条目的可视元素（按钮 + 左侧那根强调色标记），用于**原地改高亮**。
@@ -372,6 +485,12 @@ public sealed partial class MainWindow : Window
             info.BuildMenu(menu);
             button.ContextFlyout = menu;
 
+            // 悬停提示：工具包显示一句话说明，动作显示它的 description（界面最省事的"这是什么"）
+            if (!string.IsNullOrWhiteSpace(info.Tooltip))
+            {
+                ToolTipService.SetToolTip(button, info.Tooltip);
+            }
+
             // 选中项左侧加一小段强调色，比整块高亮更稳妥（不依赖主题资源名）
             var marker = new Border
             {
@@ -426,10 +545,33 @@ public sealed partial class MainWindow : Window
         return expander;
     }
 
+    private DispatcherQueueTimer? _filterTimer;
+
+    /// <summary>
+    /// 筛选框防抖：每敲一个字就重建整棵左栏（几十个分组、上百个按钮）在工具包多起来之后很浪费。
+    /// 停手 200 ms 之后再重建一次即可。
+    /// </summary>
     private void OnFilterChanged(object sender, TextChangedEventArgs e)
     {
-        RebuildPackageList();
-        RebuildActionList();
+        _filterTimer ??= CreateFilterTimer();
+
+        _filterTimer.Stop();
+        _filterTimer.Start();
+    }
+
+    private DispatcherQueueTimer CreateFilterTimer()
+    {
+        var timer = DispatcherQueue.CreateTimer();
+        timer.Interval = TimeSpan.FromMilliseconds(200);
+        timer.IsRepeating = false;
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            RebuildPackageList();
+            RebuildActionList();
+        };
+
+        return timer;
     }
 
     private void SelectPackage(PackageEntry entry, bool restoreAction)
@@ -446,8 +588,13 @@ public sealed partial class MainWindow : Window
         }
 
         _action = null;
-        ActionTitle.Text = "请选择一个动作";
-        ActionDescription.Text = string.Empty;
+
+        // 还没选动作时，这里应当解释"这个工具包是干什么的"，而不是一句干巴巴的提示。
+        ActionTitle.Text = string.IsNullOrWhiteSpace(_manifest.Summary)
+            ? _manifest.Name ?? string.Empty
+            : $"{_manifest.Name} —— {_manifest.Summary}";
+
+        ActionDescription.Text = BuildPackageIntro(_manifest);
         FormPanel.Children.Clear();
         CommandLineBox.Text = string.Empty;
         NextStepsPanel.Children.Clear();
@@ -480,6 +627,147 @@ public sealed partial class MainWindow : Window
                 SelectAction(previous);
             }
         }
+    }
+
+    /// <summary>
+    /// 按清单声明的 <c>execution</c> 调整界面（规范 §2.6）：
+    ///   run      —— 正常：宿主自己执行并捕获输出；
+    ///   info     —— **不执行**：只把命令行摊开给你看，可以复制、可以丢进真终端；
+    ///   terminal —— 需要交互或会弹窗：同样不捕获输出，直接在真终端里打开。
+    ///
+    /// 判断标准是"这一步该不该由工具替你做决定"，而不是"命令危不危险"。
+    /// </summary>
+    private void ApplyExecutionMode()
+    {
+        if (_action is null)
+        {
+            return;
+        }
+
+        var mode = _action.ExecutionOrDefault;
+        var hostRuns = _action.HostRunsIt;
+
+        RunButton.IsEnabled = hostRuns;
+        RunButton.Content = hostRuns ? "执行" : "（此动作不直接执行）";
+        TerminalButton.IsEnabled = true;
+
+        if (hostRuns)
+        {
+            return;
+        }
+
+        var why = mode == "terminal"
+            ? "这个命令需要交互或会弹出窗口，宿主没法可靠地驱动它。"
+            : "这个命令会改动系统状态，宿主的判断是：**这一步该由你自己按下回车**。";
+
+        ActionDescription.Text += Environment.NewLine + Environment.NewLine
+            + "⚠ " + why + Environment.NewLine
+            + "命令已经拼好并且随时可复制；要执行就点「在终端中打开」，它会在真正的命令行窗口里跑同一条命令。";
+    }
+
+    /// <summary>把当前这条命令放进真终端里执行（同一条命令，输出与交互由用户自己看）。</summary>
+    private void OpenInTerminal()
+    {
+        if (_executablePath is null || _action is null)
+        {
+            StatusText.Text = "还没定位到可执行文件，无法打开终端";
+            return;
+        }
+
+        IReadOnlyList<string> argv;
+
+        try
+        {
+            SyncValues();
+            argv = ArgvBuilder.Build(_action, _values);
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = "参数有误，无法打开终端：" + ex.Message;
+            return;
+        }
+
+        // 复用执行层那条"CreateProcess 只接受一条命令行"的引号规则，避免自己拼错
+        var commandLine = WindowsCommandLine.Build(_executablePath, argv);
+
+        try
+        {
+            // cmd /k 保留窗口，用户能看到输出、也能继续敲命令
+            Process.Start(new ProcessStartInfo("cmd.exe", $"/k {commandLine}")
+            {
+                UseShellExecute = true,
+                WorkingDirectory = ResolveWorkingDirectory() ?? Environment.CurrentDirectory,
+            });
+
+            _logger.Info($"在终端中打开：{commandLine}");
+            StatusText.Text = "已在终端中打开同一条命令";
+        }
+        catch (Exception ex)
+        {
+            _logger.Exception("打开终端时", ex);
+            StatusText.Text = "打不开终端：" + ex.Message;
+        }
+    }
+
+    private void OnOpenTerminalClicked(object sender, RoutedEventArgs e)
+    {
+        // 没定位过就先定位一次（与执行流程共用同一条查找逻辑）
+        if (_executablePath is not null)
+        {
+            OpenInTerminal();
+            return;
+        }
+
+        _ = LocateThenOpenTerminalAsync();
+    }
+
+    private async Task LocateThenOpenTerminalAsync()
+    {
+        if (_manifest?.Locate is null)
+        {
+            StatusText.Text = "这个工具包没有声明可执行文件";
+            return;
+        }
+
+        StatusText.Text = "正在查找可执行文件…";
+        var location = await ToolLocator.LocateAsync(_manifest.Locate, _runner);
+
+        if (location is null)
+        {
+            StatusText.Text = $"找不到 {_manifest.Locate.Executable}。{_manifest.Locate.NotFoundHint}";
+            return;
+        }
+
+        _executablePath = location.ExecutablePath;
+        OpenInTerminal();
+    }
+
+    /// <summary>选中工具包但还没选动作时展示的介绍。</summary>
+    private static string BuildPackageIntro(ToolManifest manifest)
+    {
+        var lines = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(manifest.Description))
+        {
+            lines.Add(manifest.Description!);
+        }
+
+        var actions = manifest.Actions?.Count ?? 0;
+        var groups = (manifest.Actions ?? [])
+            .Select(a => a.Category)
+            .Where(c => !string.IsNullOrWhiteSpace(c))
+            .Distinct()
+            .Count();
+
+        lines.Add($"共 {actions} 个动作" + (groups > 0 ? $"，分 {groups} 组" : string.Empty));
+        lines.Add("← 在左侧「动作」里选一个；鼠标停在条目上能看到简要说明。");
+
+        if (!string.IsNullOrWhiteSpace(manifest.Homepage))
+        {
+            lines.Add($"官网：{manifest.Homepage}");
+        }
+
+        return string.Join(Environment.NewLine, lines);
     }
 
     private void SelectAction(ActionEntry entry, IReadOnlyDictionary<string, object?>? presets = null)
@@ -1095,6 +1383,26 @@ public sealed partial class MainWindow : Window
 
     private void OnExitClicked(object sender, RoutedEventArgs e) => Close();
 
+    /// <summary>打开日志目录。日志里是每个动作的完整输出——出问题时这是第一手材料。</summary>
+    private void OnOpenLogFolderClicked(object sender, RoutedEventArgs e)
+    {
+        FlushOutput(force: true);
+
+        var directory = _logger.Directory;
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+            OpenInExplorer(directory);
+            StatusText.Text = "日志目录：" + directory;
+        }
+        catch (Exception ex)
+        {
+            _logger.Exception("打开日志目录时", ex);
+            StatusText.Text = "日志目录打不开：" + directory;
+        }
+    }
+
     /// <summary>
     /// 以管理员身份重新启动自己（会弹 UAC）。
     /// 做 Windows 自带命令集时这是刚需：chkdsk /f、sfc /scannow、diskpart 都要提权，
@@ -1247,9 +1555,16 @@ public sealed partial class MainWindow : Window
 
         if (_action.DangerOrDefault != DangerLevel.None)
         {
-            ActionDescription.Text += _action.DangerOrDefault == DangerLevel.Destructive
-                ? "\n⚠ 此动作会不可逆地修改数据，执行前会再次确认。"
-                : "\n⚠ 此动作会覆盖已有文件。";
+            // 优先用清单自己写的 confirmText：它比宿主硬编码的那句准确得多。
+            // 例如 ipconfig /release 是 overwrite，但"会覆盖已有文件"完全说不通——
+            // 清单里写的是"释放 DHCP 租约会立刻断开这个适配器的 IPv4 网络"。
+            var detail = string.IsNullOrWhiteSpace(_action.ConfirmText)
+                ? (_action.DangerOrDefault == DangerLevel.Destructive
+                    ? "此动作会不可逆地修改数据，执行前会再次确认。"
+                    : "此动作会改动已有数据，执行前会再次确认。")
+                : _action.ConfirmText!;
+
+            ActionDescription.Text += "\n\n" + detail;
         }
 
         var advancedPanel = new StackPanel { Spacing = 12 };
@@ -1318,6 +1633,7 @@ public sealed partial class MainWindow : Window
         ProgressIndicator.Value = 0;
         _pendingPresets = null;   // 预填值已经进到控件里了，别留着影响下次重建
         UpdateCommandLine();
+        ApplyExecutionMode();
         StatusText.Text = "填好后点执行";
     }
 
@@ -1727,12 +2043,6 @@ public sealed partial class MainWindow : Window
 
         var suggestions = NextStepMatcher.Match(_action, _manifest.Actions ?? [], output);
 
-        if (suggestions.Count == 0)
-        {
-            NextStepsPanel.Visibility = Visibility.Collapsed;
-            return;
-        }
-
         NextStepsPanel.Children.Add(new TextBlock
         {
             Text = "下一步",
@@ -1740,29 +2050,59 @@ public sealed partial class MainWindow : Window
             Opacity = 0.75,
         });
 
+        // ---- 清单声明的建议（领域相关，例如 scoop status → 一键更新）----
         foreach (var suggestion in suggestions)
         {
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-            var button = new Button { Content = suggestion.Title };
-            var captured = suggestion;
-            button.Click += async (_, _) => await RunSuggestionAsync(captured);
-            row.Children.Add(button);
-
-            if (!string.IsNullOrWhiteSpace(suggestion.Reason))
-            {
-                row.Children.Add(new TextBlock
-                {
-                    Text = suggestion.Reason,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Opacity = 0.75,
-                    TextWrapping = TextWrapping.Wrap,
-                });
-            }
-
-            NextStepsPanel.Children.Add(row);
+            NextStepsPanel.Children.Add(BuildSuggestionRow(suggestion));
         }
 
+        // ---- 通用选项 ----
+        // 只放工具栏上没有的那一条：复制命令与「在终端中打开」已经在按钮条里常驻了，
+        // 这里再放一遍就是重复（实测界面里会出现两个一模一样的按钮）。
+        var generic = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+
+        var helpButton = new Button { Content = "联机帮助" };
+        var tool = _manifest.Name ?? _manifest.Id ?? string.Empty;
+        var commandName = _action.Command ?? string.Empty;
+        helpButton.Click += (_, _) => OpenSearch($"{tool} {commandName} 命令 帮助 用法");
+        generic.Children.Add(helpButton);
+
+        var folderButton = new Button { Content = "打开所在目录" };
+        folderButton.Click += (_, _) => _ = OpenCurrentPackageFolderAsync();
+        generic.Children.Add(folderButton);
+
+        NextStepsPanel.Children.Add(generic);
         NextStepsPanel.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>把一条"下一步"建议渲染成一行（按钮 + 理由）。</summary>
+    private StackPanel BuildSuggestionRow(NextStepSuggestion suggestion)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        var button = new Button { Content = suggestion.Title };
+        button.Click += async (_, _) => await RunSuggestionAsync(suggestion);
+        row.Children.Add(button);
+
+        if (!string.IsNullOrWhiteSpace(suggestion.Reason))
+        {
+            row.Children.Add(new TextBlock
+            {
+                Text = suggestion.Reason,
+                VerticalAlignment = VerticalAlignment.Center,
+                Opacity = 0.75,
+                TextWrapping = TextWrapping.Wrap,
+            });
+        }
+
+        return row;
+    }
+
+    /// <summary>打开**当前**工具包对应的程序所在目录（右键菜单里那个的便捷版）。</summary>
+    private Task OpenCurrentPackageFolderAsync()
+    {
+        var entry = _packages.FirstOrDefault(p => ReferenceEquals(p.Manifest, _manifest));
+
+        return entry is null ? Task.CompletedTask : OpenPackageFolderAsync(entry);
     }
 
     /// <summary>点"下一步"：切到目标动作、预填参数、直接执行。</summary>
@@ -2087,6 +2427,11 @@ public sealed partial class MainWindow : Window
         ClearOutput();
         AppendOutput($"> {ArgvBuilder.FormatForDisplay(_executablePath, argv)}");
 
+        _logger.Info($"开始执行：{_action.Id}（{_manifest.Id}）");
+        _logger.Info($"  命令：{ArgvBuilder.FormatForDisplay(_executablePath, argv)}");
+        _logger.Info($"  工作目录：{workingDirectory ?? "(继承)"}  编码：{encoding.WebName}  "
+                     + $"伪控制台：{(_manifest.Runtime?.UsePseudoConsole ?? false)}");
+
         if (_action.RequiresAdminEffective(_manifest.Runtime?.RequiresAdmin ?? false) && !IsElevated())
         {
             AppendOutput("# 注意：这个动作通常需要管理员权限，而当前不是管理员——如果失败，请用「文件 → 以管理员身份重新启动」再试。");
@@ -2180,6 +2525,12 @@ public sealed partial class MainWindow : Window
 
         AppendOutput(string.Empty);
         AppendOutput($"# {verdict.Meaning}（退出码 {result.ExitCode}，耗时 {result.Duration.TotalSeconds:F1} 秒）");
+
+        _logger.Info($"执行结束：{_action.Id} 退出码={result.ExitCode} 耗时={result.Duration.TotalSeconds:F1}s "
+                     + $"行数={result.TotalLineCount} 截断={result.Truncated} 取消={result.Canceled} 结论={verdict.Meaning}");
+
+        // 跑完立刻把攒下的输出刷出来（否则用户会看到"结论先出现、正文还没到"）
+        FlushOutput(force: true);
 
         if (result.Truncated)
         {
@@ -2282,22 +2633,41 @@ public sealed partial class MainWindow : Window
     {
         _outputLines.Clear();
         OutputBox.Text = string.Empty;
+        _outputDirty = false;
+        _pendingLogLines.Clear();
     }
 
+    /// <summary>
+    /// 收一行输出。
+    ///
+    /// **这里刻意不碰 TextBox**：原来每行都 <c>string.Join</c> + 赋值 + 读 <c>Text.Length</c>，
+    /// 一次输出等于三次整串拷贝与一次完整重排；几万行的命令（`ipconfig /displaydns`）会让界面无响应。
+    /// 现在只入队 + 标记脏，由 <see cref="FlushOutput"/> 按 150 ms 的节奏统一刷新；
+    /// 同时把**原始行**攒起来批写进日志——界面只留最后 1000 行，日志里是全量。
+    /// </summary>
     private void AppendOutput(string line)
     {
         // 走 ConPTY 时输出里混着颜色与光标控制序列（例如 ESC[17;1H）。
         // 直接显示就是乱码，所以展示前统一清掉。
         // （将来若要做彩色渲染，应当改成语义化渲染，而不是把这些字节原样丢给 TextBox。）
-        _outputLines.Add(AnsiText.Strip(line));
+        var clean = AnsiText.Strip(line);
+
+        _outputLines.Add(clean);
 
         if (_outputLines.Count > MaxOutputLines)
         {
             _outputLines.RemoveRange(0, _outputLines.Count - MaxOutputLines);
         }
 
-        OutputBox.Text = string.Join(Environment.NewLine, _outputLines);
-        OutputBox.SelectionStart = OutputBox.Text.Length;
+        _outputDirty = true;
+
+        // 日志攒批：太多行时按块切分，避免一次持有过大的列表
+        _pendingLogLines.Add(clean);
+
+        if (_pendingLogLines.Count >= 5000)
+        {
+            FlushLogLines();
+        }
     }
 }
 

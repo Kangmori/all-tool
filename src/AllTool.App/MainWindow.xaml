@@ -19,6 +19,8 @@
             <MenuBarItem Title="文件">
                 <MenuFlyoutItem Text="安装工具包…" Click="OnInstallPackageClicked" />
                 <MenuFlyoutItem Text="打开工具包目录" Click="OnOpenPluginsFolderClicked" />
+
+                <MenuFlyoutItem Text="打开日志文件夹" Click="OnOpenLogFolderClicked" />
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="重新载入全部工具包" Click="OnReloadPackagesClicked" />
                 <MenuFlyoutSeparator />
@@ -100,7 +102,9 @@
                     <Button x:Name="RunButton" Content="执行" Click="OnRunClicked"
                             Style="{StaticResource AccentButtonStyle}" IsEnabled="False" />
                     <Button x:Name="CancelButton" Content="取消" Click="OnCancelClicked" IsEnabled="False" />
-                    <Button x:Name="CopyCommandButton" Content="复制命令" Click="OnCopyCommandClicked" />
+                    <Button x:Name="CopyCommandButton" Content="复制命令" Click="OnCopyCommandClicked" />
+                    <Button x:Name="TerminalButton" Content="在终端中打开" Click="OnOpenTerminalClicked"
+                            ToolTipService.ToolTip="把同一条命令放进真正的命令行窗口里执行（需要交互、或你想自己看输出的场合）" />
                     <TextBlock x:Name="StatusText" VerticalAlignment="Center" TextWrapping="Wrap" />
                 </StackPanel>
 
