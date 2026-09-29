@@ -769,6 +769,12 @@
       "task": "curl 工具包（14 动作，Windows 自带的新版命令）",
       "doneAt": "2026-09-29",
       "evidence": "plugins/curl：查看/下载/请求/网络四类共 14 个动作；下载与发送类标 overwrite + 明确 confirmText；basic-auth 用 password 字段类型。本机 curl 8.19.0（C:\\Windows\\System32\\curl.exe，Win10 1803+ 自带）。实测：`curl -I https://example.com` 退出码 0 / HTTP 200；宿主跑 `curl --version` 输出完整、退出码 0、中文与英文均正常（utf-8 正确）。踩坑：YAML 普通标量里出现 `: ` 会让校验器在 yaml.safe_load 阶段崩掉（不是可读错误）——含冒号空格的值必须加引号，已记进 curl NOTES。"
+    },
+    {
+      "id": "N27",
+      "task": "彻底脱敏 + 建立「公开仓库 / 本机专属库」的分工",
+      "doneAt": "2026-09-29",
+      "evidence": "development.md §4.4 从点名本机代理软件/内网段改成通用对策（三条抓取通道，一条不通换下一条；都不通就改用程序自带帮助）；P2、windows-commands.md、ipconfig/NOTES.md、project-state 的 fakeIpDns、AGENTS.md 环境要点、参照 README 一并清理。复查本机信息 0 处。新增 §8.8 写清分工与判断口径（换一台机器还成立吗），并建立本机专属库（environment.md / progress.md / snapshots/）+ 不入库的指针文件 .local-vault。校验器改为也读本机专属库的 snapshots（CI 上自动跳过），并收紧 win-* 语料适用范围。顺带重写了严重过期的 docs/reference/README.md。校验 18/18、字段 554/554。"
     }
   ],
   "plugins": [
