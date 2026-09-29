@@ -1,0 +1,1030 @@
+spec: 1
+id: winget
+name: winget
+manifestVersion: 0.1.0
+kind: system
+summary: 安装与管理软件
+appVersion: "v1.29.380（实测）"
+description: >-
+  Windows 包管理器（随 Windows 11 / 较新 Windows 10 的 App Installer 提供）。
+  从微软社区仓库搜索、安装、升级、卸载软件，也能管理来源与"包钉"、导出/导入已装列表。
+  需要 Windows 10 1809（build 17763）或更高版本，且必须登录过一次 Windows 让应用安装程序完成注册。
+homepage: https://learn.microsoft.com/en-us/windows/package-manager/winget/
+license: 随 Windows 提供（开源：github.com/microsoft/winget-cli）
+
+locate:
+  executable: winget.exe
+  searchPaths:
+    - ${LOCALAPPDATA}\Microsoft\WindowsApps\winget.exe
+  notFoundHint: 找不到 winget.exe。它随 App Installer 提供：Windows 11 自带；Windows 10 需要 1809 以上并登录过一次系统。可从 Microsoft Store 安装"应用安装程序"。
+
+runtime:
+  encoding: utf-8
+
+actions:
+  # ============================================================ 查询（只读）
+  - id: version
+    title: 查看 winget 版本
+    description: 显示当前 winget 客户端的版本号。
+    category: 查询
+    command: ""
+    fields: []
+    commandArgs: ["--version"]
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— WinGet 选项表
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "全局选项 -v / --version：返回当前 WinGet 版本。本机实测输出 v1.29.380。"
+
+  - id: info
+    title: 查看 winget 详细信息
+    description: 显示 winget 的详细信息，包括许可证、隐私声明与生效的组策略。
+    category: 查询
+    command: ""
+    fields: []
+    commandArgs: ["--info"]
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— WinGet 选项表
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "全局选项 --info：提供 WinGet 的全部详细信息，含许可证、隐私声明与已配置的组策略。"
+
+  - id: search
+    title: 搜索程序包
+    description: 在已配置的来源（默认是 winget 社区仓库）里搜索程序包。
+    category: 查询
+    command: search
+    fields:
+      - id: query
+        label: 关键词
+        type: text
+        style: positional
+        required: true
+        placeholder: "git"
+        doc: official search 命令的位置参数 <query>（winget search <query>）
+      - id: source
+        label: 来源
+        type: text
+        style: separate
+        prefix: "--source"
+        required: false
+        placeholder: "winget"
+        doc: official search 选项 -s/--source
+      - id: exact
+        label: 精确匹配
+        type: bool
+        style: flag
+        prefix: "--exact"
+        required: false
+        doc: official search 选项 -e/--exact
+      - id: count
+        label: 最多显示条数
+        type: number
+        style: separate
+        prefix: "--count"
+        required: false
+        placeholder: "20"
+        doc: official search 选项 -n/--count
+      - id: versions
+        label: 显示所有可用版本
+        type: bool
+        style: flag
+        prefix: "--versions"
+        required: false
+        doc: official search 选项 --versions
+      - id: acceptSource
+        label: 接受来源协议
+        type: bool
+        style: flag
+        prefix: "--accept-source-agreements"
+        required: false
+        help: 首次使用某个来源时需要接受协议；勾上就不会卡在交互提示上。
+        doc: official search 选项 --accept-source-agreements
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— winget search
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/search
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "本机 winget search --help 的选项：-q/--query、--id、--name、--moniker、--tag、--cmd、-s/--source、-n/--count、-e/--exact、--header、--versions、--accept-source-agreements 等。"
+
+  - id: show
+    title: 查看程序包详情
+    description: 显示某个程序包的详细信息：版本、发布者、描述、安装程序类型、可用版本等。
+    category: 查询
+    command: show
+    fields:
+      - id: query
+        label: 包名或 ID
+        type: text
+        style: positional
+        required: true
+        placeholder: "Git.Git"
+        doc: official show 命令的位置参数 <query>
+      - id: exact
+        label: 精确匹配
+        type: bool
+        style: flag
+        prefix: "--exact"
+        required: false
+        doc: official show 选项 -e/--exact
+      - id: source
+        label: 来源
+        type: text
+        style: separate
+        prefix: "--source"
+        required: false
+        doc: official show 选项 -s/--source
+      - id: versions
+        label: 显示所有可用版本
+        type: bool
+        style: flag
+        prefix: "--versions"
+        required: false
+        doc: official show 选项 --versions
+      - id: scope
+        label: 安装范围
+        type: enum
+        style: separate
+        prefix: "--scope"
+        required: false
+        values:
+          - { value: "", label: "不指定（跟随 winget 默认）", isDefault: true }
+          - { value: user, label: "user —— 当前用户" }
+          - { value: machine, label: "machine —— 整机（可能需要管理员）" }
+        doc: official show 选项 --scope
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— winget show
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/show
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "本机 winget show --help 的选项：-q/--query、-m/--manifest、--id、--name、--moniker、-v/--version、-s/--source、-e/--exact、--scope、-a/--architecture、--installer-type、--locale、--versions、--accept-source-agreements 等。"
+
+  - id: list
+    title: 列出已安装的程序包
+    description: 列出本机已安装的程序包；勾上"只看可升级"就等同于查看有哪些更新。
+    category: 查询
+    command: list
+    fields:
+      - id: upgradeAvailable
+        label: 只看可升级的
+        type: bool
+        style: flag
+        prefix: "--upgrade-available"
+        required: false
+        help: 相当于"有哪些更新可用"；官方也建议用它来查看升级列表。
+        doc: official list 选项 --upgrade-available
+      - id: scope
+        label: 安装范围
+        type: enum
+        style: separate
+        prefix: "--scope"
+        required: false
+        values:
+          - { value: "", label: "不指定（列出全部）", isDefault: true }
+          - { value: user, label: "user —— 当前用户" }
+          - { value: machine, label: "machine —— 整机" }
+        doc: official list 选项 --scope
+      - id: source
+        label: 来源
+        type: text
+        style: separate
+        prefix: "--source"
+        required: false
+        doc: official list 选项 -s/--source
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— winget list
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/list
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "本机 winget list --help 的选项含 --upgrade-available、-u/--unknown/--include-unknown、--pinned、--details、--sort、--scope、-n/--count、-e/--exact 等。"
+
+  - id: features
+    title: 查看实验性功能状态
+    description: 显示 winget 各实验性功能的开关状态。
+    category: 查询
+    command: features
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— winget features
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/features
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "官方命令表：features —— Shows the status of experimental features。本机 winget features --help 只有全局选项。"
+
+  # ============================================================ 来源与包钉（低风险配置）
+  - id: source-list
+    title: 列出来源
+    description: 列出当前配置的所有程序包来源（默认含 winget 社区仓库与 msstore）。
+    category: 来源
+    command: source
+    fields: []
+    commandArgs: ["list"]
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— winget source
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/source
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "source 的子命令：add / list / update / remove / edit / reset / export（本机 winget source --help 实测）。"
+
+  - id: source-update
+    title: 更新来源
+    description: 刷新来源的数据（例如让搜索结果显示最新的仓库内容）。不指定名称则更新全部。
+    category: 来源
+    command: source
+    fields:
+      - id: name
+        label: 来源名称
+        type: text
+        style: separate
+        prefix: "--name"
+        required: false
+        placeholder: "winget"
+        doc: official source update 选项 -n/--name
+    commandArgs: ["update"]
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— winget source
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/source
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "source update —— 更新当前源；官方命令表：Adds, edits, removes, and updates the repositories。"
+
+  - id: source-add
+    title: 添加来源
+    description: 添加一个新的程序包来源（例如内网私有仓库或 REST 源）。
+    category: 来源
+    command: source
+    commandArgs: ["add"]
+    danger: overwrite
+    confirmText: 添加来源会改动 winget 的来源配置；确保你信任该来源，否则可能安装到被篡改的包。
+    fields:
+      - id: name
+        label: 名称
+        type: text
+        style: separate
+        prefix: "--name"
+        required: true
+        placeholder: "winget"
+        doc: official source add 选项 -n/--name
+      - id: arg
+        label: 地址
+        type: text
+        style: separate
+        prefix: "--arg"
+        required: true
+        placeholder: "https://example.com/api"
+        doc: official source add 选项 -a/--arg
+      - id: type
+        label: 类型
+        type: text
+        style: separate
+        prefix: "--type"
+        required: false
+        placeholder: "Microsoft.Rest"
+        doc: official source add 选项 -t/--type
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— winget source
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/source
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "本机 winget source add --help 的选项：-n/--name、-a/--arg、-t/--type、--trust-level、--header、--accept-source-agreements、--explicit。"
+
+  - id: source-remove
+    title: 删除来源
+    description: 从 winget 里移除一个来源。
+    category: 来源
+    command: source
+    commandArgs: ["remove"]
+    danger: overwrite
+    confirmPhrase: "删除来源 {name}"
+    confirmText: 移除来源后，来自它的包将无法搜索/安装（已安装的软件不受影响）。
+    fields:
+      - id: name
+        label: 来源名称
+        type: text
+        style: separate
+        prefix: "--name"
+        required: true
+        placeholder: "winget"
+        doc: official source remove 选项 -n/--name
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— winget source
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/source
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "source remove —— 删除当前源（官方命令表含 remove）。"
+
+  - id: pin-list
+    title: 列出包钉
+    description: 列出已固定的"包钉"（被钉住的包在升级时会被跳过）。
+    category: 来源
+    command: pin
+    commandArgs: ["list"]
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— winget pin
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/pinning
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "pin 的子命令：add / remove / list / reset（本机 winget pin --help 实测）。"
+
+  - id: pin-add
+    title: 固定一个包（包钉）
+    description: 把某个包钉住，使它在升级时被跳过（也可钉住指定版本）。适合"这个软件不能升"的场景。
+    category: 来源
+    command: pin
+    commandArgs: ["add"]
+    danger: overwrite
+    confirmText: 钉住后该包的升级会被跳过，直到你移除包钉。
+    fields:
+      - id: query
+        label: 包名或 ID
+        type: text
+        style: positional
+        required: true
+        placeholder: "Git.Git"
+        doc: official pin add 的位置参数 <query>
+      - id: exact
+        label: 精确匹配
+        type: bool
+        style: flag
+        prefix: "--exact"
+        required: false
+        doc: official pin add 选项 -e/--exact
+      - id: version
+        label: 钉住的版本
+        type: text
+        style: separate
+        prefix: "--version"
+        required: false
+        placeholder: "2.43.0"
+        help: 不填则只钉住"不升级"，不限定版本。
+        doc: official pin add 选项 -v/--version
+      - id: blocking
+        label: 阻止升级（blocking）
+        type: bool
+        style: flag
+        prefix: "--blocking"
+        required: false
+        doc: official pin add 选项 --blocking
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— winget pin
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/pinning
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "本机 winget pin add --help 的选项：-q/--query、--id、--name、--moniker、--tag、--cmd、-e/--exact、-v/--version、-s/--source、--force、--blocking、--installed。"
+
+  - id: pin-remove
+    title: 移除包钉
+    description: 移除某个包的"包钉"，让它重新参与升级。
+    category: 来源
+    command: pin
+    commandArgs: ["remove"]
+    danger: overwrite
+    confirmText: 移除后该包会重新出现在可升级列表里。
+    fields:
+      - id: query
+        label: 包名或 ID
+        type: text
+        style: positional
+        required: true
+        placeholder: "Git.Git"
+        doc: official pin remove 的位置参数 <query>
+      - id: exact
+        label: 精确匹配
+        type: bool
+        style: flag
+        prefix: "--exact"
+        required: false
+        doc: official pin remove 选项 -e/--exact
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— winget pin
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/pinning
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "pin remove —— 删除包钉（本机 winget pin --help 列出 remove 子命令）。"
+
+  # ============================================================ 安装与升级（会改动系统）
+  - id: install
+    title: 安装程序包
+    description: 搜索并安装一个程序包。建议用 --id + --exact 精确指定，避免装错同名包。
+    category: 安装
+    command: install
+    danger: overwrite
+    confirmPhrase: "安装 {query}"
+    confirmText: 安装会把软件写入本机（可能弹 UAC）。请确认包来源可信。
+    fields:
+      - id: query
+        label: 包名或 ID
+        type: text
+        style: positional
+        required: true
+        placeholder: "Git.Git"
+        help: 先用「搜索程序包」确认 ID；用 --exact + --id 最稳妥。
+        doc: official install 命令的位置参数 <query>
+      - id: id
+        label: 精确 ID
+        type: text
+        style: separate
+        prefix: "--id"
+        required: false
+        placeholder: "Git.Git"
+        doc: official install 选项 --id
+      - id: exact
+        label: 精确匹配
+        type: bool
+        style: flag
+        prefix: "--exact"
+        required: false
+        doc: official install 选项 -e/--exact
+      - id: source
+        label: 来源
+        type: text
+        style: separate
+        prefix: "--source"
+        required: false
+        placeholder: "winget"
+        doc: official install 选项 -s/--source
+      - id: version
+        label: 版本
+        type: text
+        style: separate
+        prefix: "--version"
+        required: false
+        placeholder: "2.43.0"
+        doc: official install 选项 -v/--version
+      - id: scope
+        label: 安装范围
+        type: enum
+        style: separate
+        prefix: "--scope"
+        required: false
+        values:
+          - { value: "", label: "不指定（由 winget 决定）", isDefault: true }
+          - { value: user, label: "user —— 当前用户（不需要管理员）" }
+          - { value: machine, label: "machine —— 整机（可能需要管理员）" }
+        doc: official install 选项 --scope
+      - id: silent
+        label: 静默安装
+        type: bool
+        style: flag
+        prefix: "--silent"
+        required: false
+        doc: official install 选项 -h/--silent
+      - id: location
+        label: 安装位置
+        type: text
+        style: separate
+        prefix: "--location"
+        required: false
+        help: 只有部分安装程序支持自定义位置；不支持时会报错。
+        doc: official install 选项 -l/--location
+      - id: acceptPackage
+        label: 接受包协议
+        type: bool
+        style: flag
+        prefix: "--accept-package-agreements"
+        required: false
+        doc: official install 选项 --accept-package-agreements
+      - id: acceptSource
+        label: 接受来源协议
+        type: bool
+        style: flag
+        prefix: "--accept-source-agreements"
+        required: false
+        doc: official install 选项 --accept-source-agreements
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— winget install
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/install
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "本机 winget install --help 的选项：-q/--query、-m/--manifest、--id、--name、--moniker、-v/--version、-s/--source、--scope、-a/--architecture、--installer-type、-e/--exact、-i/--interactive、-h/--silent、--locale、-o/--log、-l/--location、--ignore-security-hash、--allow-reboot、--skip-dependencies、--accept-package-agreements、--accept-source-agreements、--uninstall-previous、--force 等。"
+      - title: Microsoft Learn —— WinGet 的管理员注意事项
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "官方：非管理员运行时，部分应用会要求提权（Windows 会弹 UAC）；管理员命令行下不会再弹提权提示，需谨慎。"
+
+  - id: upgrade-one
+    title: 升级指定的程序包
+    description: 升级某一个已安装的程序包。
+    category: 升级
+    command: upgrade
+    danger: overwrite
+    confirmPhrase: "升级 {query}"
+    confirmText: 升级会替换已安装的软件版本。
+    fields:
+      - id: query
+        label: 包名或 ID
+        type: text
+        style: positional
+        required: true
+        placeholder: "Git.Git"
+        doc: official upgrade 命令的位置参数 <query>
+      - id: id
+        label: 精确 ID
+        type: text
+        style: separate
+        prefix: "--id"
+        required: false
+        doc: official upgrade 选项 --id
+      - id: exact
+        label: 精确匹配
+        type: bool
+        style: flag
+        prefix: "--exact"
+        required: false
+        doc: official upgrade 选项 -e/--exact
+      - id: source
+        label: 来源
+        type: text
+        style: separate
+        prefix: "--source"
+        required: false
+        doc: official upgrade 选项 -s/--source
+      - id: silent
+        label: 静默升级
+        type: bool
+        style: flag
+        prefix: "--silent"
+        required: false
+        doc: official upgrade 选项 -h/--silent
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— winget upgrade
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/upgrade
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "本机 winget upgrade --help 的选项含 -r/--recurse/--all（升级全部）、-u/--include-unknown、--pinned、--uninstall-previous、--purge、-l/--location、--silent 等。"
+
+  - id: upgrade-all
+    title: 升级全部可升级的程序包
+    description: 一次性升级所有有可用更新的程序包。适合"装完就不管"的批量维护。
+    category: 升级
+    command: upgrade
+    danger: overwrite
+    confirmPhrase: "升级全部应用"
+    confirmText: 这会一次性升级本机上所有有更新的软件（数量可能很多，耗时也长）。
+    fields:
+      - id: all
+        label: 全部升级
+        type: bool
+        style: flag
+        prefix: "--all"
+        required: true
+        doc: official upgrade 选项 -r/--recurse/--all
+      - id: includeUnknown
+        label: 包含无法确定版本的包
+        type: bool
+        style: flag
+        prefix: "--include-unknown"
+        required: false
+        doc: official upgrade 选项 -u/--unknown/--include-unknown
+      - id: silent
+        label: 静默升级
+        type: bool
+        style: flag
+        prefix: "--silent"
+        required: false
+        doc: official upgrade 选项 -h/--silent
+      - id: acceptPackage
+        label: 接受包协议
+        type: bool
+        style: flag
+        prefix: "--accept-package-agreements"
+        required: false
+        doc: official upgrade 选项 --accept-package-agreements
+      - id: acceptSource
+        label: 接受来源协议
+        type: bool
+        style: flag
+        prefix: "--accept-source-agreements"
+        required: false
+        doc: official upgrade 选项 --accept-source-agreements
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— winget upgrade
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/upgrade
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "官方与本地帮助一致：-r/--recurse/--all 表示升级全部；-u/--include-unknown 把版本未知的包也纳入。"
+
+  - id: uninstall
+    title: 卸载程序包
+    description: 卸载一个已安装的程序包。卸载前请确认包 ID（同名软件很多）。
+    category: 卸载
+    command: uninstall
+    danger: destructive
+    confirmPhrase: "卸载 {query}"
+    confirmText: 卸载会移除该软件；若软件自身把数据放在程序目录里，那些数据也会一起没了。卸载后需要时可重新安装。
+    requiresAdmin: false
+    fields:
+      - id: query
+        label: 包名或 ID
+        type: text
+        style: positional
+        required: true
+        placeholder: "Git.Git"
+        doc: official uninstall 命令的位置参数 <query>
+      - id: id
+        label: 精确 ID
+        type: text
+        style: separate
+        prefix: "--id"
+        required: false
+        doc: official uninstall 选项 --id
+      - id: exact
+        label: 精确匹配
+        type: bool
+        style: flag
+        prefix: "--exact"
+        required: false
+        doc: official uninstall 选项 -e/--exact
+      - id: silent
+        label: 静默卸载
+        type: bool
+        style: flag
+        prefix: "--silent"
+        required: false
+        doc: official uninstall 选项 -h/--silent
+      - id: allVersions
+        label: 卸载所有版本
+        type: bool
+        style: flag
+        prefix: "--all-versions"
+        required: false
+        doc: official uninstall 选项 --all/--all-versions
+      - id: purge
+        label: 同时删除包数据（purge）
+        type: bool
+        style: flag
+        prefix: "--purge"
+        required: false
+        help: 不只是卸载程序，还会删掉该包留下的数据。不可恢复，请谨慎。
+        doc: official uninstall 选项 --purge
+      - id: preserve
+        label: 保留包数据（preserve）
+        type: bool
+        style: flag
+        prefix: "--preserve"
+        required: false
+        doc: official uninstall 选项 --preserve
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— winget uninstall
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/uninstall
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "本机 winget uninstall --help 的选项：-q/--query、--id、--name、--moniker、--product-code、-v/--version、--all/--all-versions、-s/--source、-e/--exact、--scope、-i/--interactive、-h/--silent、--force、--purge、--preserve、--accept-source-agreements 等。"
+
+  - id: repair
+    title: 修复已安装的程序包
+    description: 让 winget 重新执行该包的安装程序来修复安装（适用于文件被删、注册表损坏等情况）。
+    category: 卸载
+    command: repair
+    danger: overwrite
+    confirmPhrase: "修复 {query}"
+    confirmText: 修复会重新运行该包的安装程序，可能改动该软件的文件。
+    fields:
+      - id: query
+        label: 包名或 ID
+        type: text
+        style: positional
+        required: true
+        placeholder: "Git.Git"
+        doc: official repair 命令的位置参数 <query>
+      - id: id
+        label: 精确 ID
+        type: text
+        style: separate
+        prefix: "--id"
+        required: false
+        doc: official repair 选项 --id
+      - id: silent
+        label: 静默修复
+        type: bool
+        style: flag
+        prefix: "--silent"
+        required: false
+        doc: official repair 选项 -h/--silent
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— winget repair
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/repair
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "本机 winget repair --help 的选项：-q/--query、--id、--name、-v/--version、--product-code、-a/--architecture、--scope、-s/--source、-i/--interactive、-h/--silent、-o/--log 等。"
+
+  # ============================================================ 导出 / 导入 / 下载（写文件）
+  - id: export
+    title: 导出已安装程序包列表
+    description: 把本机已安装的程序包导出成一个 JSON 文件（换机或重装后可用「导入」恢复）。
+    category: 备份迁移
+    command: export
+    danger: overwrite
+    confirmText: 会写入一个 JSON 文件；若文件已存在会被覆盖。
+    fields:
+      - id: output
+        label: 输出文件
+        type: file
+        style: separate
+        prefix: "--output"
+        required: true
+        placeholder: "D:\\packages.json"
+        doc: official export 选项 -o/--output
+      - id: includeVersions
+        label: 包含版本号
+        type: bool
+        style: flag
+        prefix: "--include-versions"
+        required: false
+        help: 导出具体版本，导入时可要求装回同一版本。
+        doc: official export 选项 --include-versions
+      - id: acceptSource
+        label: 接受来源协议
+        type: bool
+        style: flag
+        prefix: "--accept-source-agreements"
+        required: false
+        doc: official export 选项 --accept-source-agreements
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— winget export
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/export
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "本机 winget export --help 的选项：-o/--output、-s/--source、--include-versions、--accept-source-agreements 与全局选项。"
+
+  - id: import
+    title: 从文件导入并安装程序包
+    description: 读取「导出」生成的 JSON，把里面的程序包逐个装回来。
+    category: 备份迁移
+    command: import
+    danger: overwrite
+    confirmPhrase: "按文件导入并安装"
+    confirmText: 这会批量安装文件里列出的所有程序包（可能很多）。建议先用「查看文件内容」确认清单再执行。
+    fields:
+      - id: file
+        label: 导入文件
+        type: file
+        style: separate
+        prefix: "--import-file"
+        required: true
+        placeholder: "D:\\packages.json"
+        doc: official import 选项 -i/--import-file
+      - id: ignoreUnavailable
+        label: 跳过不可用的包
+        type: bool
+        style: flag
+        prefix: "--ignore-unavailable"
+        required: false
+        doc: official import 选项 --ignore-unavailable
+      - id: noUpgrade
+        label: 不升级已装的包
+        type: bool
+        style: flag
+        prefix: "--no-upgrade"
+        required: false
+        doc: official import 选项 --no-upgrade
+      - id: acceptPackage
+        label: 接受包协议
+        type: bool
+        style: flag
+        prefix: "--accept-package-agreements"
+        required: false
+        doc: official import 选项 --accept-package-agreements
+      - id: acceptSource
+        label: 接受来源协议
+        type: bool
+        style: flag
+        prefix: "--accept-source-agreements"
+        required: false
+        doc: official import 选项 --accept-source-agreements
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— winget import
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/import
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "本机 winget import --help 的选项：-i/--import-file、--ignore-unavailable、--ignore-versions、--no-upgrade、--accept-package-agreements、--accept-source-agreements 与全局选项。"
+
+  - id: download
+    title: 只下载安装程序（不安装）
+    description: 把指定程序包的安装程序下载到指定目录，由你自己检查后再安装。
+    category: 备份迁移
+    command: download
+    danger: overwrite
+    confirmText: 会往指定目录写文件；同名文件可能被覆盖。
+    fields:
+      - id: query
+        label: 包名或 ID
+        type: text
+        style: positional
+        required: true
+        placeholder: "Git.Git"
+        doc: official download 命令的位置参数 <query>
+      - id: directory
+        label: 下载目录
+        type: directory
+        style: separate
+        prefix: "--download-directory"
+        required: true
+        placeholder: "D:\\winget-downloads"
+        doc: official download 选项 -d/--download-directory
+      - id: exact
+        label: 精确匹配
+        type: bool
+        style: flag
+        prefix: "--exact"
+        required: false
+        doc: official download 选项 -e/--exact
+      - id: source
+        label: 来源
+        type: text
+        style: separate
+        prefix: "--source"
+        required: false
+        doc: official download 选项 -s/--source
+      - id: version
+        label: 版本
+        type: text
+        style: separate
+        prefix: "--version"
+        required: false
+        doc: official download 选项 -v/--version
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— winget download
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/download
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "本机 winget download --help 的选项：-q/--query、-d/--download-directory、--id、-v/--version、-s/--source、--scope、-a/--architecture、-e/--exact、--locale、--platform、--os-version、--accept-package-agreements 等。"
+
+  # ============================================================ 作者与高级
+  - id: hash
+    title: 计算安装程序哈希
+    description: 生成安装程序文件的 SHA256 哈希（写 winget 清单时用）。
+    category: 高级
+    command: hash
+    fields:
+      - id: file
+        label: 文件
+        type: file
+        style: separate
+        prefix: "--file"
+        required: true
+        doc: official hash 选项 -f/--file
+      - id: msix
+        label: 这是 MSIX 包
+        type: bool
+        style: flag
+        prefix: "--msix"
+        required: false
+        doc: official hash 选项 -m/--msix
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— winget hash
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/hash
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "本机 winget hash --help 的选项：-f/--file、-m/--msix 与全局选项。官方命令表：hash —— Generates the SHA256 hash for the installer。"
+
+  - id: validate
+    title: 校验清单文件
+    description: 按 winget 的规范校验一个清单目录，检查是否是合法的包清单（给要投稿到社区仓库的人用）。
+    category: 高级
+    command: validate
+    fields:
+      - id: manifest
+        label: 清单目录
+        type: directory
+        style: separate
+        prefix: "--manifest"
+        required: true
+        doc: official validate 选项 --manifest
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— winget validate
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/validate
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "本机 winget validate --help 的选项：--manifest 与全局选项。"
+
+  # ============================================================ 不由宿主执行 / 会打开外部界面
+  - id: settings
+    title: 打开 winget 设置
+    description: >-
+      打开 winget 的 settings.json（通常用记事本打开）让你手动编辑。因为会拉起外部编辑器、
+      并且可能要等它关闭，所以不由宿主执行。
+    category: 高级
+    command: ""
+    execution: info
+    commandArgs: ["settings"]
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— winget settings
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/settings
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "settings —— 打开设置或设置管理员设置（官方命令表）。本机 winget settings --help 的选项：--enable、--disable 与全局选项。"
+
+  - id: configure
+    title: 应用配置文件（configure）
+    description: >-
+      按一份 YAML 配置把系统配置到期望状态（WinGet Configuration / DSC）。
+      它会批量改动系统状态，所以不由宿主执行——命令拼好后由你自己在终端里回车。
+    category: 高级
+    command: ""
+    execution: info
+    commandArgs: ["configure"]
+    danger: destructive
+    confirmText: 配置会按文件批量改动系统（安装软件、改设置），属于大范围变更。
+    fields:
+      - id: file
+        label: 配置文件
+        type: file
+        style: separate
+        prefix: "--file"
+        required: true
+        placeholder: "D:\\configuration.dsc.yaml"
+        doc: official configure 选项 -f/--file
+      - id: accept
+        label: 接受配置协议
+        type: bool
+        style: flag
+        prefix: "--accept-configuration-agreements"
+        required: false
+        doc: official configure 选项 --accept-configuration-agreements
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— winget configure
+        url: https://learn.microsoft.com/en-us/windows/package-manager/winget/configure
+        retrieved: "2026-09-29"
+        appliesTo: v1.29.380
+        note: "本机 winget configure --help 的选项：-f/--file、--module-path、--processor-path、-h/--history、--accept-configuration-agreements、--suppress-initial-details、--enable、--disable 等。"

@@ -45,7 +45,8 @@
     "workspaceAclLesson": "工作区若缺显式 WRITE_DAC，沙箱类写入会被拒绝。遇到时用 icacls 给当前用户完全控制（具体命令见 development.md 的 P11）；**不要把本机的路径与账号写进文档**。",
     "privacy": "本仓库是公开的：文档里不要写本机用户名、机器名、绝对路径、个人安装目录与邮箱。需要机器相关的事实时，写「用 scripts/check-env.ps1 现测」，而不是抄一份快照进来。",
     "workspaces": "权威工作区只有一个（历史与 GitHub 一致的那个克隆）；改名前的旧克隆必须切断推送能力（git remote remove origin），否则它里面那条含第三方文档快照的旧历史可能被 force push 送回公开仓库。第三方文档快照放在不受版本控制的地方，只在本地核对时用。",
-    "copyrightBoundary": "可以入库：自己的文档、自己提取的事实性数据（开关矩阵/清单）、官方文档的链接与短引用。不可入库：第三方文档的整篇副本（CHM 提取文本、wiki 克隆、Learn 页面 HTML）、软件自带帮助文件本身。判断口径：这是我做的（含提取出的事实）还是我抄的？"
+    "copyrightBoundary": "可以入库：自己的文档、自己提取的事实性数据（开关矩阵/清单）、官方文档的链接与短引用。不可入库：第三方文档的整篇副本（CHM 提取文本、wiki 克隆、Learn 页面 HTML）、软件自带帮助文件本身。判断口径：这是我做的（含提取出的事实）还是我抄的？",
+    "webFetch": "2026-09-29 起 web_fetch 可用了：产品负责人把 Clash Verge 的 DNS 覆写从 fake-ip 改成 redir-host。Microsoft Learn 页面能直接抓成 Markdown（页面本身提供 Copy Markdown），比以前的 Invoke-WebRequest + 去标签流程省很多事。若将来又不可用，退回 Invoke-WebRequest 即可。"
   },
   "artifacts": [
     {
@@ -756,6 +757,12 @@
       "task": "会话型工具包落地：diskpart（29 动作，三级风险）",
       "doneAt": "2026-09-29",
       "evidence": "plugins/diskpart：会话（脚本重放）+ 状态门控（disk/volume/partition）+ 三级风险。参数全部来自 Microsoft Learn 逐页核对；发现 list disk / create partition primary 等**没有独立页**，语法与位置参数取自 create 页的官方示例与参数表；也发现 .../expand 是文件解压命令的页面（diskpart 扩卷是 extend），已避开。界面实测：🔴 标记、会话状态条、requires 未满足时「执行」置灰 + 主面板写明原因、无 requires 的动作可点、info 级动作显示宿主不执行。校验 16/16；交付包 231 MB 含 16 个工具包。**未验证**：需要管理员的成功路径（本机非管理员，diskpart 启动即被拒），已把复核清单写进 plugins/diskpart/NOTES.md。"
+    },
+    {
+      "id": "N24",
+      "task": "winget 工具包（25 动作，随 Windows 提供的包管理器）",
+      "doneAt": "2026-09-29",
+      "evidence": "plugins/winget：只读（version/info/search/show/list/features/source list/source update/pin list/pin remove/hash/validate）直接执行；安装类（install/upgrade/upgrade-all/uninstall/repair/import/source add/source remove）走逐字确认短语，其中 uninstall 标 destructive；settings 与 configure 用 execution: info（会拉外部编辑器 / 批量改系统状态）。真机实测：宿主跑 winget list → 退出码 0、141 行、1.0 秒、无截断，中文输出正常（据此确认 runtime.encoding: utf-8 是对的）。winget v1.29.380；只读命令不需要管理员；实测耗时 --version 0.6s、list 1.3–1.7s、features 0.6s。发现并修掉一个真实缺陷：--scope 枚举默认 user 会静默生成 `list --scope user`，把整机范围安装的包过滤掉——现在三个 --scope 都默认「不指定」。校验 16/16 → 17/17；字段 431 → 504（+73，出处 100%）；测试 165/165。"
     }
   ],
   "plugins": [
@@ -1013,6 +1020,14 @@
       "why": "第一批 12 个包已经能覆盖诊断与维护的主干；子智能体按价值给了下一批建议",
       "how": "优先 schtasks（/query 只读且常用）、wevtutil（事件日志查询——chkdsk/sfc 的结果都在事件日志里）、curl 与 tar（Win10 1803+ 自带、跨平台语义清晰）。netsh 面太大要拆；diskpart 是交互式、shutdown 会改系统状态，建议继续不做。做之前先看 docs/ai/windows-commands.md（第一批的实测事实，能省很多重复摸索）",
       "doneWhen": "校验全绿 + 每个动作对着 `/?` 与官方文档核对 + 冒烟（只读命令）+ NOTES 记录",
+      "priority": 2
+    },
+    {
+      "id": "N25",
+      "task": "「新版系统自带命令」第二批工具包",
+      "why": "产品负责人指定：接着做 winget 与一些新版系统自带的命令。这类命令是新系统才带、用户普遍不知道其存在的，正好符合本项目「让用户知道有这个功能」的定位。",
+      "how": "建议顺序（按价值/独立性）：① curl（Win10 1803+ 自带，官方手册 curl.se/docs/manpage.html，选项多，只收常用项）② tar（同版本自带，bsdtar 语义，压缩/解压/列表）③ ssh / scp（OpenSSH 客户端，Win10 1809+ 可选功能）④ schtasks（计划任务，只读的 /query 很实用）⑤ wevtutil（事件日志——chkdsk/sfc 的结果都在事件日志里）⑥ certutil / takeown / icacls（证书与权限，需要管理员的多）。注意：curl 的选项是 `-x` 风格且和 url 位置参数混排，写字段时要按官方手册逐个核对。",
+      "doneWhen": "每个包：校验全绿 + 只读动作真机冒烟 + NOTES 记录；风险分级按规范 §2.9。",
       "priority": 2
     }
   ],
