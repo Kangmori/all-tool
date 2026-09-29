@@ -409,3 +409,96 @@ git push
 **做法**：定字段风格之前，**用同一条真实命令把两种写法各试一次**，把结果写进 NOTES，
 不要按「看起来像哪一类」选。这类错误**校验器查不出来**（开关名是对的、出处也对），只有真机能发现——
 所以它属于「必须真机冒烟」的理由之一。
+
+## 10. 坑清单（跨 23 个工具包归纳，动手前先扫一遍）
+
+> 这一节是**踩过的坑**的汇总，全部有实测出处。校验器只能拦住其中一部分
+> （清单结构能拦，argv 风格/顺序/编码/退出码**拦不住**，只有真机能发现）。
+
+### 10.1 清单结构（校验器会拦，但报错可能很吓人）
+
+1. **YAML 普通标量里出现 `: `（冒号+空格）会让校验器直接抛 Python traceback 崩掉**，不是可读的校验错误。
+   例：`description: 官方原文：/q "..."`。→ 含冒号空格的值必须加引号。
+2. **单引号标量里再出现单引号 → 同样崩**，而且更难发现。→ 含引号的长文本用 `>-` 折叠块标量最省事。
+3. 顶层必需键：`spec: 1`、`id`、`name`、`manifestVersion: 0.1.0`、`locate`、`actions`
+   （注意是 `manifestVersion` 且必须是 `x.y.z` 形式，不是 `version`）。
+4. 动作级**没有** `args`；多词子命令用 `command` + `commandArgs: [...]`。`command: ""` 合法（没有子命令时）。
+5. `type: path` **不存在** → 用 `file` / `files` / `directory` / `directories` / `paths`。
+6. `style: attached` **强制要求** `prefix`（冒号可以写进 prefix）；没有前缀的字段用 `style: positional`。
+7. enum 的 `values` 必须是**对象数组** `{ value, label }`，默认项写 `isDefault: true`（不是 `default:`）。
+8. **`switchBase` 只用于 CI 白名单校验，不产生 argv**。要生成 `/deny` 这种固定 token，
+   用 `style: literal` 的字段（每个取值带 `args`）。把它当成"生成开关的字段"是常见误解。
+
+### 10.2 字段与 argv（校验器查不出来，只有真机能发现）
+
+9. **`separate` 展开成两个 token、`attached` 展开成一个 token，不同程序认的不一样**：
+
+   | 程序 | 实测结论（2026-09） |
+   |---|---|
+   | `wevtutil` | **只认单 token**：`/q:值` ✔；`/q 值` → exit 87 |
+   | `certutil` | **不存在单 token**：`-hashfile:<file>` → 「未知参数」；用两 token |
+   | `icacls` | 开关必须是**独立 token**：`<路径>:/T` → exit 123 |
+   | `curl` / `schtasks` | 两 token 合法（实测 exit 0） |
+
+   → 定风格前**用同一条真实命令把两种写法各试一次**，把结果写进 NOTES。
+
+10. **开关与位置参数的顺序也因程序而异**，而**字段声明顺序就是 argv 顺序**：
+    - `certutil`：flag 必须在前（`-encode -f <in> <out>` ✔；`-encode <in> -f <out>` ✗）
+    - `icacls`：**路径必须永远在最前**（`icacls /T <路径>` → 87「First parameter must be a file name pattern」）
+    - `wevtutil` / `schtasks`：开关在路径/任务名之前
+
+11. **小心「不报错但行为不同」的写法**：`certutil -store My -user` 不报参数错，
+    而是把 `-user` 当成 CertId 去匹配、**静默给出另一个结果**。这类问题只有把两种写法都跑一遍才会发现。
+12. **枚举的默认值等于替用户做决定**：winget 的 `--scope` 默认 `user` 会把**整机范围安装的包全部过滤掉**，
+    用户只会觉得「少了很多软件」。拿不准就默认「不指定」（空值 + `isDefault: true`）。
+
+### 10.3 输出与编码（每个包都要实测，包之间不能互抄）
+
+13. **编码必须逐包实测**：同一台机器上 `tar`=oem、`schtasks`=utf-8、`wevtutil`=oem、`certutil`=oem、`icacls`=oem。
+14. **判编码必须用带中文（非 ASCII）的输出**：`wevtutil el` / `icacls /?` 全是纯 ASCII，拿它们判会得出错误结论。
+    正确做法是造一个中文样本（中文路径名、中文任务名），再看**原始字节**：
+    严格 UTF-8 解码抛异常 = 不是 UTF-8；`0x00` 间隔 = 可能是 UTF-16LE。
+15. **退出码不是「0 = 成功」**：`ipconfig /?` = 1；`icacls /findsid` 零命中 = 1332（与账号名写错同码）；
+    `icacls /restore` 部分失败仍返回 0；`schtasks /End` 对没在跑的任务也报 SUCCESS。
+16. **失败常常写 stderr、汇总写 stdout**；帮助可能写 stdout 也可能写 stderr（`nslookup /?` 是 stderr，
+    `tar --help` 是 stdout）。抓快照时要两个流都留。
+17. **本地化**：中文系统上程序输出中文（diskpart 全是中文，连版本横幅都是）。
+    **绝不要用「成功提示的措辞」判断成败**——要么用退出码，要么声明多语言正则，
+    要么像会话型那样「只判有没有命中错误」。
+18. `(?m)^...$` 在多行输出的 CRLF 上会因 `\r` 失配 → 写 `\r?$`
+    （wevtutil 的输出就是 CRLF，踩过）。
+
+### 10.4 会话型（有状态的）程序
+
+19. **状态值从字段值取**（`session.state[].captureField`），不要从输出里正则捕获——
+    后者在中文系统上必然失效（中文提示匹配不上英文正则）。
+20. **只有声明了 `establishes` 的动作才写状态，且只写它声明的那个**。
+    否则 `list` / `detail` 这类动作也会去写「第一个状态」，把「已选中磁盘 0」覆盖成 `yes`（实测过的 bug）。
+21. 失败判定写**多条语言**的 `errorPatterns`；命中任一条就不确立状态。
+22. 不可逆毁数据的动作（清盘 / 删分区 / 格式化）用 `execution: info`：**宿主不执行**，只给解释与命令。
+
+### 10.5 工具与流程
+
+23. **改了清单必须跑校验 + 真机冒烟**，一条都不能省：校验器查不出 argv 风格、顺序、编码、退出码。
+24. **子智能体的产出必须等它完全结束再读**。不要在它还在写文件时 `git add -A`——
+    会把半成品提交进去（表现为应用报「YAML 解析失败」）。正确顺序：确认它 inactive → 校验 → 复核 → 提交。
+25. **脚本里的 `str.replace` 锚点不匹配时不报错**（Python/PowerShell 都是）。改完必须用编译或 grep 复核，
+    别信脚本自己打印的「已完成」。同理：**按「起点+终点」切代码块很危险**，块内可能有别的东西
+    （我删弹窗代码时连带删掉了自动化逻辑，编译才发现）。
+26. 在 pwsh 里读中文输出前先设 `$OutputEncoding = [Console]::OutputEncoding = [Text.Encoding]::UTF8`，
+    否则中文标签会乱码——**零残留自检因此误判过**（把 21 个证书数成 0 个）。
+27. 写中文文档时**别在字符串里混用 ASCII 引号**（写脚本时踩过多次，表现为语法错误或 shell 解析错）。
+
+## 11. 新增一个工具包的检查单
+
+- [ ] 官方文档 + 本机 `--help` / `/?` 都读了；**两边对不上的只写都能对应的**，差异记进 NOTES
+- [ ] 每个动作有 `sources`（title / url / retrieved / note），每个字段有 `doc`
+- [ ] 字段风格（`separate` / `attached` / `positional`）与**字段顺序**都各试两种写法再定
+- [ ] `runtime.encoding` 用**带中文的输出**实测，并写清判定依据
+- [ ] 退出码语义逐条实测（含失败路径），写进 `exitCodes`
+- [ ] 是否需要管理员：**实测确认**，不要照文档抄（官方常常一个字都不写）
+- [ ] 只读动作全部真跑并记录退出码；危险动作只在自建临时对象上跑，或干脆不跑并说明
+- [ ] 风险分级按 §2.9；`confirmPhrase` 里带**真实目标**（例如「清空磁盘 0」）
+- [ ] `uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py` 全绿
+- [ ] NOTES 写全：验了什么 / 没验什么 / **为什么没验** / 与官方文档对不上的地方
+- [ ] 临时对象申报：建了什么、何时删的、**怎么复核**

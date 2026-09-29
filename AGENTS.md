@@ -17,7 +17,7 @@
 0. 看仓库根目录有没有 .local-vault    ← 不入库的指针文件
                                         有 → 先读它指向的本机专属库（环境事实 / 开发流水 / 宿主手册）
 1. 读 docs/spec/manifest-v1.md        ← 清单规范（含 §2.6 execution、§2.9 三级风险、§2.10 kind）
-2. 读 docs/ai/playbook-tool-package.md ← 做工具包的逐步流程（**动手前必读**）
+2. 读 docs/ai/playbook-tool-package.md ← 做工具包的逐步流程 + **§10 坑清单 + §11 检查单**（动手前必读）
 3. 要碰 Windows 自带命令 → 先读 docs/ai/windows-commands.md（前人实测的公共结论，能省很多重复摸索）
 4. 改完 → 跑校验（§3）→ 真机冒烟 → 写进 NOTES
 ```
