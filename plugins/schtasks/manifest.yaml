@@ -1,0 +1,897 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# schtasks —— Windows 自带的计划任务命令行工具（C:\Windows\System32\schtasks.exe）。
+#
+# 参数知识来源（两边逐条核对，冲突记进 NOTES.md §7）：
+#   1) 官方文档（Microsoft Learn），共 7 个页面，全部实测 HTTP 200：
+#      主页            https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks
+#      /query          .../schtasks-query
+#      /create         .../schtasks-create
+#      /change         .../schtasks-change
+#      /delete         .../schtasks-delete
+#      /run            .../schtasks-run
+#      /end            .../schtasks-end
+#      **主页只是索引**（命令总表 + 权限说明），每个开关的细节都在子页里；
+#      这与 ipconfig/powercfg 那种"一页到底"的形态不同。
+#   2) 本机 `schtasks /?` 与 `schtasks <子命令> /?` 的真实输出（8 个帮助页，全部实跑）。
+#      本机帮助是**英文**（系统为 zh-CN 且代码页 936，但 schtasks 的帮助语言集是英文），
+#      见 NOTES.md §5。
+#
+# **输出编码：utf-8（实测，本批唯一一个）。** 见 NOTES.md §4：
+#   用中文任务名 `__AllTool编码探针` 触发器实测，任务名字节为 e7 bc 96 e7 a0 81 e6 8e a2 e9 92 88
+#   （正是「编码探针」的 UTF-8 编码）；按 cp936 解是乱码「缂栫爜鎺㈤拡」，按 UTF-8 解正确。
+#   这与第一批 12 个 Windows 命令包的 oem(cp936) **不同**，不要照抄那批的结论。
+#
+# **管理员权限：本批不做"一刀切"标注。** 官方主页写"要查看和更改计算机上的所有任务，
+#   必须是 Administrators 组成员"，这句指的是**全部任务**；实测非管理员可以创建、修改、
+#   运行、删除**自己文件夹里的任务**，只有对系统任务（\Microsoft\...）才 Access is denied。
+#   所以本清单**动作级一律不标 requiresAdmin**（按规范 §2.5 宁可漏标），
+#   把逐条实测结论写进 NOTES.md §8。**例外是 /Create 的 /DELAY 字段**——实测
+#   非管理员下 `schtasks /Create ... /SC ONSTART /DELAY 0001:00` 直接 Access is denied（见 NOTES.md §8.2）。
+#
+# 版本：Windows 自带命令没有 --version 开关，故不写 versionArgs/versionPattern（R1）。
+#       exe 文件版本实测 10.0.26100.8875（读 VersionInfo，规范无此能力，只记进 NOTES）。
+
+spec: 1
+id: schtasks
+name: schtasks
+manifestVersion: 0.1.0
+appVersion: Windows 10/11 自带（随系统版本发布）
+kind: system
+summary: 查看与管理计划任务
+description: 查看、创建、修改、运行、结束与删除 Windows 计划任务。只读的查询部分（列出全部任务、详细模式、按格式导出）不需要管理员；改动系统任务需要管理员，改动自己的任务不需要。Windows 自带，无需安装。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 计划任务, 定时任务, 任务计划程序]
+
+sources:
+  - title: schtasks 命令主页（Microsoft Learn）—— 命令总表与"必需权限"
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks
+    retrieved: "2026-09-29"
+    appliesTo: Windows 10/11 / Windows Server 2016-2025
+    note: 主页只列七个操作（/change /create /delete /end /query /run）与权限说明（"To schedule, view, and change all tasks on the local computer, you must be a member of the Administrators group."），单个开关的说明在各自的子页里。
+  - title: schtasks query —— 官方参考（/query /fo /nh /v /tn 等）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-query
+    retrieved: "2026-09-29"
+    appliesTo: Windows 10/11
+    note: 语法行已抄进 query 系列动作的 note 里。该页明确写 /tn "Does not accept wildcards"——实测确认（连 \文件夹\* 也报错），见 NOTES.md §7.4。
+  - title: schtasks create —— 官方参考（/sc /mo /d /m /st /sd /ed /ru /rp /it /np /z /xml /v1 /f /rl /delay）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-create
+    retrieved: "2026-09-29"
+    appliesTo: Windows 10/11
+    note: 这一页很长（含各 schedule type 的详细用法与官方示例），本清单的字段依据全部来自它的 Parameters 表。
+  - title: schtasks change —— 官方参考（/tn /ru /rp /tr /st /ri /rl /et /du /k /sd /ed /ENABLE /DISABLE /it /z）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-change
+    retrieved: "2026-09-29"
+    appliesTo: Windows 10/11
+    note: 注意该页的 Syntax 行里**没有** /delay，而本机 `/change /?` 的语法行与参数表里都有它——按"只用官方页面确认存在的开关"处理，本清单不收 /delay，见 NOTES.md §7.2。
+  - title: schtasks delete —— 官方参考（/tn {<taskname> | *} /f）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-delete
+    retrieved: "2026-09-29"
+    appliesTo: Windows 10/11
+    note: 官方示例 schtasks /delete /tn * /f「删除本机全部任务」是这条动作的 confirmPhrase 要用逐字确认的直接依据。
+  - title: schtasks run —— 官方参考（/tn）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-run
+    retrieved: "2026-09-29"
+    appliesTo: Windows 10/11
+    note: 官方原文：run 忽略计划、用任务里保存的程序位置与账号立即运行；不影响计划、不改变下次运行时间。本清单据此把 run 定为"按需启动"，不加 confirmText（见 NOTES.md §9.3）。
+  - title: schtasks end —— 官方参考（/tn）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-end
+    retrieved: "2026-09-29"
+    appliesTo: Windows 10/11
+    note: 官方原文：只停止由该计划任务启动的程序实例；要停别的进程得用 TaskKill。
+  - title: 本机 `schtasks /?` 与 `schtasks <操作> /?` 的真实输出（8 个帮助页）
+    url: file:///<仓库目录>/本机帮助快照（**未入库**，可用 pwsh -File scripts/fetch-win-help.ps1 -Commands schtasks 重新抓取）/schtasks.txt
+    retrieved: "2026-09-29"
+    appliesTo: Windows 11 26200 / schtasks.exe 文件版本 10.0.26100.8875
+    note: 实测 `schtasks /?`、`/query /?`、`/create /?`、`/change /?`、`/delete /?`、`/run /?`、`/end /?`、`/showSid /?` 八个帮助页**退出码全是 0**、全部写 stdout、stderr 0 字节。帮助文本是英文、纯 ASCII。与官方页面不一致之处逐条记在 NOTES.md §7。
+
+locate:
+  executable: schtasks.exe
+  searchPaths:
+    - "${SystemRoot}\\System32\\schtasks.exe"
+    - "${SystemRoot}\\SysWOW64\\schtasks.exe"
+  notFoundHint: schtasks.exe 是 Windows 自带命令，正常情况下都在 C:\Windows\System32 下。
+
+runtime:
+  encoding: utf-8
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  usePseudoConsole: false
+
+# 退出码：微软的 schtasks 各子页**都没有退出码章节**（已逐页核对）。下面来自实测，见 NOTES.md §6。
+# 实测汇总（全部为本机真实跑出来的）：
+#   只读：/Query 0、/Query /FO LIST /V 0、/Query /FO CSV /NH 0、/Query /FO TABLE /NH /V 0、
+#         /Query /TN <存在的任务> 0、/ShowSid /TN <存在的任务> 0
+#   失败：/Query /TN <不存在的任务> 1、/Query /TN <不存在的文件夹> 1、
+#         /Delete|/Change|/Run 打到系统任务 1（stderr: Access is denied。）
+#         /Create /SC ONSTART /DELAY ... 1（stderr: Access is denied。）
+#   帮助：8 个 `/?` 全部 0
+exitCodes:
+  # 块式写法，理由见 plugins/ping/manifest.yaml 的同一处注释。
+  - code: 0
+    meaning: 成功（帮助 /? 也返回 0；"计划任务已存在但参数正确"这类 INFO 提示也是 0）
+    severity: ok
+  - code: 1
+    meaning: 失败。实测最常见的是两类：**权限不足**（stderr 为 Access is denied，出现在非管理员操作系统任务时）与**找不到任务**（stderr 为 The system cannot find the file specified. / The specified task name "..." does not exist in the system.）
+    severity: error
+
+quickActions:
+  - title: 列出全部计划任务
+    action: list-tasks
+  - title: 详细查看全部任务（很慢、输出很大）
+    action: list-tasks-detail
+  - title: 新建一个计划任务
+    action: create-basic
+
+actions:
+
+  # ============================================================ 查询任务（只读，不标 danger）
+  - id: list-tasks
+    category: 查询任务
+    title: 列出全部计划任务
+    command: /Query
+    description: 列出本机全部计划任务：所在文件夹、任务名、下次运行时间、状态。这就是不带参数跑 schtasks 的结果。本机实测输出约 41 KB、19 个文件夹。
+    sources:
+      - title: schtasks query 官方参考 —— /query
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-query
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: 官方原文：/query "Optionally, specifies the name of the operation. Using this query without any parameters performs a query of all tasks on the system."；官方示例 schtasks 与 schtasks /query "produce the same result and can be used interchangeably"。
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测本机输出 41 827 字节（19 个文件夹、含 192 个 \Microsoft\ 下的系统任务），退出码 0。中文系统的任务名也能正常显示（输出是 UTF-8）。
+    nextSteps:
+      - title: 详细查看（含上次运行结果、要运行的程序）
+        action: list-tasks-detail
+        when: '(?m)^(?!TaskName|Folder:|=)\S.*?\s{2,}\S'
+        reason: 概览里已经有任务行，想看某个任务的"上次运行结果/要运行的程序/运行身份"就切到详细模式
+    examples:
+      - title: 列出全部计划任务
+        args: ["/Query"]
+
+  # ============================================================ 查询任务
+  - id: list-tasks-detail
+    category: 查询任务
+    title: 详细查看全部任务（/FO LIST /V）
+    command: /Query
+    commandArgs: ["/FO", "LIST", "/V"]
+    description: 每个任务列一大段详细信息：要运行的程序、运行身份、上次运行时间与结果、重复间隔、电源设置等。官方文档说这条命令可以用来核对"你建的任务是不是按预期重复"。
+    sources:
+      - title: schtasks query 官方参考 —— /fo LIST 与 /v
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-query
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: 官方示例 schtasks /query /fo LIST /v，并说明 /v 是"request a detailed (verbose) display"、/fo LIST 是"format the display as a list for easy reading"，用途是"verify that a task you created has the intended recurrence pattern"。
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测本机这条输出 **437 167 字节**（427 KB）、退出码 0。是本工具包里最慢最大的一条，界面上要有等待预期。
+    nextSteps:
+      - title: 只看某一个任务（把任务名填进 /TN）
+        action: query-task
+        when: '(?m)^TaskName:\s+\S'
+        reason: 详细模式里能看到具体任务名，直接把它填进「查询指定任务」就不用再翻这几百 KB
+    examples:
+      - title: 详细列出全部任务
+        args: ["/Query", "/FO", "LIST", "/V"]
+
+  # ============================================================ 查询任务
+  - id: list-tasks-csv
+    category: 查询任务
+    title: 导出为 CSV（/FO CSV /NH）
+    command: /Query
+    commandArgs: ["/FO", "CSV", "/NH"]
+    description: 以 CSV 格式输出全部任务且不带列标题，便于粘进表格或再喂给别的工具。官方示例正是用它把多台机器的任务收集成一个日志文件。
+    sources:
+      - title: schtasks query 官方参考 —— /fo CSV 与 /nh
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-query
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: 官方原文：/fo 的合法值是 TABLE、LIST 或 CSV；/nh "Removes column headings from the table display. This parameter is valid with the TABLE or CSV output formats."。官方示例 schtasks /query /s Reskit16 /fo csv /nh >> \\svr01\data\tasklogs\p0102.csv。
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测本机输出 21 641 字节、退出码 0；每行形如 "\Microsoft\Windows\Defrag\ScheduledDefrag","N/A","Ready"。
+    examples:
+      - title: 导出为无表头 CSV
+        args: ["/Query", "/FO", "CSV", "/NH"]
+
+  # ============================================================ 查询任务
+  - id: list-tasks-table
+    category: 查询任务
+    title: 表格模式 + 详细（/FO TABLE /NH /V）
+    command: /Query
+    commandArgs: ["/FO", "TABLE", "/NH", "/V"]
+    description: 详细模式配表格输出：把每个任务的详细字段横着铺成很多列。官方帮助里给的示例组合之一。
+    sources:
+      - title: schtasks query 官方参考 —— /fo TABLE 与 /nh 与 /v
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-query
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: 本机 `schtasks /query /?` 的 Examples 一节里有 "SCHTASKS /Query /FO TABLE /NH /V"。官方网页说 /v 只在 LIST 或 CSV 下有效、/nh 只在 TABLE 或 CSV 下有效，**但本机实测 TABLE+/V 与 /nh 都正常工作**，见 NOTES.md §7.3。
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测本机输出 272 067 字节、退出码 0。列很多，窄窗口里会折行。
+    examples:
+      - title: 表格模式详细列出
+        args: ["/Query", "/FO", "TABLE", "/NH", "/V"]
+
+  # ============================================================ 查询任务
+  - id: query-task
+    category: 查询任务
+    title: 查询指定任务（/TN）
+    command: /Query
+    description: 按"路径\任务名"查询一个任务。任务在子文件夹里时要写完整路径（例如 \Microsoft\Windows\Defrag\ScheduledDefrag）。官方文档说明 /TN 不接受通配符。
+    sources:
+      - title: schtasks query 官方参考 —— /tn <taskname>
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-query
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: 官方原文："/tn <taskname> Queries a specific task by path and name. If /tn is used, <taskname> cannot be blank. Assumes from root directory "\" folder by default (thus \ is omittable if the task is located in the root directory). Does not accept wildcards. Use quotation marks to enclose names that include spaces."；官方示例 schtasks /query /tn "\Microsoft\Office\Office Subscription Maintenance"。**"不接受通配符"这条本机实测确认**（\文件夹\* 报 The system cannot find the file specified.），见 NOTES.md §7.4。
+    fields:
+      - id: taskName
+        label: 任务名（含路径）
+        type: text
+        style: attached
+        prefix: "/TN "
+        required: true
+        save: true
+        placeholder: 例 \Microsoft\Windows\Defrag\ScheduledDefrag
+        help: 根目录下的任务可以省略开头那个反斜杠；名字里有空格不用手动加引号（宿主按 argv 数组传参，不经过 shell）。**不能写通配符**——官方文档明确 /TN 不接受通配符，实测 \文件夹\* 也会报错；想按文件夹看任务请用「列出全部计划任务」再按 Folder 行找。
+        doc: 'official #parameters 的 /tn <taskname>（含 "Does not accept wildcards"）与官方示例 schtasks /query /tn "\Microsoft\Office\Office Subscription Maintenance"'
+      - id: verbose
+        label: 详细模式（/V）
+        type: bool
+        style: flag
+        prefix: "/V"
+        group: 输出
+        advanced: true
+        default: false
+        help: 加详细字段。官方示例里 /v 配 /fo LIST 用。
+        doc: official #parameters 的 /v
+      - id: format
+        label: 输出格式（/FO）
+        type: enum
+        style: separate
+        prefix: "/FO"
+        group: 输出
+        advanced: true
+        help: 官方说明：合法值是 TABLE、LIST、CSV。留空 = 不指定（用 schtasks 自己的默认 TABLE）。
+        doc: official #parameters 的 /fo <format>
+        values:
+          - value: ""
+            label: 不指定
+            isDefault: true
+          - value: TABLE
+            label: TABLE
+          - value: LIST
+            label: LIST
+          - value: CSV
+            label: CSV
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测查询存在的系统任务 exit=0（\Microsoft\Windows\Defrag\ScheduledDefrag 共 280 字节）；查询不存在的任务 exit=1，stderr 为 The system cannot find the file specified.
+    nextSteps:
+      - title: 立即运行这个任务（/Run）
+        action: run-task
+        when: '(?m)^TaskName:\s+\S|^(?!TaskName|Folder:|=)\S.*?\s{2,}\S'
+        reason: 已经查到具体任务，可以直接切到「立即运行」并填同一个任务名
+    examples:
+      - title: 查询系统里的磁盘碎片整理任务
+        args: ["/Query", "/TN", "\\Microsoft\\Windows\\Defrag\\ScheduledDefrag"]
+
+  # ============================================================ 查询任务
+  - id: show-sid
+    category: 查询任务
+    title: 查看任务专用账号的 SID（/ShowSid）
+    command: /ShowSid
+    description: 显示某个计划任务"专用用户"对应的安全标识符（SID）。只有那些以自己的名义运行的任务才有；普通任务跑这条会报错。
+    sources:
+      - title: 本机 `schtasks /showSid /?` 的真实输出
+        url: file:///<仓库目录>/本机帮助快照（**未入库**）/schtasks.txt
+        retrieved: "2026-09-29"
+        appliesTo: Windows 11 26200 / schtasks.exe 10.0.26100.8875
+        note: 本机帮助原文：SCHTASKS /ShowSid /TN taskname [/HRESULT] [/?]；"Shows the SID for the task's dedicated user."。**官方 Microsoft Learn 的七个子页里都没有 /ShowSid**（主页的命令总表也没有），这条动作的开关依据只有本机帮助 + 实测，见 NOTES.md §7.1 与 §10。
+    fields:
+      - id: taskName
+        label: 任务名（含路径）
+        type: text
+        style: attached
+        prefix: "/TN "
+        required: true
+        placeholder: 例 \Microsoft\Windows\Defrag\ScheduledDefrag
+        help: 本机帮助原文只有"Specifies the path\name of the scheduled task."。实测：只有自带专用账号的任务（例如 Defrag 的那个）能算出 SID，普通任务会报 The specified task name "..." does not exist in the system. 或参数错误。
+        doc: 本机 /showSid /? 的 /TN 一行（官方文档无此命令页）
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: "实测 `schtasks /ShowSid /TN \"\\Microsoft\\Windows\\Defrag\\ScheduledDefrag\"` exit=0，输出 SUCCESS: The SID \"S-1-5-87-...\" for the user name \"Microsoft-Windows-Defrag-ScheduledDefrag\" has been computed successfully.（173 字节）"
+    examples:
+      - title: 查看 Defrag 任务的专用账号 SID
+        args: ["/ShowSid", "/TN", "\\Microsoft\\Windows\\Defrag\\ScheduledDefrag"]
+
+  # ============================================================ 新建任务
+  - id: create-basic
+    category: 新建任务
+    title: 新建计划任务（/Create）
+    command: /Create
+    description: 用命令行参数建一个计划任务：指定计划类型、任务名和要运行的程序，可选开始时间、重复修饰符、日期范围、运行身份等。任务名里可以带文件夹（如 我的工具\备份）来放进子文件夹。
+    danger: overwrite
+    confirmText: 这会往系统的计划任务库里写入一条新任务（填了 /F 时，同名任务会被**直接覆盖**且不再询问）。请先核对任务名与「要运行的程序」。确定继续？
+    sources:
+      - title: schtasks create 官方参考
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-create
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: 字段依据全部来自该页 Parameters 表；官方语法行 schtasks /create /sc <scheduletype> /tn <taskname> /tr <taskrun> [...] [/ru {[<domain>\]<user> | system}] [/rp <password>] [/mo <modifier>] [/d <day>[,<day>...] | *] [/m <month>[,<month>...]] [/i <idletime>] [/st <starttime>] [/ri <interval>] [{/et <endtime> | /du <duration>} [/k]] [/sd <startdate>] [/ed <enddate>] [/it] [/np] [/z] [/xml <xmlfile>] [/v1] [/f] [/rl <level>] [/delay <delaytime>] [/hresult]。
+      - title: schtasks 主页 —— 必需权限
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: 主页写"要计划、查看和更改本机上的所有任务，必须是 Administrators 组成员"；实测**非管理员可以创建自己文件夹里的任务**（exit=0），只有 /SC ONSTART /DELAY 那类会 Access is denied，见 NOTES.md §8。
+    fields:
+      # ---- 位置参数放在最前（-sc / -tn / -tr 在官方语法里是必需项，顺序不敏感，但保持与文档一致更易读）
+      - id: scheduleType
+        label: 计划类型（/SC）
+        type: enum
+        style: separate
+        prefix: "/SC"
+        required: true
+        help: 官方文档的 10 种取值。**刻意不给默认值**——官方说明"不带 /F 时，若任务已存在会提示是否替换，而 stdin 被重定向时会直接失败"（实测：退出码 1 + WARNING ... Do you want to replace it (Y/N)?），所以选哪个由你决定，见 NOTES.md §9.2。
+        doc: official #parameters 的 /sc <scheduletype>（10 种取值）
+        values:
+          - value: MINUTE
+            label: MINUTE —— 每 N 分钟
+          - value: HOURLY
+            label: HOURLY —— 每 N 小时
+          - value: DAILY
+            label: DAILY —— 每 N 天
+          - value: WEEKLY
+            label: WEEKLY —— 每 N 周
+          - value: MONTHLY
+            label: MONTHLY —— 每 N 月
+          - value: ONCE
+            label: ONCE —— 只运行一次（必须给 /ST）
+          - value: ONSTART
+            label: ONSTART —— 每次系统启动时
+          - value: ONLOGON
+            label: ONLOGON —— 任何用户登录时
+          - value: ONIDLE
+            label: ONIDLE —— 系统空闲时（必须给 /I）
+          - value: ONEVENT
+            label: ONEVENT —— 匹配到事件日志条目时
+      - id: taskName
+        label: 任务名（/TN）
+        type: text
+        style: separate
+        prefix: "/TN"
+        required: true
+        save: true
+        placeholder: 例 我的工具\每日备份
+        help: 官方说明：任务名在本机必须唯一、要符合文件名规则、不超过 238 个字符；要放进别的文件夹就写成 "文件夹\任务名"；名字里有空格不用手动加引号（宿主按 argv 数组传参）。
+        doc: 'official #parameters 的 /tn <taskname>（unique、≤238 字符、/tn <folder name\task name>）'
+      - id: taskRun
+        label: 要运行的程序（/TR）
+        type: file
+        style: separate
+        prefix: "/TR"
+        required: true
+        save: true
+        placeholder: 例 C:\Windows\System32\notepad.exe
+        help: 官方说明：写可执行文件/脚本/批处理的完整路径与文件名，路径不超过 262 个字符；**不给路径时 schtasks 会当成在 <systemroot>\System32 下**。带参数的命令（如 cmd.exe /c ...）请写在一行里、由宿主作为单个 argv 传下去。
+        doc: official #parameters 的 /tr <Taskrun>（必须完整路径，不给路径则假定在 <systemroot>\System32）
+      # ---- 时间与重复
+      - id: startTime
+        label: 开始时间（/ST）
+        type: text
+        style: separate
+        prefix: "/ST"
+        group: 时间与重复
+        placeholder: 例 14:30
+        help: 官方说明：24 小时制 HH:mm，默认当前时间；/SC ONCE 时**必需**。
+        doc: official #parameters 的 /st <Starttime>（HH:mm 24 小时制；ONCE 必需；默认当前时间）
+      - id: modifier
+        label: 重复修饰符（/MO）
+        type: text
+        style: separate
+        prefix: "/MO"
+        group: 时间与重复
+        placeholder: 例 5（MINUTE 的 5 分钟）
+        help: 按计划类型取值不同，官方表格：MINUTE 1-1439、HOURLY 1-23、DAILY 1-365、WEEKLY 1-52、MONTHLY 1-12 或 FIRST/SECOND/THIRD/FOURTH/LAST/LASTDAY、ONCE/ONSTART/ONLOGON/ONIDLE 无修饰符、ONEVENT 是 XPath 事件查询串。用文本字段而不做枚举，是因为合法集合取决于你在上面选的 /SC（v1 的 visibleWhen 宿主尚未实现）。
+        doc: official #parameters 的 /mo <modifiers>（逐计划类型的取值与默认值）
+      - id: day
+        label: 日期或星期（/D）
+        type: text
+        style: separate
+        prefix: "/D"
+        group: 时间与重复
+        placeholder: 例 MON,WED,FRI 或 15
+        help: 官方说明：MON 到 SUN 的星期几；MONTHLY 计划下也可以是 1-31 的日期；"*" 表示所有天。多个值用逗号分隔（官方示例 /d MON,FRI 与 /d 21）。默认是 MON（WEEKLY）/ 1（MONTHLY）。
+        doc: official #parameters 的 /d DAY[,DAY...]（MON-SUN / 1-31 / *；官方示例 /d MON,FRI、/d 21）
+      - id: months
+        label: 月份（/M）
+        type: text
+        style: separate
+        prefix: "/M"
+        group: 时间与重复
+        advanced: true
+        placeholder: 例 MAR,SEP 或 *
+        help: 官方说明：JAN 到 DEC，或 "*"（每月）；**只在 MONTHLY 计划下有效**，用 LASTDAY 修饰符时必需，否则默认 "*"。
+        doc: official #parameters 的 /m MONTH[,MONTH...]（JAN-DEC 或 *，仅 MONTHLY，LASTDAY 时必需）
+      - id: startDate
+        label: 起始日期（/SD）
+        type: text
+        style: separate
+        prefix: "/SD"
+        group: 时间与重复
+        advanced: true
+        placeholder: 例 2026/09/30
+        help: 官方说明：日期格式**随系统区域设置变化**（月在前 / 日在前 / 年在前的三种形态之一），默认当前日期。本机（zh-CN）实测输出是 2026/9/29 这种"年/月/日"形态。所以这里只做文本框、不校验格式。
+        doc: official #parameters 的 /sd <Startdate>（默认当前日期；格式随"区域和语言选项"变化）
+      - id: endDate
+        label: 结束日期（/ED）
+        type: text
+        style: separate
+        prefix: "/ED"
+        group: 时间与重复
+        advanced: true
+        placeholder: 例 2026/12/31
+        help: 官方说明：格式同样随区域设置变化；默认没有结束日期；**对 ONCE/ONSTART/ONLOGON/ONIDLE/ONEVENT 计划无效**。
+        doc: official #parameters 的 /ed <Enddate>（默认无结束日期；对 ONCE/ONSTART/ONLOGON/ONIDLE/ONEVENT 无效）
+      - id: interval
+        label: 重复间隔分钟数（/RI）
+        type: number
+        style: separate
+        prefix: "/RI"
+        group: 时间与重复
+        advanced: true
+        placeholder: 1-599940
+        help: 官方说明：单位分钟，合法范围 1-599940；对 MINUTE、HOURLY、ONSTART、ONLOGON、ONIDLE、ONEVENT **不适用**；若同时给了 /ET 或 /DU，默认是 10 分钟。
+        doc: official #parameters 的 /ri <interval>（1-599940 分钟；对这些计划类型不适用；配 /ET 或 /DU 时默认 10 分钟）
+      - id: endTime
+        label: 结束时间（/ET）
+        type: text
+        style: separate
+        prefix: "/ET"
+        group: 时间与重复
+        advanced: true
+        placeholder: 例 08:00
+        help: 官方说明：HH:MM 24 小时制；过了这个时间当天不再启动；**只对 MINUTE 或 HOURLY 计划有效**；默认没有结束时间。与 /DU 二选一。
+        doc: official #parameters 的 /et <endtime>（仅 MINUTE/HOURLY；默认无结束时间；与 /du 二选一）
+      - id: duration
+        label: 最长持续时间（/DU）
+        type: text
+        style: separate
+        prefix: "/DU"
+        group: 时间与重复
+        advanced: true
+        placeholder: 例 0010:00
+        help: 官方说明：格式 <HHHH:MM>；超过后当天不再启动；**只对 MINUTE 或 HOURLY 计划有效**；默认没有最大时长。与 /ET 二选一。
+        doc: official #parameters 的 /du <duration>（HHHH:MM，仅 MINUTE/HOURLY；与 /et 二选一）
+      - id: killAtEnd
+        label: 到点就终止程序（/K）
+        type: bool
+        style: flag
+        prefix: "/K"
+        group: 时间与重复
+        advanced: true
+        default: false
+        help: 官方说明：在 /ET 或 /DU 指定的时刻停止该程序；不加 /K 时 schtasks 只是不再启动它、**不会**停止还在跑的实例。必须配 /ET 或 /DU，且只对 MINUTE 或 HOURLY 计划有效。
+        doc: official #parameters 的 /k（必须配 /et 或 /du；仅 MINUTE/HOURLY）
+      # ---- 运行身份与其它
+      - id: runAsUser
+        label: 以哪个账号运行（/RU）
+        type: text
+        style: separate
+        prefix: "/RU"
+        group: 运行身份
+        advanced: true
+        placeholder: 例 SYSTEM 或 域\用户
+        help: 官方说明：默认用当前用户；System 账号的合法写法是 ""、"NT AUTHORITY\SYSTEM" 或 "SYSTEM"。**注意**：/RU 决定的是"任务以什么身份运行"，不是"用什么身份去建这个任务"。本机 `/create /?` 还写了 LOCALSERVICE / NETWORKSERVICE（官方网页未列），见 NOTES.md §7.5。
+        doc: 'official #parameters 的 /ru {[<domain>\]<user> | system}（system 账号不交互、无密码）'
+      - id: runAsPassword
+        label: 运行账号的密码（/RP）
+        type: password
+        style: separate
+        prefix: "/RP"
+        group: 运行身份
+        advanced: true
+        help: 官方说明：配合 /RU 或 /XML 使用；用 System 账号时**不要**给这个参数。本机帮助另注：要让它"提示输入密码"得写 "*" 或不写——宿主没有交互控制台，**提示输入会挂住**，所以要用就在界面上把密码填进来，不要留空指望它来问。宿主永不把密码字段落盘。
+        doc: official #parameters 的 /rp <password>（与 /ru 或 /xml 组合；system 账号不用）
+      - id: interactiveOnly
+        label: 只在用户登录时运行（/IT）
+        type: bool
+        style: flag
+        prefix: "/IT"
+        group: 运行身份
+        advanced: true
+        default: false
+        help: 官方说明：任务只在"运行身份那个用户"已登录时运行；对以系统权限运行的任务、或本来就带 interactive-only 属性的任务没有影响。
+        doc: official #parameters 的 /it
+      - id: noPasswordStore
+        label: 不保存密码（/NP）
+        type: bool
+        style: flag
+        prefix: "/NP"
+        group: 运行身份
+        advanced: true
+        default: false
+        help: 官方说明：不存储密码，任务以给定用户**非交互**运行，只能用本地资源。
+        doc: official #parameters 的 /np（No password is stored）
+      - id: runLevel
+        label: 运行级别（/RL）
+        type: enum
+        style: separate
+        prefix: "/RL"
+        group: 运行身份
+        advanced: true
+        help: 官方说明：LIMITED（最低权限）或 HIGHEST（最高权限），**默认 LIMITED**。留空 = 不指定（按默认 LIMITED）。
+        doc: official #parameters 的 /rl <level>（LIMITED | HIGHEST，默认 LIMITED）
+        values:
+          - value: ""
+            label: 不指定（默认 LIMITED）
+            isDefault: true
+          - value: LIMITED
+            label: LIMITED —— 最低权限
+          - value: HIGHEST
+            label: HIGHEST —— 最高权限
+      - id: deleteAfterRun
+        label: 最后一次运行后删除任务（/Z）
+        type: bool
+        style: flag
+        prefix: "/Z"
+        group: 运行身份
+        advanced: true
+        default: false
+        help: 官方原文：/z "Specifies to delete the task upon the completion of its schedule."
+        doc: official #parameters 的 /z
+      - id: delay
+        label: 触发后延迟（/DELAY）
+        type: text
+        style: separate
+        prefix: "/DELAY"
+        group: 运行身份
+        advanced: true
+        placeholder: 例 0001:00
+        help: 官方说明：格式 mmmm:ss，触发后等这么久再运行；**只对 ONSTART、ONLOGON、ONEVENT 有效**。本机实测：非管理员下 /SC ONSTART /DELAY 0001:00 直接 Access is denied（exit=1），见 NOTES.md §8.2。
+        doc: official #parameters 的 /delay <delaytime>（mmmm:ss；仅 ONSTART/ONLOGON/ONEVENT）
+      - id: force
+        label: 同名任务直接覆盖（/F）
+        type: bool
+        style: flag
+        prefix: "/F"
+        group: 覆盖
+        default: false
+        help: 官方原文：/f "Specifies to create the task and suppress warnings if the specified task already exists."。**实测这条很关键**：不填 /F 而任务已存在时，schtasks 会打印一句 WARNING 询问是否替换（Do you want to replace it (Y/N)?）并以退出码 1 失败（宿主没有 stdin 可以回答）。
+        doc: official #parameters 的 /f
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 官方文档提醒 schtasks **不校验**程序路径与账号密码——路径或密码不对，任务照样创建成功但不会运行。实测非管理员下 /SC WEEKLY /D MON,WED,FRI、/SC DAILY /MO 2、/SC MONTHLY /MO LASTDAY /M *、/SC MONTHLY /MO FIRST /D MON 全部 exit=0。
+    nextSteps:
+      - title: 立刻试跑一次刚建的任务（/Run）
+        action: run-task
+        reason: 官方说明建完任务后可以用 run 立刻测试它，再去 SchedLgU.txt 看有没有报错
+      - title: 详细查看刚建的任务
+        action: query-task
+        reason: 核对计划与重复间隔是不是你想要的（官方文档推荐用 /query /fo LIST /v 做这件事）
+    examples:
+      - title: 每天上午 8 点运行一次记事本
+        args: ["/Create", "/SC", "DAILY", "/TN", "我的工具\\每日记事本", "/TR", "C:\\Windows\\System32\\notepad.exe", "/ST", "08:00"]
+      - title: 每周一三五 23:30 运行（官方 /d 多值写法）
+        args: ["/Create", "/SC", "WEEKLY", "/TN", "我的工具\\每周备份", "/TR", "C:\\Windows\\System32\\notepad.exe", "/D", "MON,WED,FRI", "/ST", "23:30"]
+      - title: 以系统账号每月最后一天运行（官方示例形态）
+        args: ["/Create", "/SC", "MONTHLY", "/MO", "LASTDAY", "/M", "*", "/TN", "我的工具\\月末任务", "/TR", "C:\\Windows\\System32\\notepad.exe", "/RU", "SYSTEM"]
+
+  # ============================================================ 新建任务
+  - id: create-from-xml
+    category: 新建任务
+    title: 从 XML 定义新建任务（/Create /XML）
+    command: /Create
+    description: 用一个任务的 XML 定义文件来建任务。先用「导出任务 XML」拿到模板、改好再导回来，是复制一个复杂任务最省事的做法。
+    danger: overwrite
+    confirmText: 这会按照 XML 文件里的定义往计划任务库里写入一条任务。XML 内容不会被界面检查（例如里面写的是关机命令也照样执行），请先自己确认文件内容。确定继续？
+    sources:
+      - title: schtasks create 官方参考 —— /xml <xmlfile>
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-create
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: 官方原文：/xml <xmlfile> "Creates a task specified in the XML file. Can be combined with the /ru and /rp parameters, or with the /rp parameter by itself if the XML file already contains the user account information."；另注 /v1 "is not compatible with the /XML parameter"。
+    fields:
+      - id: xmlFile
+        label: XML 定义文件
+        type: file
+        style: separate
+        prefix: "/XML"
+        required: true
+        accept: [".xml"]
+        placeholder: 例 D:\tasks\mytask.xml
+        help: 任务定义 XML。可用「详细查看」里的 /XML 输出（schtasks /Query /XML /TN "..."）或任务计划程序的「导出」得到模板。
+        doc: official #parameters 的 /xml <xmlfile>
+      - id: runAsUser
+        label: 以哪个账号运行（/RU）
+        type: text
+        style: separate
+        prefix: "/RU"
+        group: 运行身份
+        advanced: true
+        placeholder: 例 SYSTEM
+        help: 官方说明：/xml 可以与 /ru 和 /rp 组合，或在 XML 已含账号信息时单独用 /rp。
+        doc: official #parameters 的 /xml <xmlfile>（"Can be combined with the /ru and /rp parameters"）
+      - id: runAsPassword
+        label: 运行账号的密码（/RP）
+        type: password
+        style: separate
+        prefix: "/RP"
+        group: 运行身份
+        advanced: true
+        help: 官方说明：XML 已含 principal 时可单独使用 /rp。宿主永不把密码字段落盘。
+        doc: official #parameters 的 /xml <xmlfile>（"...or with the /rp parameter by itself"）
+      - id: force
+        label: 同名任务直接覆盖（/F）
+        type: bool
+        style: flag
+        prefix: "/F"
+        group: 覆盖
+        default: false
+        help: 与「新建计划任务」里的 /F 同一含义，见该字段的 doc 与 NOTES.md §9.2。
+        doc: official #parameters 的 /f
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 未实跑（会创建真实任务，且需要一个 XML 文件），见 NOTES.md §11。
+    examples:
+      - title: 从 XML 建任务（把路径换成你自己的文件）
+        args: ["/Create", "/TN", "我的工具\\导入的任务", "/XML", "D:\\tasks\\mytask.xml"]
+
+  # ============================================================ 修改任务
+  - id: change-task
+    category: 修改任务
+    title: 修改任务 / 启用 / 禁用（/Change）
+    command: /Change
+    description: 修改一个已有任务的属性（要运行的程序、运行身份、交互属性），或者启用/禁用它。官方说明：**不能**用 change 改任务名，也**不能**用它去掉 interactive-only 属性。
+    danger: overwrite
+    confirmText: 这会改写已有计划任务的属性（启用/禁用、要运行的程序、运行身份等），立刻生效。请核对任务名。确定继续？
+    sources:
+      - title: schtasks change 官方参考
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-change
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: 官方语法行 schtasks /change /tn <Taskname> [/s <computer> [/u [<domain>\]<user> [/p <password>]]] [/ru <username>] [/rp <password>] [/tr <Taskrun>] [/st <Starttime>] [/ri <interval>] [/rl <level>] [{/et <Endtime> | /du <duration>} [/k]] [/sd <Startdate>] [/ed <Enddate>] [/{ENABLE | DISABLE}] [/it] [/z]；官方原文：不能改任务名（"You can't change the task name."）。
+    fields:
+      - id: taskName
+        label: 任务名（含路径）
+        type: text
+        style: attached
+        prefix: "/TN "
+        required: true
+        save: true
+        placeholder: 例 我的工具\每日记事本
+        help: 官方原文：/tn <Taskname> "Identifies the task to be changed."；名字里有空格在命令行里要用引号，宿主按 argv 数组传参所以不用你手动加。
+        doc: official #parameters 的 /tn <Taskname>
+      - id: mode
+        label: 启用还是禁用（/ENABLE | /DISABLE）
+        type: enum
+        style: literal
+        switchBase: "/ENABLE"
+        default: enable
+        help: 官方说明：/ENABLE 启用该任务、/DISABLE 禁用它。**默认选「启用」**——它不会让任务停止运行，只是保证它没被关掉。禁用某个任务意味着它不再按计划运行。
+        doc: official #parameters 的 /ENABLE 与 /DISABLE
+        values:
+          - value: enable
+            label: 启用（/ENABLE）
+            args: ["/ENABLE"]
+            isDefault: true
+          - value: disable
+            label: 禁用（/DISABLE）
+            args: ["/DISABLE"]
+      - id: runAsUser
+        label: 换运行账号（/RU）
+        type: enum
+        style: literal
+        switchBase: "/RU"
+        group: 运行身份
+        advanced: true
+        default: keep
+        help: 官方说明：改任务以哪个账号运行；System 账号的写法是 ""、"NT AUTHORITY\SYSTEM" 或 "SYSTEM"。本机帮助另列了 LOCAL SERVICE / NETWORK SERVICE（官方网页未列）。**默认「不修改」**——改运行身份会把任务改成以别的账号跑，属于实质变更。
+        doc: official #parameters 的 /ru <username>（system 账号的三种写法）
+        values:
+          - value: keep
+            label: 不修改
+            args: []
+            isDefault: true
+          - value: system
+            label: 系统账号（/RU SYSTEM）
+            args: ["/RU", "SYSTEM"]
+          - value: localservice
+            label: 本地服务（/RU "NT AUTHORITY\\LOCALSERVICE"）
+            args: ["/RU", "NT AUTHORITY\\LOCALSERVICE"]
+          - value: networkservice
+            label: 网络服务（/RU "NT AUTHORITY\\NETWORKSERVICE"）
+            args: ["/RU", "NT AUTHORITY\\NETWORKSERVICE"]
+      - id: runAsPassword
+        label: 新密码（/RP）
+        type: password
+        style: separate
+        prefix: "/RP"
+        group: 运行身份
+        advanced: true
+        help: 官方说明：给已有账号或 /RU 指定的账号设新密码；用系统账号时这个参数**会被忽略**。留空 = 不改密码。宿主永不把密码字段落盘。
+        doc: official #parameters 的 /rp <password>（system 账号下被忽略）
+      - id: taskRun
+        label: 换要运行的程序（/TR）
+        type: file
+        style: separate
+        prefix: "/TR"
+        group: 程序
+        advanced: true
+        placeholder: 例 C:\Windows\System32\notepad.exe
+        help: 官方说明：写可执行文件/脚本/批处理的完整路径，不给路径时假定在 <systemroot>\System32；**指定的程序会替换原来的程序**。留空 = 不修改。
+        doc: official #parameters 的 /tr <Taskrun>（"The specified program replaces the original program run by the task."）
+      - id: runLevel
+        label: 运行级别（/RL）
+        type: enum
+        style: separate
+        prefix: "/RL"
+        group: 运行身份
+        advanced: true
+        help: 官方说明：LIMITED 或 HIGHEST；与本机帮助不同的是，**官方 change 页说"默认不改变它"**（create 页的默认才是 LIMITED）。留空 = 不修改。
+        doc: official #parameters 的 /rl <level>（LIMITED | HIGHEST）
+        values:
+          - value: ""
+            label: 不修改
+            isDefault: true
+          - value: LIMITED
+            label: LIMITED —— 最低权限
+          - value: HIGHEST
+            label: HIGHEST —— 最高权限
+      - id: interactiveOnly
+        label: 加上"只在登录时运行"（/IT）
+        type: bool
+        style: flag
+        prefix: "/IT"
+        group: 运行身份
+        advanced: true
+        default: false
+        help: 官方原文：这个属性**加上去就撤不掉**（"You can't use a change command to remove the interactive-only property from a task."）。要用 /query /v 看 Logon Mode 字段确认。
+        doc: official #parameters 的 /it（含"无法用 change 去除该属性"）
+      - id: deleteAfterRun
+        label: 最后一次运行后删除任务（/Z）
+        type: bool
+        style: flag
+        prefix: "/Z"
+        group: 计划
+        advanced: true
+        default: false
+        help: 官方原文：/z "Specifies to delete the task upon the completion of its schedule."。任务跑完最后一次就会被删掉，慎用。
+        doc: official #parameters 的 /z
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: "实测：对自己文件夹里的任务 /ENABLE 成功（exit=0，输出 INFO ... has already been enabled. + SUCCESS: The parameters of scheduled task \"...\" have been changed.）；对系统任务 \\Microsoft\\Windows\\Defrag\\ScheduledDefrag 执行 /DISABLE 时 exit=1、stderr 为 Access is denied.。"
+    nextSteps:
+      - title: 查看这个任务现在的状态
+        action: query-task
+        reason: 改完用 /query /v 核对 Scheduled Task State 之类的字段（官方文档也是这么建议的）
+    examples:
+      - title: 启用一个任务（官方示例形态）
+        args: ["/Change", "/TN", "我的工具\\每日记事本", "/ENABLE"]
+
+  # ============================================================ 运行与结束
+  - id: run-task
+    category: 运行与结束
+    title: 立即运行任务（/Run）
+    command: /Run
+    description: 马上启动一个计划任务，不等计划时间。官方说明：run 忽略计划，但会用任务里保存的程序位置、账号和密码立即运行；**不影响计划、也不改变下次运行时间**。
+    sources:
+      - title: schtasks run 官方参考
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-run
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: 官方原文："Starts a scheduled task immediately. The run operation ignores the schedule, but uses the program file location, user account, and password saved in the task to run the task immediately. Running a task does not affect the task schedule and does not change the next run time scheduled for the task."；官方建议用它测试刚建的任务，失败就看 <Systemroot>\SchedLgU.txt。
+    fields:
+      - id: taskName
+        label: 任务名（含路径）
+        type: text
+        style: attached
+        prefix: "/TN "
+        required: true
+        save: true
+        placeholder: 例 我的工具\每日记事本
+        help: 官方原文：/tn <taskname> "Identifies the task to start. This parameter is required."
+        doc: official #parameters 的 /tn <taskname>（required）
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: "实验记录：对自己文件夹里的任务 exit=0，输出 SUCCESS: Attempted to run the scheduled task \"...\"（69 字节）；对系统任务 \\Microsoft\\Windows\\Defrag\\ScheduledDefrag exit=1、stderr 为 Access is denied.。**\"Attempted\" 只表示\"已请求启动\"**，任务自身是否成功要另看它的「上次运行结果」。"
+    nextSteps:
+      - title: 查看这个任务的上次运行结果
+        action: query-task
+        reason: run 只回报"已尝试启动"，任务本身成没成功要看详细查询里的 Last Result
+    examples:
+      - title: 立即运行一个任务（官方示例形态）
+        args: ["/Run", "/TN", "我的工具\\每日记事本"]
+
+  # ============================================================ 运行与结束
+  - id: end-task
+    category: 运行与结束
+    title: 结束正在运行的任务（/End）
+    command: /End
+    description: 停止由某个计划任务启动的程序实例。官方说明：它只停这个任务启动的实例，要停别的进程得用 TaskKill。
+    sources:
+      - title: schtasks end 官方参考
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-end
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: 官方原文："Stops only the instances of a program started by a scheduled task. To stop other processes, you must use the TaskKill command."；/tn 是 required。
+    fields:
+      - id: taskName
+        label: 任务名（含路径）
+        type: text
+        style: attached
+        prefix: "/TN "
+        required: true
+        save: true
+        placeholder: 例 我的工具\每日记事本
+        help: 官方原文：/tn <taskname> "Identifies the task that started the program. This parameter is required."
+        doc: official #parameters 的 /tn <taskname>（required）
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: "实验记录：对没有实例在跑的任务照样 exit=0，输出 SUCCESS: The scheduled task \"...\" has been terminated successfully.（85 字节）——**这句 SUCCESS 不等于真的杀掉了一个进程**，它只说明请求被接受。对系统任务执行 /End 也返回 exit=0（与 /Run、/Change /DISABLE 不同），见 NOTES.md §8.1。"
+    examples:
+      - title: 结束一个任务启动的程序（官方示例形态）
+        args: ["/End", "/TN", "我的工具\\每日记事本"]
+
+  # ============================================================ 删除任务
+  - id: delete-task
+    category: 删除任务
+    title: 删除计划任务（/Delete）
+    command: /Delete
+    danger: destructive
+    confirmPhrase: "删除计划任务 {taskName}"
+    confirmText: 这会把这个计划任务从任务库里**删掉**（任务定义消失，无法用 schtasks 撤销）。官方说明：它**不会**删除任务要运行的那个程序，也**不会**中断正在运行的程序。填 /F 后不存在的任务也会被静默跳过、不再询问。确定继续？
+    description: 删除一个计划任务。官方说明：删的是"计划"，不是程序，也不会中断正在运行的程序；用 /TN * 会删除本机上所有任务。
+    sources:
+      - title: schtasks delete 官方参考
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-delete
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: 官方语法行 schtasks /delete /tn {<taskname> | *} [/f] [...]; 官方原文："Deletes a scheduled task from the schedule. This command doesn't delete the program that the task runs or interrupt a running program."；/tn * 会"deletes all tasks scheduled for the computer, not just the tasks scheduled by the current user"；官方示例 schtasks /delete /tn * /f。
+    fields:
+      - id: taskName
+        label: 任务名（含路径）
+        type: text
+        style: attached
+        prefix: "/TN "
+        required: true
+        save: true
+        placeholder: 例 我的工具\每日记事本（填 * 会删除本机全部任务）
+        help: 官方原文：/tn {<taskname> | *} "Identifies the task to be deleted. If you use the *, this command deletes all tasks scheduled for the computer, not just the tasks scheduled by the current user."。**填 `*` 会删掉本机全部计划任务**（官方示例就是 schtasks /delete /tn * /f），所以确认短语必须逐字输入。
+        doc: 'official #parameters 的 /tn {<taskname> | *}'
+      - id: force
+        label: 不询问直接删（/F）
+        type: bool
+        style: flag
+        prefix: "/F"
+        default: false
+        help: 官方原文：/f "Suppresses the confirmation message. The task is deleted without warning."；本机帮助另注它还会抑制"任务当前正在运行"的警告。宿主本来就不接 stdin，**任务不存在时不给 /F 会以退出码 1 失败**（实测 stderr：The specified task name "..." does not exist in the system.）。
+        doc: official #parameters 的 /f
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实验记录：对自己文件夹里的任务 /Delete /F exit=0（77 字节 SUCCESS）；对系统任务 \Microsoft\Windows\Defrag\ScheduledDefrag exit=1、stderr 为 Access is denied.（27 字节）。**本工具包的冒烟测试没有删除任何真实任务**，见 NOTES.md §11。
+    examples:
+      - title: 删除一个任务（把任务名换成你自己的）
+        args: ["/Delete", "/TN", "我的工具\\每日记事本", "/F"]
