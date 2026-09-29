@@ -6,7 +6,8 @@
 > ① 官方文档是**一页到底**（12 条命令全在一页里，没有子页）；
 > ② 输出编码实测是 **OEM(936)**，但**纯 ASCII 的输出（`el`/`ep`/`gl`）根本看不出编码**，
 > 必须跑 `qe ... /f:text` 把中文事件正文逼出来才能判定；
-> ③ 大部分"参数写错"的失败**不是退出码 1**，而是 87 / 15001 / 15007 这些 Win32 码。
+> ③ **所有选项都必须写成 `/开关:取值` 的单个 token**（写成 `/开关 取值` 两个 token 会以退出码 87 失败）；
+> ④ 大部分"参数写错"的失败**不是退出码 1**，而是 87 / 15001 / 15007 这些 Win32 码。
 >
 > 实测环境：Windows 11 `10.0.26200` x64，账号 `kangmori\steve`，**非管理员**
 > （`WindowsPrincipal.IsInRole(Administrator)` 实测 `False`）。控制台代码页 `936`。
@@ -19,7 +20,7 @@
 `chkdsk`、`sfc`、安装失败、蓝屏/意外关机的结果**都不在屏幕上**，而是躺在事件日志里；
 普通用户不知道有 `wevtutil` 这个命令，于是这些结果等于不存在。本包把它们变成可点击的动作。
 
-实测证据（本机、非管理员、只读）：`qe Application /c:5 /rd:true /f:text /q:*[System[Provider[@Name='Chkdsk']]]`
+实测证据（本机、非管理员、只读）：`qe Application /f:text /c:5 /q:*[System[Provider[@Name='Chkdsk']]]`
 → **退出码 0、命中 4 条、8 938 字节**，事件正文里就是 chkdsk 的完整报告原文：
 
 ```
@@ -45,7 +46,7 @@ Windows 已扫描文件系统并且没有发现问题。
 |---|---|---|---|---|
 | 1 | **Microsoft Learn 官方文档（单页）** | https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/wevtutil | 2026-09-29 | Windows 10/11、Server 2016–2025、Azure Local 2311.2+ |
 | 2 | 本机 13 个帮助页（`wevtutil /?` + 12 个 `wevtutil <命令> /?`） | `C:\Windows\System32\wevtutil.exe`（快照**未入库**，可用 `pwsh -File scripts/fetch-win-help.ps1 -Commands wevtutil` 重取） | 2026-09-29 | wevtutil.exe 10.0.26100.8875 |
-| 3 | 本包真机冒烟（18 条只读 argv + 8 条红线自检，见 §5） | `plugins/wevtutil/smoke.ps1`（**本包自带，可复跑**） | 2026-09-29 | 同上 |
+| 3 | 本包真机冒烟（17 条只读 argv + 7 条失败路径 + 9 条红线自检） | `plugins/wevtutil/smoke.ps1`（**本包自带，可复跑**） | 2026-09-29 | 同上 |
 
 ### 2.1 官方文档的形态（与 schtasks 完全不同）
 
@@ -79,6 +80,7 @@ Windows 已扫描文件系统并且没有发现问题。
 | 版本开关 | **没有**（`wevtutil` 不带参数只打印帮助） | `wevtutil /?` 的命令总表与 Common options 里都没有版本项 |
 | 运行身份 | `kangmori\steve`，**非管理员** | `IsInRole(Administrator)` = `False` |
 | 输出编码 | **OEM 代码页 936** | 见 §4 |
+| 选项写法 | **必须 `/开关:取值` 单 token** | 见 §7.2（本次冒烟最重要的发现） |
 
 **12 条命令与长写法**（本机命令总表逐字抄，官方语法行一致）：
 
@@ -103,15 +105,15 @@ argv: qe System /c:3 /rd:true /f:text
 第一处上下文原始字节: 61 20 54 4c 53 20 | bf cd bb a7 b6 cb | 20 63 72
                                         ^^^^^^^^^^^^^^^^^^^
 按 cp936 解: "a TLS 客户端 cr"     ← 正确
-按 utf-8 解: "a TLS ?ͻ??? cr"      ← 乱码（问号处是替换字符）
+按 utf-8 解: 出现替换字符（乱码）
 用 UTF8Encoding(throwOnInvalidBytes:true) 解同一段 → 抛异常
   "Unable to translate bytes [BF] at index 306 from specified code page to Unicode."
 ```
 
 - `BF CD BB A7 B6 CB` 是 GBK(936) 的「客户端」（英文标签 `A fatal error occurred while creating a TLS ...` 后面跟中文正文）；
 - UTF-8 严格解码**抛异常** → **确定不是 UTF-8**（对照：本批 schtasks 是 UTF-8，tar 是 oem）；
-- 也不是 UTF-16LE：`qe ... /f:text` 的输出里有 12~256 个 0x00 字节，但它们不是"高字节恒为 0"的规律性分布（见下方补充），
-  且用 UTF-16LE 解会得到乱码；`ael`/`ep` 这类天然 ASCII 输出根本判不出来。
+- 也不是 UTF-16LE：`qe ... /f:text` 的输出里有几十到几百个 0x00 字节，但它们不是"高字节恒为 0"的规律性分布，
+  且用 UTF-16LE 解会得到乱码；而 `el`/`ep` 这类天然 ASCII 输出根本判不出来。
 
 **结论：`runtime.encoding: oem`**（宿主 `EncodingResolver` 把 `oem` 解析成
 `CultureInfo.CurrentCulture.TextInfo.OEMCodePage`，本机 = 936）。
@@ -121,40 +123,41 @@ argv: qe System /c:3 /rd:true /f:text
 
 ## 5. 真机冒烟测试（R4，2026-09-29）
 
-复跑入口：`pwsh -NoProfile -File plugins/wevtutil/smoke.ps1`
-（脚本自带**红线自检**：8 条写/删类 argv 先判一次"绝不允许可跑"，
-任何一条被判为可跑就 `throw` 中止，不进入执行循环）。
+复跑入口：`pwsh -NoProfile -File plugins/wevtutil/smoke.ps1`。
+脚本自带**两层自检**：
+① 9 条写/删类 argv 先判一次"绝不允许可跑"，任一条被判为可跑就 `throw` 中止；
+② 白名单里不许出现"选项与值分成两个 token"的形态（那种形态必然以 87 失败，见 §7.2）。
 
-### 5.1 只读动作逐条实测（全部为本机真实跑出）
+### 5.1 只读动作逐条实测（**argv 是按清单字段声明顺序展开出来的**）
 
-| # | argv（`wevtutil` 之后） | 退出码 | 输出字节 | 行数 | 命中事件 | 非 ASCII | UTF-8 严格解码 |
-|---|---|---|---|---|---|---|---|
-| 1 | `el` | 0 | 54 738 | 1 243 | – | 0 | 通过 |
-| 2 | `gl System` | 0 | 410 | 13 | – | 0 | 通过 |
-| 3 | `gl System /f:xml` | 0 | 635 | 12 | – | 0 | 通过 |
-| 4 | `gli Application` | 0 | 227 | 7 | – | 0 | 通过 |
-| 5 | `ep` | 0 | 38 675 | 1 282 | – | 0 | 通过 |
-| 6 | `gp Microsoft-Windows-Eventlog` | 0 | 2 615 | 123 | – | 0 | 通过 |
-| 7 | `gp Microsoft-Windows-Eventlog /ge:true` | 0 | 9 494 | 520 | – | 0 | 通过 |
-| 8 | `qe Application /c:3 /rd:true /f:text` | 0 | 2 796 | 86 | 3 | 6 | **抛异常（→ 非 UTF-8）** |
-| 9 | `qe System /c:20 /rd:true /f:text /q:*[System[(Level=1 or Level=2)]]` | 0 | 8 396 | 319 | 20 | 120 | 抛异常 |
-| 10 | `qe System /c:3 /rd:true /f:xml /e:root` | 0 | 2 321 | 2 | 3 | 18 | 抛异常 |
-| 11 | `qe Application /c:5 /rd:true /f:text /q:*[System[Provider[@Name='Chkdsk']]]` | 0 | 8 938 | 292 | **4** | 3 744 | 抛异常 |
-| 12 | `qe Application /c:3 /rd:true /f:text /q:*[System[(EventID=26226)]]` | 0 | 6 595 | 221 | 3 | 2 738 | 抛异常 |
-| 13 | `qe Application /c:50 /rd:true /f:text /q:*[System[(Level=1 or Level=2)]]` | 0 | 42 622 | 1 078 | 50 | 48 | 抛异常 |
-| 14 | `qe System /c:50 /rd:true /f:text /q:*[System[(Level=3)]]` | 0 | 21 101 | 796 | 50 | 324 | 抛异常 |
-| 15 | `qe System /c:30 /rd:true /f:text /q:*[System[Provider[@Name='Microsoft-Windows-WindowsUpdateClient']]]` | 0 | 12 509 | 449 | 30 | 0 | 通过 |
-| 16 | `qe System /c:20 /rd:true /f:text /q:*[System[(EventID=41) or (EventID=1001)]]` | 0 | **0** | 0 | **0** | 0 | 通过 |
-| 17 | `qe System /c:20 /rd:true /f:text /q:*[System[(EventID=1001)]]` | 0 | **0** | 0 | **0** | 0 | 通过 |
-| 18 | **反例**：`qe System /c:20 /rd:true /f:text /q` `*[System[(Level=1 or Level=2)]]`（查询串当**独立 token**） | **87** | 0 | – | – | – | 通过 |
+展开规则与宿主 `ArgvBuilder` 一致：`command` + `commandArgs` + 各字段按声明顺序
+（`attached` = `prefix` 与值拼成**一个** token）。
 
-全部只读动作 **stderr 都是 0 字节**（唯一的例外是第 18 条反例）。
+| # | 动作 | argv（`wevtutil` 之后） | 退出码 | 输出字节 | 行数 | 命中事件 | 非 ASCII | UTF-8 严格解码 |
+|---|---|---|---|---|---|---|---|---|
+| 1 | `list-logs` | `el` | 0 | 54 738 | 1 243 | – | 0 | 通过 |
+| 2 | `query-log-config` | `gl System /f:Text` | 0 | 410 | 13 | – | 0 | 通过 |
+| 3 | `query-log-config`（XML） | `gl System /f:XML` | 0 | 635 | 12 | – | 0 | 通过 |
+| 4 | `query-log-status` | `gli Application` | 0 | 227 | 7 | – | 0 | 通过 |
+| 5 | `list-publishers` | `ep` | 0 | 38 675 | 1 282 | – | 0 | 通过 |
+| 6 | `query-publisher`（默认） | `gp Microsoft-Windows-Eventlog` | 0 | 2 615 | 123 | – | 0 | 通过 |
+| 7 | `query-publisher`（/ge） | `gp Microsoft-Windows-Eventlog /ge:true` | 0 | 9 494 | 520 | – | 0 | 通过 |
+| 8 | `query-channel-events`（官方示例形态） | `qe Application /c:3 /rd:true /f:Text` | 0 | 2 796 | 86 | 3 | 6 | **抛异常（→ 非 UTF-8）** |
+| 9 | `query-channel-events`（XML + 根元素） | `qe System /c:3 /rd:true /f:XML /e:root` | 0 | 2 321 | 2 | 3 | 18 | 抛异常 |
+| 10 | `query-system-errors`（默认值） | `qe System /f:text /c:50 /q:*[System[(Level=1 or Level=2)]]` | 0 | 20 986 | 798 | 50 | 306 | 抛异常 |
+| 11 | `query-chkdsk`（默认值） | `qe Application /f:text /c:5 /q:*[System[Provider[@Name='Chkdsk']]]` | 0 | 8 938 | 292 | **4** | 3 744 | 抛异常 |
+| 12 | `query-chkdsk`（改 26226） | `qe Application /f:text /c:3 /q:*[System[(EventID=26226)]]` | 0 | 6 595 | 221 | 3 | 2 738 | 抛异常 |
+| 13 | `query-application-errors`（默认值） | `qe Application /f:text /c:50 /q:*[System[(Level=1 or Level=2)]]` | 0 | 24 022 | 812 | 50 | 372 | 抛异常 |
+| 14 | `query-recent-critical-warnings`（默认值） | `qe System /f:text /c:50 /q:*[System[(Level=3)]]` | 0 | 17 421 | 772 | 50 | 144 | 抛异常 |
+| 15 | `query-update-events`（默认值） | `qe System /f:text /c:30 /q:*[System[Provider[@Name='Microsoft-Windows-WindowsUpdateClient']]]` | 0 | 11 595 | 449 | 30 | 0 | 通过 |
+| 16 | `query-unexpected-shutdown`（默认值） | `qe System /f:text /c:20 /q:*[System[(EventID=41) or (EventID=1001)]]` | 0 | **0** | 0 | **0** | 0 | 通过 |
+| 17 | `query-unexpected-shutdown`（改 1001） | `qe System /f:text /c:20 /q:*[System[(EventID=1001)]]` | 0 | **0** | 0 | **0** | 0 | 通过 |
 
-**第 18 条反例是本次冒烟最重要的发现**，见 §7.2：查询串必须与 `/q:` **拼成同一个 token**。
+**17 条全部退出码 0、stderr 全部 0 字节。**
 
-### 5.2 未命中查询的结果计数（顺带确认了 examples 的语义）
+### 5.2 未命中查询的结果计数（顺带确认了 examples 与默认值的语义）
 
-| 查询 | 不加 `/c` 时的命中量 | 输出字节 |
+| 查询（不加 `/c`） | 命中量 | 输出字节 |
 |---|---|---|
 | `System` 日志全部 | 41 541 | 19 673 857（≈ 19 MB） |
 | `System` 里 `Level=1 or 2` | 8 050 | 3 367 610 |
@@ -162,16 +165,17 @@ argv: qe System /c:3 /rd:true /f:text
 | `Application` 里 `Level=1 or 2` | 1 046 | 647 271 |
 | `Application` 里 `Provider[@Name='Chkdsk']` | 4 | 8 938 |
 | `Application` 里 `EventID=26226` | 3 | 6 595 |
+| `Application` 里 `EventID=1000` | 2 | 4 454 |
 | `System` 里 `Provider[@Name='Microsoft-Windows-WindowsUpdateClient']` | 479 | 203 911 |
 | `System` 里 `EventID=1001`（在本频道） | 0 | 0 |
-| `Application` 里 `Provider[@Name='Microsoft-Windows-Wininit' and EventID=1001]` | 0 | 0（本机这两个条件不共存于同一频道） |
-| `System` 里 `EventID=41` / `EventID=6008` | 0 / 0 | 0（本机近期没有意外关机/蓝屏） |
+| `System` 里 `EventID=41` / `EventID=6008` | 0 / 0 | 0 |
+| `System` 里 `TimeCreated[timediff(@SystemTime) <= 86400000]` | 与不加时间条件同为 3（`/c:3` 上限） | 1 250 |
 
-**"命中 0 条"时退出码仍是 0、输出 0 字节**——写法见 §5.3 第 4 条。
+**"命中 0 条"时退出码仍是 0、输出 0 字节**——见 §7.6。
 这直接影响了 examples 的 `expectExitCode`：`query-unexpected-shutdown` 的两条示例
 在本机就是"0 命中 + 退出码 0"。
 
-### 5.3 失败路径的退出码（全部实跑）
+### 5.3 失败路径的退出码（全部实跑，全部只读）
 
 | argv | 退出码 | stderr 首行 / 关键行 | 十六进制 |
 |---|---|---|---|
@@ -190,9 +194,11 @@ argv: qe System /c:3 /rd:true /f:text
 | `gp NoSuchPublisher` | 2 | Failed to open metadata for publisher ... / The system cannot find the file specified. | 0x2 |
 | `qe C:\no\such.evtx /lf:true /c:1 /f:text` | 3 | The system cannot find the path specified. | 0x3 |
 | `qe Security /c:1 /f:text`（**非管理员**） | 5 | Access is denied. | 0x5 |
-| `qe <真实的 .evtx> /lf:true /c:1 /f:text`（**非管理员**） | 5 | Access is denied. | 0x5 |
-| `gli <真实的 .evtx> /lf:true`（**非管理员**） | 5 | Access is denied. / Failed to read log status information for log ... | 0x5 |
-| `qe System /c:1 /f:text /q:*[System[(Bogus=1)]]`（**属性名写错**） | **0** | 无输出 | – |
+| `qe <真实的 .evtx> /lf:true`（**非管理员**） | 5 | Access is denied. | 0x5 |
+| `gli <真实的 .evtx> /lf:true`（**非管理员**） | 5 | Access is denied. | 0x5 |
+| `qe System /c:1 /f:text /q` `*[System[(Bogus=1)]]`（**属性名写错 + 两个 token**） | 87 | Too many arguments are specified. | 0x57 |
+| `qe System /c:1 /f:text /q:*[System[(Bogus=1)]]`（**属性名写错，单 token**） | **0** | 无输出 | – |
+| `epl System D:\backup\system.evtx`（目录不存在） | 3 | Failed to export log System. / The system cannot find the path specified. | 0x3 |
 
 码的语义不是猜的：`net helpmsg 87` → "The parameter is incorrect."；
 `net helpmsg 2` → "The system cannot find the file specified."；
@@ -203,8 +209,9 @@ argv: qe System /c:3 /rd:true /f:text
 
 **两条容易误判的行为，写进了清单的 exitCodes 与字段 help：**
 
-1. **属性名写错不报错**：`*[System[(Bogus=1)]]` 返回 **exit 0 + 0 字节**，
+1. **属性名写错不报错**：`/q:*[System[(Bogus=1)]]` 返回 **exit 0 + 0 字节**，
    与"该事件确实不存在"完全无法区分。所以查询"没结果"时**先怀疑查询串拼错**。
+   （顺带：把同一个查询串写成 `/q` + 值两个 token 会先以 87 失败，反而"报错"了——见 §7.2。）
 2. **`/c` 必须 ≥ 1**：`/c:0` 报 87（不是"取全部"也不是"取 0 条"）。
 
 ### 5.3.1 附带抓出的一个坑：CRLF 让 `(?m)$` 在 CRLF 文本上匹配不到行尾
@@ -212,10 +219,8 @@ argv: qe System /c:3 /rd:true /f:text
 `wevtutil` 的输出是 **CRLF**（实测 `el` 的原始字节：`AMSI/Debug 0d 0a AirSpace...`）。
 在 .NET 正则里 `(?m)$` 匹配的是 `\n` **之前**的位置，而 `[\w/\-]+` 吃不掉 `\r`，
 于是 `(?m)^[A-Za-z][\w/\-]+$` 对着真实输出命中 **0 行**（实测）。
-正确的写法是 `(?m)^[A-Za-z][\w/\-]+\r?$`（命中 1 183 / 1 173 行）。
-**清单里 2 条 `nextSteps.when` 已按 `\r?$` 写**（并改成带命名捕获组的形态，见 §9 那一行）；
-这一点只在我们的测试脚本里被发现，因为宿主最终拿到的字符串可能已经去过 `\r`
-（`\r?` 对两种情形都成立）。
+正确的写法是 `(?m)^(?<log>[A-Za-z][\w/\-]*)\r?$`（实测命中 1 183 / 1 173 行）。
+**清单里 2 条 `nextSteps.when` 已按后者写**（并带命名捕获组，见 §9 那一行）。
 
 ### 5.4 `versionPattern` 的验证（playbook §5.2 情形①）
 
@@ -251,9 +256,9 @@ wevtutil **没有版本开关**（`/?` 的命令总表与 Common options 里都�
 - **处理方式**：本包 `install-manifest` / `uninstall-manifest` 的 `accept` 同时收
   `.man` 与 `.xml`，examples 用官方的 `.xml` 形态。
 
-### 6.4 官方示例里的 `%systemroot%` 转义符与本机帮助不同（不影响本包）
+### 6.4 官方示例里的 `%systemroot%` 转义符（不影响本包）
 
-- 官方 `im` 页写 `/rf:^%systemroot^%/System32/wevtutil.exe`；本机 `im /?` 写 `/rf:^%systemroot^%/System32/wevtutil.exe`（同一套 `^` 转义）。
+- 官方 `im` 页与本机 `im /?` 都写 `/rf:^%systemroot^%/System32/wevtutil.exe`。
 - 这个 `^` 是 **cmd.exe 的转义字符**，只对"经 shell 传参"有意义。
   本项目的宿主是 `ProcessStartInfo.ArgumentList`（不经 shell），
   所以清单里的占位符写作 `C:\Windows\System32\wevtutil.exe`、**不写 `^`**——
@@ -267,11 +272,17 @@ wevtutil **没有版本开关**（`/?` 的命令总表与 Common options 里都�
 
 ### 6.6 `/l:zz-ZZ`（不存在的语言）没有报错，也没有产生差异
 
-实测 `qe System /c:1 /rd:true /f:text /l:zz-ZZ` → **退出码 0、输出 417 字节**，
-与不加 `/l` 的输出（422 字节）**没有可解释的差异**。
+实测 `qe System /c:1 /rd:true /f:text /l:zz-ZZ` → **退出码 0**，
+与不加 `/l` 的输出（422 字节 vs 417 字节）**没有可解释的差异**。
 本机的事件消息资源只有一种语言，所以**没能观测到 `/l` 实际生效**
 （这与官方说法不冲突——官方只说它"用来以特定语言打印事件文本"，没说非法语言会报错）。
 清单里保留这个字段（官方有、本机跑得通），默认留空 = 不指定，并在 help 里写明这一点。
+
+### 6.7 官方页面有一处 Note 提到会覆盖文件（`al`）
+
+官方 `al`（archive-log）一节有 Note："Files in the locale-specific subdirectory will be overwritten.
+Make sure the location is trusted and does not contain untrusted symlinks or junctions to critical files."
+本包**没有收录 `al`**，理由见 §9。
 
 ---
 
@@ -283,49 +294,47 @@ wevtutil **没有版本开关**（`/?` 的命令总表与 Common options 里都�
 `Level=1/2/3` 也还有 7 MB。清单里凡是有"日用语义"的动作都给了 `/c` 默认值，
 而通用的「查询事件」动作**刻意不给 `/c` 默认值**（返回全量还是取最近 N 条是用户该决定的事）。
 
-### 7.2 **查询串必须与 `/q:` 拼成同一个 argv token**（本次冒烟最重要的发现）
+### 7.2 **所有选项都必须写成 `/开关:取值` 的单个 token**（本次冒烟最重要的发现）
 
-`ProcessStartInfo.ArgumentList`（宿主 `ProcessRunner.cs` 用的就是这个）在
-"一个元素里含空格与单引号"时会自动给它加引号再传给 `CreateProcess`。实测：
+**这一条差一点让整个包不可用**：清单最初按规范 §4 的映射表把 `/q`、`/f`、`/c` 等
+写成 `style: separate`（= 前缀与值**两个** token），而 wevtutil **全部拒绝**：
 
 ```
-✅ 单 token：/q:*[System[(Level=1 or Level=2)]]              → exit 0，命中正常
-✅ 单 token：/q:*[System[Provider[@Name='Chkdsk']]]          → exit 0，命中 4 条
-❌ 两个 token：/q  +  *[System[(Level=1 or Level=2)]]        → exit 87
-      stderr: Too many arguments are specified. / The parameter is incorrect.
+✗ 两个 token：/f  Text                    -> exit 87  Too many arguments are specified.
+✗ 两个 token：/c  1                       -> exit 87  Too many arguments are specified.
+✗ 两个 token：/rd true                    -> exit 87  Too many arguments are specified.
+✗ 两个 token：/q  *[System[(Level=1 ...)]] -> exit 87  Too many arguments are specified.
+✓ 一个 token：/f:Text                     -> exit 0
+✓ 一个 token：/c:1                        -> exit 0
+✓ 一个 token：/rd:true                    -> exit 0
+✓ 一个 token：/q:*[System[(Level=1 ...)]] -> exit 0
 ```
 
-所以清单里 `/q` 一律写成 **`style: separate` 且 `prefix: "/q"`**——
-宿主 `ArgvBuilder` 的 `separate` 是"前缀与值两个 token"吗？
+上面这 8 条是**逐条实跑**的对照（`gl`/`gli`/`gp`/`qe`/`sl`/`cl` 的选项都试过）。
 
-**这里有一个必须由宿主确认的点**：按规范 §4 的映射表，`separate` 的定义就是
-"`prefix` 与 `value` 两个独立 token"，而两个 token 的 `/q` + 查询串**在本机实测会失败（exit 87）**。
-本包需要的其实是**`attached` 语义**（`prefix + value` 拼成一个 token，即 `/q*[System[...]]`），
-但那与官方语法 `/q:<Query>`（带冒号）不符——`/q` 后面紧跟查询串（**没有冒号**）时
-wevtutil 是接受的（实测 `attached-ok` 一条：`/q:*[System[(EventID=26226)]]` 成功，
-写成 `/q` 与值同 token、中间带冒号就是官方语法）。
+**宿主的 `ArgvBuilder` 对 `separate` 的展开就是两个 token**（见
+`src/AllTool.Core/Execution/ArgvBuilder.cs` 的 `AppendWithPrefix(..., separate: true)`：
+`argv.Add(prefix); argv.Add(text);`），所以 **`separate` 在这个命令上是错的**。
 
-**当前清单的写法**：`style: separate` + `prefix: "/q"`，
-与 `schtasks` 的 `/FO` `/TN` 等字段同构（那些也是 `separate`），
-也符合官方语法行的 `/q:<Query>` 形态。**冒烟脚本里为了复现官方语法，
-是把 `/q:` 与查询串拼成同一个 token 传的**（因为脚本直接操作 `ArgumentList`，
-没有 `ArgvBuilder` 的 `separate` 展开逻辑）。
+**处理方式**：本清单**全部改用 `style: attached`**，把冒号写进 `prefix`
+（`prefix: "/q:"`、`/f:`、`/c:`、`/rd:true`(flag)、`/ge:true`(flag)…），
+于是每个选项只有一个 token，与官方语法 `/q:<Query>` `/f:<Format>` 完全一致。
+冒烟脚本的第 ② 层自检就是守这条：白名单里出现 `/^\/[a-z]+$/` 形态的 token 就立刻中止。
 
-> **给宿主/复核者的一条明确请求**：请用宿主链路（表单 → `ArgvBuilder` → `ProcessRunner`）
-> 实跑一次「查询事件」动作。若 `separate` 真的产生 `/q` 与查询串两个 token 而 wevtutil 报 87，
-> 那么要么 `separate` 的展开要照顾"值含空格时仍作为一个 token"（`ArgumentList` 本来就该如此，
-> 是本机实测里**两个独立 token** 才失败的），要么本包要把 `/q` 改成 `attached`
-> （`prefix: "/q:"`，值直接跟冒号，实测可行）。
-> 这次**没有改宿主、也没有改 `ArgvBuilder`**（超出本包的边界）。
+> **顺带一个对其它 Windows 工具包的提醒（不在本包边界内，只报告）**：
+> 本仓库里 `plugins/curl/manifest.yaml` 有 18 个、`plugins/schtasks/manifest.yaml` 有 23 个
+> `style: separate` 字段。它们是否可用取决于各自程序是否接受"/开关 值"两 token 形态——
+> 本包**没有改它们**，也没有替它们实测。`schtasks` 的实测记录里那些 `/TN xxx` 也是两 token 形态，
+> 需要负责人按同一个方法核对一遍。
 
 ### 7.3 读 Security 日志、以及用 `/lf:true` 直接读 `.evtx` 文件都要管理员
 
 非管理员实测三条全是 **exit 5 + "Access is denied."**：
 
 ```
-qe Security /c:1 /f:text                              → 5
-qe C:\Windows\System32\winevt\Logs\HardwareEvents.evtx /lf:true /c:1 /f:text  → 5
-gli C:\Windows\System32\winevt\Logs\HardwareEvents.evtx /lf:true              → 5
+qe Security /c:1 /f:text                                              -> 5
+qe C:\Windows\System32\winevt\Logs\HardwareEvents.evtx /lf:true /c:1 /f:text  -> 5
+gli C:\Windows\System32\winevt\Logs\HardwareEvents.evtx /lf:true              -> 5
 ```
 
 （`icacls C:\Windows\System32\winevt\Logs\Security.evtx` 对当前账号直接
@@ -341,14 +350,14 @@ gli C:\Windows\System32\winevt\Logs\HardwareEvents.evtx /lf:true              �
 
 ### 7.4 `timediff` 时间过滤：写法被接受了，但没有做跨天对照
 
-清单里有两个"只看最近 N 天"的可选字段，它们把天数换算成
-`*[System[TimeCreated[timediff(@SystemTime) <= 天数*86400000]]]`（毫秒）交给官方的 `/q`。
-实测这个写法**被接受**（`... <= 86400000` 返回 exit 0；`... <= 604800000` 也返回 exit 0），
-且**官方 Remarks 里没有 timediff 的取值表**（本包里这个写法是从微软事件日志 XPath 的通用形态来的）。
+清单里不再有"只看最近 N 天"的**独立字段**（原因见 §9），但各 `query` 字段的 help 里
+给了这个写法：`*[System[TimeCreated[timediff(@SystemTime) <= 毫秒]]]`（1 天 = 86400000）。
+实测这个写法**被接受**：`... <= 86400000` 与 `... <= 604800000` 都返回退出码 0，
+且**官方 Remarks 里没有 timediff 的取值表**。
 
 **我没能做的验证**：没有构造"只保留昨天/前天的对照数据"来证明边界精确
-（那需要改动系统日志或依赖特定的历史事件），所以清单的 help 里
-如实写成"实测有效，但没有做过跨天对照的严格验证"。
+（那需要改动系统日志或依赖特定的历史事件），所以 help 里如实写成
+"实测可用，但没有做过跨天对照的严格验证"。
 `Level`（1/2/3 = Critical/Error/Warning）与 `Provider[@Name=...]`、`EventID` 是**严格对照过**的（§5.2）。
 
 ### 7.5 `/e:root` 只对 XML 输出生效
@@ -367,7 +376,7 @@ EventID 41 / 1001 / 6008 这三类事件在本机 System 日志里**都是 0 条
 Wininit 1001 = BugCheck、6008 = 上次关机是意外的），但**本机没有可观测的命中样本**，
 所以这条动作的编号依据比本包其它动作弱——如实记在这里。
 
-### 7.7 本机日志名里有 `/` 与中文
+### 7.7 本机日志名里有 `/`、`%4` 与中文
 
 `wevtutil el` 实测 1 243 行，名字里既有 `AMSI/Debug`、
 `Microsoft-Windows-WindowsUpdateClient/Operational` 这种带斜杠的，
@@ -377,8 +386,8 @@ Wininit 1001 = BugCheck、6008 = 上次关机是意外的），但**本机没有
 
 ### 7.8 传参反例：写操作的 argv 绝不能被误判为可跑
 
-`plugins/wevtutil/smoke.ps1` 里内置了 8 条红线 argv（`cl` ×2、`sl`、`im`、`um`、`epl`、
-`/sbm`、`al`），脚本启动时先做一次"这些绝不允许可跑"的自检，
+`plugins/wevtutil/smoke.ps1` 里内置了 9 条红线 argv（`cl` ×2、`sl` ×2、`im`、`um`、`epl`、`al`、`/sbm`），
+脚本启动时先做一次"这些绝不允许可跑"的自检，
 **任一条被判为可跑就 `throw` 中止**，不进入执行循环。
 判定用 `($argv -join "`0")` 做字符串比较，不用 `[array] -eq`（playbook §5.1 的血泪教训）。
 
@@ -395,19 +404,19 @@ Wininit 1001 = BugCheck、6008 = 上次关机是意外的），但**本机没有
   只是执行方式不同"，并把 `info` 留给"**这一步该不该由工具替你做决定**"的情形
   （典型是 `ipconfig /release`：会切断网络、用户可能正在远程桌面上点它）。
   清空日志不会让用户失去对机器的控制，风险完全可以通过"逐字输入确认短语"来消解，
-  而且它**有官方提供的补救开关 `/bu`**（先备份再清），所以本包按中风险之上、
-  极高之下的口径处理：`danger: destructive` + `confirmPhrase: "清空日志 {logName}"`。
+  而且它**有官方提供的补救开关 `/bu`**（先备份再清），所以本包的处理是：
+  `danger: destructive` + `confirmPhrase: "清空日志 {logName}"`。
   这一条**与任务描述里"我倾向 danger: destructive + confirmPhrase"一致**。
 - **没有执行**：这是本次任务的硬红线（会真的清掉本机事件日志），
   所以这条动作**没有任何实测退出码**。它的字段依据全部来自官方页面
   （语法行、`/bu` 的说明、官方示例 `wevtutil cl Application /bu:C:\admin\backups\al0306.evtx`）。
   唯一相关的实测是**反例**：`cl System /invalidate`（参数名错）→ exit 87，
-  用来说明"参数错会在动手之前就失败"。
+  用来说明"参数错会在动手之前就失败"——而这一次那个 argv 连清空动作都不会触发。
 
 ### 8.2 `sl`（改日志配置）→ `danger: overwrite`，**没有执行**
 
 改的是配置而不是数据（关掉日志、改最大体积、改保留策略），所以按 `overwrite` 分级。
-**没有执行**：会真的改写本机日志配置，且我在收尾时要保证"零残留"。
+**没有执行**：会真的改写本机日志配置，且收尾时要保证"零残留"。
 清单的设计保证"没填的项不出现在命令行里"，因此不可能"顺手"改掉没想改的设置。
 官方示例 `wevtutil sl /c:config.xml` 原样收进 examples（未跑）。
 
@@ -422,9 +431,8 @@ Wininit 1001 = BugCheck、6008 = 上次关机是意外的），但**本机没有
 （`D:\backup` 不存在）→ **exit 3**、stderr "Failed to export log System. /
 The system cannot find the path specified."，随后 `Test-Path D:\backup\system.evtx` = `False`，
 **确认一个字节都没写出去**。所以这条动作的"成功路径"仍然没有实测。
-（顺带这也是 `exitCodes` 里 3 的实测来源。）
 
-### 8.4 `im` / `um`（安装/卸载事件清单）→ overWrite / destructive，**没有执行**
+### 8.4 `im` / `um`（安装/卸载事件清单）→ overwrite / destructive，**没有执行**
 
 - `im`：按清单文件往系统里注册提供程序与日志 → `danger: overwrite` + `confirmText`。
 - `um`：把清单里的提供程序与日志**从系统里注销**，且**没有反向操作可用**
@@ -450,15 +458,18 @@ The system cannot find the path specified."，随后 `Test-Path D:\backup\system
 
 | 没做 | 原因 |
 |---|---|
-| `/lf`（`qe`/`gli`/`epl` 的"从 .evtx 文件读"） | 实测**非管理员必然 exit 5**（§7.3），做成开关只会得到"点了就报权限错"。要读归档文件请先提权。 |
-| `/sq`（结构化查询文件 `/sq:true`） | 需要用户先准备一个"结构化查询 XML"文件，而官方**没有给这个格式的规范**（只说 `<Path>` 换成那个文件）。做不出来就没法给字段写 `doc`。 |
+| `/lf`（`qe`/`gli` 的"从 .evtx 文件读"） | 实测**非管理员必然 exit 5**（§7.3），做成开关只会得到"点了就报权限错"。要读归档文件请先提权。 |
+| `/sq`（结构化查询文件） | 需要用户先准备一个"结构化查询 XML"文件，而官方**没有给这个格式的规范**（只说 `<Path>` 换成那个文件）。做不出来就没法给字段写 `doc`。 |
 | `/bm` / `/sbm`（书签读写） | 是"分页续读"的机制：`/sbm` 会写文件、`/bm` 要读上次写的文件。属于高频轮询脚本的用法，不是"查看一次结果"的场景；而且 `/sbm` 是**写动作**，与"重点做只读"的口径不符。 |
 | `/r` `/u` `/p` `/a`（远程机器与认证） | 与 tasklist 包同一口径：`/p` 要明文密码、`/u` 只在 `/r` 下有效，远程日志管理不是本工具包要解决的问题。而且 `/u` 的说明里带 "Only applicable when option /r is specified" 这种耦合条件，v1 的 `visibleWhen` 宿主尚未实现，做出来会误导。 |
 | `/uni`（Unicode 输出） | 官方共选项之一。宿主已按 `runtime.encoding: oem` 正确解码（§4），再加一层 `/uni` 只会让输出变成 UTF-16LE、与声明的编码打架。 |
-| `/sl` 的 `/c`（配置文件）与"逐项开关"的**互斥校验** | 官方明确 "/c 与 <Logname> 不能同时给"，但 v1 没有 `visibleWhen`/互斥能力（规范 §4），所以在 help 与 NOTES 里写明，不做自动互斥。 |
+| **"只看最近 N 天"的独立数字字段** | **做过又删掉了**：原本设计成 `type: number` + `prefix: "/q:"`，但宿主的 number 字段只会产出 `/q:7` 这种形态——而 XPath 需要的是整段 `*[System[TimeCreated[timediff(@SystemTime) <= 604800000]]]`。实测 `/q:86400000` **退出码 0、命中 0 条**，即"静默返回空结果"，是最坏的一种错。v1 清单没有字符串拼接能力，所以改成在各 `query` 字段的 help 里给出完整的毫秒写法，让用户直接改查询串。 |
+| **预设动作里那些"勾一下就换查询串"的 bool 字段** | **同样做过又删掉了**：`eventIdOnly` / `onlyAppCrash` / `errorsOnly` 这种 `style: flag` + `prefix: "/q:..."` 的字段，一旦与同一动作里的 `query` 字段并存就会产出**两个 `/q` 参数**，实际生效的只有最后一个。改成"每个预设动作就是一个带默认值的 `query` 文本框"，默认值即该动作的语义，想换就改文本——只有一个 `/q`，不可能冲突。 |
+| `/sl` 的 `/c`（配置文件）与"逐项开关"的**互斥校验** | 官方明确 `/c` 与 `<Logname>` 不能同时给，但 v1 没有 `visibleWhen`/互斥能力（规范 §4），所以在 help 与 NOTES 里写明，不做自动互斥。 |
+| `al`（归档日志） | 见 §8.5。 |
 | `qe /e`（根元素）之外的 XML 后处理、`Get-WinEvent` 式的 FilterHashtable | `FilterHashtable` 是 PowerShell 的写法，**wevtutil 只吃 XPath 1.0**，两者不能互换。已在 `/q` 字段的 help 里点名这条，免得用户把 `Get-WinEvent` 的语法抄过来。 |
 | `output.progress` | wevtutil 不画进度条，被重定向时也没有百分比 → 不写（不凭印象编正则）。 |
-| `nextSteps` 的 `when` 正则 | 只写了 2 条，且**每一条都对着真实输出数过命中量**：`el` 的输出 1 243 行 / 正则命中 **1 183**；`ep` 的输出 1 282 行 / 命中 **1 173**。未命中的行是名字里含**空格**、`%4`、`.`（例如 `.NET Runtime`）、中文的名字——`(?m)^(?<name>[A-Za-z][\w/\-]*)\r?$` 只认"字母开头 + 字母/数字/下划线/斜杠/连字符"这种形态，本来就是"看起来像一行日志名/发布者名"的启发式。**两个正则/宿主相关的细节**：<br>① `wevtutil` 的输出是 CRLF，`(?m)` 下 `$` 只匹配 `\n` 前的位置，所以必须写 `\r?$`——第一版没有 `\r?` 的正则在 CRLF 上命中 **0**，是本次冒烟抓出来的；<br>② 宿主的 `NextStepMatcher` 是"**一次命中生成一个可点选项**"（`MatchCollection` + 标题/`values` 里 `{1}`/`{名字}` 用捕获组填充，默认最多 6 条）。所以这两条 `when` **用了命名捕获组** `(?<log>…)` / `(?<publisher>…)` 并配 `values`，点一下就直接把日志名/发布者名填进目标动作——写成裸的整行匹配只会生成 6 个同名按钮。<br>**没有写任何"凭印象猜文案"的正则**（scoop 的 `Updates are available` 就是这么踩的）。`gl`/`gli`/`gp` 这三条动作**不写** `nextSteps`——它们的输出是 `name: ...` / `creationTime: ...` 这类字段行，从输出里判断不出用户的下一步意图。 |
+| `nextSteps` 的 `when` 正则 | 只写了 2 条，且**每一条都对着真实输出数过命中量**：`el` 的输出 1 243 行 / 正则命中 **1 183**；`ep` 的输出 1 282 行 / 命中 **1 173**。未命中的行是名字里含**空格**、`%4`、`.`（例如 `.NET Runtime`）、中文的名字——`(?m)^(?<log>[A-Za-z][\w/\-]*)\r?$` 只认"字母开头 + 字母/数字/下划线/斜杠/连字符"这种形态，本来就是"看起来像一行日志名/发布者名"的启发式。**两个正则/宿主相关的细节**：<br>① wevtutil 的输出是 CRLF，`(?m)` 下 `$` 只匹配 `\n` 前的位置，所以必须写 `\r?$`——第一版没有 `\r?` 的正则在 CRLF 上命中 **0**，是本次冒烟抓出来的；<br>② 宿主的 `NextStepMatcher` 是"**一次命中生成一个可点选项**"（`MatchCollection` + 标题/`values` 里 `{1}`/`{名字}` 用捕获组填充，默认最多 6 条）。所以这两条 `when` **用了命名捕获组** `(?<log>…)` / `(?<publisher>…)` 并配 `values`，点一下就直接把日志名/发布者名填进目标动作——写成裸的整行匹配只会生成 6 个同名按钮。<br>**没有写任何"凭印象猜文案"的正则**（scoop 的 `Updates are available` 就是这么踩的）。`gl`/`gli`/`gp` 这三条动作**不写** `nextSteps`——它们的输出是 `name: ...` / `creationTime: ...` 这类字段行，从输出里判断不出用户的下一步意图。 |
 | `requiresAdmin`（动作级） | 官方页面**通篇没有权限说明**，实测只发现"读 Security 日志"与"`/lf:true` 读 .evtx 文件"两条需要管理员，而前者只影响通用查询动作里的一种填法。按规范 §2.5"不确定就不标"，一律不标，把实测依据写进 `exitCodes` 的 5 与 §7.3。 |
 | `cl` / `sl` / `im` / `um` / `epl` 的**成功路径实测** | 红线（会改动真实系统）。见 §8。 |
 
@@ -483,6 +494,14 @@ The system cannot find the path specified."，随后 `Test-Path D:\backup\system
 
 **零个。** 本轮全部测量都用只读手段完成：
 不需要创建任何临时计划任务/日志/渠道，也没有创建过 `__AllToolProbe` 前缀的对象。
-冒烟脚本只在 `%TEMP%` 里用过两个固定的中间文件（`wv-o.bin` / `wv-e.bin`），
-不参与任何判定，也不留在仓库里。
+冒烟脚本只在内存里读子进程输出，不写任何文件；
 `epl` 那一次"成功路径"的反例连文件都没写出来（`Test-Path D:\backup\system.evtx` = `False`）。
+
+## 12. 给复核者的一条请求（不在本包边界内）
+
+**§7.2 那条"-wevtutil 只接受 `/开关:取值` 单 token"的实测结论，
+很可能同样影响仓库里其它把选项写成 `style: separate` 的 Windows 工具包**
+（本包统计：`plugins/curl` 18 处、`plugins/schtasks` 23 处）。
+本包只改了自己目录，**没有动那两个包、也没有替它们实测**。
+建议按同一方法（把两种 token 形态各跑一次、比对退出码）逐包核对一遍：
+若目标程序也只认单 token，那么那些字段在 UI 上点出来的命令都会是坏的。

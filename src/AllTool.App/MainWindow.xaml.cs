@@ -4,6 +4,7 @@ using System.Globalization;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using AllTool.Core.Diagnostics;
@@ -543,9 +544,6 @@ public sealed partial class MainWindow : Window
             }
 
             content.Children.Add(name);
-            // 内容换成 StackPanel 之后，按钮的可访问名称不再自动等于文字——
-            // 显式设一下，读屏软件与界面验收脚本才能按名字找到它。
-            AutomationProperties.SetName(button, info.Text);
 
             var button = new Button
             {
@@ -556,6 +554,10 @@ public sealed partial class MainWindow : Window
                 Background = null,
                 BorderThickness = new Thickness(0),
             };
+            // 内容换成 StackPanel 之后，按钮的可访问名称不再自动等于文字——
+            // 显式设一下，读屏软件与界面验收脚本才能按名字找到它。
+            AutomationProperties.SetName(button, info.Text);
+
             button.Click += (_, _) => info.Select();
 
             // 会话型：前置条件没满足的动作灰显。**不隐藏**——用户要能看到"有这个功能"

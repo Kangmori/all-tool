@@ -56,7 +56,7 @@ sources:
     retrieved: "2026-09-29"
     appliesTo: Windows 10/11 / Windows Server 2016-2025
     note: 实测 HTTP 200、正文 63 349 字节、页面 Last updated 2023-02-03、Applies to 含 Windows 10/11 与 Server 2016-2025。**这个命令没有子页**（与 schtasks 的主页 + 六个子页不同），12 条命令的语法、选项说明与示例都在这一页里；本清单每个动作的 sources 都指它，靠 note 区分查的是哪一段。页内锚点：#syntax（语法总表）、#parameters（命令/参数表）、#options（选项表）、#remarks（用配置文件配合 sl）、#examples（12 条官方示例）。
-  - title: 本机 13 个帮助页的真实输出（`wevtutil /?` 与 12 个 `wevtutil <命令> /?`）
+  - title: 本机 13 个帮助页的真实输出（wevtutil /? 与 12 个 wevtutil <命令> /?）
     url: file:///<仓库目录>/本机帮助快照（**未入库**，可用 pwsh -File scripts/fetch-win-help.ps1 -Commands wevtutil 重新抓取）/wevtutil.txt
     retrieved: "2026-09-29"
     appliesTo: Windows 11 26200 / wevtutil.exe 文件版本 10.0.26100.8875
@@ -88,25 +88,25 @@ runtime:
 #   码的语义用 `net helpmsg <code>` 逐条核对过（NOTES.md §5），不是猜的。
 exitCodes:
   - code: 0
-    meaning: 成功。**包括"查询命中 0 条事件"**——实测 `*[System[(EventID=1001)]]` 与本机某 Analytic 渠道都返回 0 字节 + 退出码 0，所以"没有输出"不等于"命令失败"。
+    meaning: 成功。**包括"查询命中 0 条事件"**——实测 *[System[(EventID=1001)]] 与本机某 Analytic 渠道都返回 0 字节 + 退出码 0，所以"没有输出"不等于"命令失败"。
     severity: ok
   - code: 2
-    meaning: ERROR_FILE_NOT_FOUND（系统找不到指定的文件）。实测出现在 `gp <不存在的发布者>`：stderr 为 "Failed to open metadata for publisher ..." + "The system cannot find the file specified."。
+    meaning: ERROR_FILE_NOT_FOUND（系统找不到指定的文件）。实测出现在 gp <不存在的发布者>：stderr 为 "Failed to open metadata for publisher ..." + "The system cannot find the file specified."。
     severity: error
   - code: 3
-    meaning: ERROR_PATH_NOT_FOUND（系统找不到指定的路径）。实测出现在 `/lf:true` 指向一个不存在的日志文件：stderr 为 "The system cannot find the path specified." + "Failed to open event query."。
+    meaning: ERROR_PATH_NOT_FOUND（系统找不到指定的路径）。实测出现在 /lf:true 指向一个不存在的日志文件：stderr 为 "The system cannot find the path specified." + "Failed to open event query."。
     severity: error
   - code: 5
-    meaning: ERROR_ACCESS_DENIED（拒绝访问）。实测出现在**非管理员读 Security 日志**（`qe Security /c:1 /f:text`）与**用 `/lf:true` 直接读 .evtx 文件**（`qe`/`gli`）时：stderr 为 "Access is denied."。
+    meaning: ERROR_ACCESS_DENIED（拒绝访问）。实测出现在**非管理员读 Security 日志**（qe Security /c:1 /f:text）与**用 /lf:true 直接读 .evtx 文件**（qe/gli）时：stderr 为 "Access is denied."。
     severity: error
   - code: 87
-    meaning: ERROR_INVALID_PARAMETER（参数错误）。**本命令最常撞到的一个**，实测覆盖五种情形：选项名写错（`/invalidate`）、选项取值类型错（`/ge:maybe`）、取值不在允许集合（`/f:json`）、取值非法（`/c:0` 和 `/c:-5`）、必需的路径参数没给（`qe` 或 `gl` 后面什么都不写）。stderr 首行通常是 "Invalid value for option f." / "Invalid option ge. Option is not Boolean." / "Required argument(s) is/are not specified."，末行都是 "The parameter is incorrect."。
+    meaning: ERROR_INVALID_PARAMETER（参数错误）。**本命令最常撞到的一个**，实测覆盖五种情形：选项名写错（/invalidate）、选项取值类型错（/ge:maybe）、取值不在允许集合（/f:json）、取值非法（/c:0 和 /c:-5）、必需的路径参数没给（qe 或 gl 后面什么都不写）。stderr 首行通常是 "Invalid value for option f." / "Invalid option ge. Option is not Boolean." / "Required argument(s) is/are not specified."，末行都是 "The parameter is incorrect."。
     severity: error
   - code: 15001
-    meaning: ERROR_EVT_INVALID_QUERY（指定的查询无效），十六进制 0x3A99。实测出现在 XPath 查询串语法不完整时（`/q:*[System[`）：stderr 为 "A syntax error occurred at position 9" + "Failed to open event query." + "The specified query is invalid."。
+    meaning: ERROR_EVT_INVALID_QUERY（指定的查询无效），十六进制 0x3A99。实测出现在 XPath 查询串语法不完整时（/q:*[System[）：stderr 为 "A syntax error occurred at position 9" + "Failed to open event query." + "The specified query is invalid."。
     severity: error
   - code: 15007
-    meaning: ERROR_EVT_CHANNEL_NOT_FOUND（找不到指定的通道），十六进制 0x3A9F。实测出现在日志名不存在时（`qe` / `gl` / `gli` 配一个不存在的名字）：stderr 为 "Failed to open event query." / "Failed to read configuration for log ..." + "The specified channel could not be found."。
+    meaning: ERROR_EVT_CHANNEL_NOT_FOUND（找不到指定的通道），十六进制 0x3A9F。实测出现在日志名不存在时（qe / gl / gli 配一个不存在的名字）：stderr 为 "Failed to open event query." / "Failed to read configuration for log ..." + "The specified channel could not be found."。
     severity: error
 
 quickActions:
@@ -127,11 +127,11 @@ actions:
     execution: info
     description: wevtutil **没有**版本开关——不带参数运行它只会打印一屏帮助。想知道本机 wevtutil 的版本，要读那个 exe 文件的版本信息。这个动作只展示命令与说明，**宿主不执行**：它不是 wevtutil 的参数，而是查文件的方法。
     sources:
-      - title: 本机 `wevtutil /?` 的真实输出 —— 无参数时只打印帮助
+      - title: 本机 wevtutil /? 的真实输出 —— 无参数时只打印帮助
         url: file:///<仓库目录>/本机帮助快照（**未入库**）/wevtutil.txt
         retrieved: "2026-09-29"
         appliesTo: Windows 11 26200 / wevtutil.exe 10.0.26100.8875
-        note: 本机 `wevtutil /?` 的输出里**没有任何版本相关开关**：命令总表只有 12 条（el/gl/sl/ep/gp/im/um/qe/gli/epl/al/cl），Common options 只有 /r /u /p /a /uni。因此按 R1 不写 versionArgs/versionPattern；实测 `(Get-Item C:\Windows\System32\wevtutil.exe).VersionInfo.FileVersion` = 10.0.26100.8875 (WinBuild.160101.0800)。
+        note: 本机 wevtutil /? 的输出里**没有任何版本相关开关**：命令总表只有 12 条（el/gl/sl/ep/gp/im/um/qe/gli/epl/al/cl），Common options 只有 /r /u /p /a /uni。因此按 R1 不写 versionArgs/versionPattern；实测 (Get-Item C:\Windows\System32\wevtutil.exe).VersionInfo.FileVersion = 10.0.26100.8875 (WinBuild.160101.0800)。
     fields: []
     output:
       mode: capture
@@ -152,12 +152,12 @@ actions:
         url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/wevtutil
         retrieved: "2026-09-29"
         appliesTo: Windows 10/11
-        note: 官方原文："{el | enum-logs} Displays the names of all logs."；官方示例第一条就是 "wevtutil el"。语法行里 el 是唯一不接受任何选项的命令（本机 `el /?` 也只显示 `wevtutil { el | enum-logs }` 一行语法）。
+        note: 官方原文："{el | enum-logs} Displays the names of all logs."；官方示例第一条就是 "wevtutil el"。语法行里 el 是唯一不接受任何选项的命令（本机 el /? 也只显示 wevtutil { el | enum-logs } 一行语法）。
     fields: []
     output:
       mode: stream
       showCommandLine: true
-      resultNote: 实测本机输出 54 738 字节 / 1 243 行、退出码 0、stderr 0 字节；**0 个非 ASCII 字节**（纯 ASCII）。名字形如 AMSI/Debug、Application、Microsoft-Windows-WindowsUpdateClient/Operational，带 `/` 的是渠道下的子日志，可以直接填给「查询事件」。
+      resultNote: 实测本机输出 54 738 字节 / 1 243 行、退出码 0、stderr 0 字节；**0 个非 ASCII 字节**（纯 ASCII）。名字形如 AMSI/Debug、Application、Microsoft-Windows-WindowsUpdateClient/Operational，带 / 的是渠道下的子日志，可以直接填给「查询事件」。
     nextSteps:
       # 宿主的 nextSteps **每条命中生成一个可点选项**，标题与 values 里的 {名字}/{1}
       # 会被该次匹配的捕获组填充（见 src/AllTool.Core/Execution/NextStepMatcher.cs）。
@@ -197,7 +197,7 @@ actions:
         required: true
         save: true
         placeholder: 例 System
-        help: 日志名必须与 `wevtutil el` 列出来的一字不差（大小写不敏感，但名字里的斜杠不能少，例如 Microsoft-Windows-WindowsUpdateClient/Operational）。名字不对会以退出码 15007 失败。
+        help: 日志名必须与 wevtutil el 列出来的一字不差（大小写不敏感，但名字里的斜杠不能少，例如 Microsoft-Windows-WindowsUpdateClient/Operational）。名字不对会以退出码 15007 失败。
         doc: official #parameters 的 {gl | get-log} <Logname>（"You can run wevtutil el to obtain a list of log names."）
       - id: format
         label: 输出格式（/f）
@@ -238,7 +238,7 @@ actions:
         url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/wevtutil
         retrieved: "2026-09-29"
         appliesTo: Windows 10/11
-        note: 官方原文："{gli | get-loginfo} <Logname> [/lf:<Logfile>] Displays status information about an event log or log file. If the /lf option is used, <Logname> is a path to a log file. You can run wevtutil el to obtain a list of log names."；官方示例 "wevtutil gli Application"。**注意命令的长写法**：本机帮助与官方页面都写 `get-loginfo`（不是 get-log-info）。
+        note: 官方原文："{gli | get-loginfo} <Logname> [/lf:<Logfile>] Displays status information about an event log or log file. If the /lf option is used, <Logname> is a path to a log file. You can run wevtutil el to obtain a list of log names."；官方示例 "wevtutil gli Application"。**注意命令的长写法**：本机帮助与官方页面都写 get-loginfo（不是 get-log-info）。
     fields:
       - id: logName
         label: 日志名
@@ -269,7 +269,7 @@ actions:
         url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/wevtutil
         retrieved: "2026-09-29"
         appliesTo: Windows 10/11
-        note: 官方原文："{ep | enum-publishers} Displays the event publishers on the local computer."；本机 `ep /?` 的示例也是 "wevtutil ep"。与 el 一样，ep 不接受任何选项。
+        note: 官方原文："{ep | enum-publishers} Displays the event publishers on the local computer."；本机 ep /? 的示例也是 "wevtutil ep"。与 el 一样，ep 不接受任何选项。
     fields: []
     output:
       mode: stream
@@ -347,7 +347,7 @@ actions:
     output:
       mode: stream
       showCommandLine: true
-      resultNote: 实测：`gp Microsoft-Windows-Eventlog` 2 615 字节；`/ge:true /gm:true` 13 688 字节；`/ge:true /f:xml` 9 078 字节；`gp Microsoft-Windows-Kernel-Power /ge:true /gm:true /f:xml` 108 196 字节（约 106 KB）。全部退出码 0。**输出可能很大**，界面要有等待预期。
+      resultNote: 实测：gp Microsoft-Windows-Eventlog 2 615 字节；/ge:true /gm:true 13 688 字节；/ge:true /f:xml 9 078 字节；gp Microsoft-Windows-Kernel-Power /ge:true /gm:true /f:xml 108 196 字节（约 106 KB）。全部退出码 0。**输出可能很大**，界面要有等待预期。
     nextSteps:
       - title: 查询这个提供程序发出的事件
         action: query-channel-events
@@ -381,7 +381,7 @@ actions:
         required: true
         save: true
         placeholder: 例 System
-        help: 默认要填**日志名**（来自 `wevtutil el`，例如 System / Application / Microsoft-Windows-WindowsUpdateClient/Operational），不是 .evtx 文件路径。名字不对会以退出码 15007 失败。想直接读 .evtx 文件得加 /lf:true，而**实测那需要管理员**，所以本包没做这个开关（见 NOTES.md §7.3）。
+        help: 默认要填**日志名**（来自 wevtutil el，例如 System / Application / Microsoft-Windows-WindowsUpdateClient/Operational），不是 .evtx 文件路径。名字不对会以退出码 15007 失败。想直接读 .evtx 文件得加 /lf:true，而**实测那需要管理员**，所以本包没做这个开关（见 NOTES.md §7.3）。
         doc: official #parameters 的 {qe | query-events} <Path>（"By default, you provide a log name for <Path>."）
       - id: query
         label: XPath 查询串（/q）
@@ -391,7 +391,7 @@ actions:
         group: 筛选
         save: true
         placeholder: 例 *[System[(Level=1 or Level=2)]]
-        help: 官方原文：/q "Defines the XPath query to filter the events that are read or exported. If this option is not specified, all events will be returned."。**这是 XPath 1.0**（不是 `Get-WinEvent -FilterHashtable` 那种写法，两者不能互换）。留空 = 取全部事件（System 日志实测有 4 万多条，务必配合下面的条数）。可直接抄的片段：按等级 `*[System[(Level=1 or Level=2)]]`（1=Critical、2=Error、3=Warning、4=Information、5=Verbose，实测有效）；按编号 `*[System[(EventID=1000)]]`；按提供程序 `*[System[Provider[@Name='Chkdsk']]]`；组合 `*[System[Provider[@Name='Microsoft-Windows-Wininit'] and (EventID=1001)]]`；按时间（**毫秒**，实测有效）`*[System[TimeCreated[timediff(@SystemTime) <= 86400000]]]`（一天内）。注意：**属性名写错不会报错，只会返回 0 条**（实测 `*[System[(Bogus=1)]]` 退出码 0、无输出），写完后先看条数对不对。
+        help: 官方原文：/q "Defines the XPath query to filter the events that are read or exported. If this option is not specified, all events will be returned."。**这是 XPath 1.0**（不是 Get-WinEvent -FilterHashtable 那种写法，两者不能互换）。留空 = 取全部事件（System 日志实测有 4 万多条，务必配合下面的条数）。可直接抄的片段：按等级 *[System[(Level=1 or Level=2)]]（1=Critical、2=Error、3=Warning、4=Information、5=Verbose，实测有效）；按编号 *[System[(EventID=1000)]]；按提供程序 *[System[Provider[@Name='Chkdsk']]]；组合 *[System[Provider[@Name='Microsoft-Windows-Wininit'] and (EventID=1001)]]；按时间（**毫秒**，实测有效）*[System[TimeCreated[timediff(@SystemTime) <= 86400000]]]（一天内）。注意：**属性名写错不会报错，只会返回 0 条**（实测 *[System[(Bogus=1)]] 退出码 0、无输出），写完后先看条数对不对。
         doc: official #options 的 /q:<Query>（"Defines the XPath query to filter the events that are read or exported."）
       - id: count
         label: 最多读几条（/c）
@@ -409,7 +409,7 @@ actions:
         prefix: "/rd:true"
         group: 数量与方向
         default: false
-        help: 官方原文：/rd "Specifies the direction in which events are read. <Direction> can be true or false. If true, the most recent events are returned first."。**默认不加**：官方没写不加时是按什么方向读（实测不加时读的是最旧的几条），所以这里把"用 wevtutil 自己的默认方向"留作默认，要"最近 N 条"就自己勾上——官方示例 `wevtutil qe Application /c:3 /rd:true /f:text` 正是这么用的。
+        help: 官方原文：/rd "Specifies the direction in which events are read. <Direction> can be true or false. If true, the most recent events are returned first."。**默认不加**：官方没写不加时是按什么方向读（实测不加时读的是最旧的几条），所以这里把"用 wevtutil 自己的默认方向"留作默认，要"最近 N 条"就自己勾上——官方示例 wevtutil qe Application /c:3 /rd:true /f:text 正是这么用的。
         doc: official #options 的 /rd:<Direction>（true | false）
       - id: format
         label: 输出格式（/f）
@@ -436,7 +436,7 @@ actions:
         group: 输出
         advanced: true
         placeholder: 例 zh-CN 或 en-US
-        help: 官方原文：/l "Defines a locale string that is used to print event text in a specific locale. Only available when printing events in text format using the /f option."。**只在 Text 格式下有效**。本机实测填 `zz-ZZ` 这种不存在的语言也返回退出码 0、输出与不填时一样——**没能观测到它产生差异**（本机消息资源只有一种语言），所以留空 = 不指定是默认。见 NOTES.md §7.5。
+        help: 官方原文：/l "Defines a locale string that is used to print event text in a specific locale. Only available when printing events in text format using the /f option."。**只在 Text 格式下有效**。本机实测填 zz-ZZ 这种不存在的语言也返回退出码 0、输出与不填时一样——**没能观测到它产生差异**（本机消息资源只有一种语言），所以留空 = 不指定是默认。见 NOTES.md §7.5。
         doc: official #options 的 /l:<Locale>（"Only available when printing events in text format using the /f option."）
       - id: element
         label: 包一层根元素（/e，高级）
@@ -446,12 +446,12 @@ actions:
         group: 输出
         advanced: true
         placeholder: 例 root
-        help: 官方原文：/e "Includes a root element when displaying events in XML. <Element> is the string that you want within the root element. For example, /e:root would result in XML that contains the root element pair <root></root>."。**实测它只对 XML 输出生效**：`/f:xml /e:root` 的输出首行是 `<root>`，而 `/f:text /e:root` 的输出里找不到 root（与官方措辞一致，官方说的就是 "when displaying events in XML"）。留空 = 不加根元素。
+        help: 官方原文：/e "Includes a root element when displaying events in XML. <Element> is the string that you want within the root element. For example, /e:root would result in XML that contains the root element pair <root></root>."。**实测它只对 XML 输出生效**：/f:xml /e:root 的输出首行是 <root>，而 /f:text /e:root 的输出里找不到 root（与官方措辞一致，官方说的就是 "when displaying events in XML"）。留空 = 不加根元素。
         doc: official #options 的 /e:<Element>（"Includes a root element when displaying events in XML."）
     output:
       mode: stream
       showCommandLine: true
-      resultNote: 实测（非管理员）：`qe System /c:3 /rd:true /f:text` 1 250 字节、退出码 0；`qe Application /c:2 /rd:true /f:text /q:"*[System[Provider[@Name='Chkdsk']]]"` 4 540 字节、命中 2 条；查询串语法不完整 → 退出码 15001；日志名不存在 → 15007；`/c:0` → 87。**注意"没有输出"不等于失败**：命中 0 条时退出码是 0、输出 0 字节。
+      resultNote: 实测（非管理员）：qe System /c:3 /rd:true /f:text 1 250 字节、退出码 0；qe Application /c:2 /rd:true /f:text /q:"*[System[Provider[@Name='Chkdsk']]]" 4 540 字节、命中 2 条；查询串语法不完整 → 退出码 15001；日志名不存在 → 15007；/c:0 → 87。**注意"没有输出"不等于失败**：命中 0 条时退出码是 0、输出 0 字节。
     examples:
       - title: Application 日志最近三条（官方示例原文）
         args: ["qe", "Application", "/c:3", "/rd:true", "/f:text"]
@@ -497,7 +497,7 @@ actions:
         prefix: "/c:"
         group: 数量
         default: 50
-        help: 官方原文：/c "Sets the maximum number of events to read."；**实测必须 ≥ 1**（`/c:0` → 退出码 87）。默认 50 是本工具包按"人一次看得完"选的：本机 System 日志这类错误有 8 050 条，不加限制会输出 3 MB 以上。
+        help: 官方原文：/c "Sets the maximum number of events to read."；**实测必须 ≥ 1**（/c:0 → 退出码 87）。默认 50 是本工具包按"人一次看得完"选的：本机 System 日志这类错误有 8 050 条，不加限制会输出 3 MB 以上。
         doc: official #options 的 /c:<Count>（"Sets the maximum number of events to read."）
       - id: query
         label: XPath 查询串（/q）
@@ -513,7 +513,7 @@ actions:
     output:
       mode: stream
       showCommandLine: true
-      resultNote: 实测 `qe System /c:3 /rd:true /f:text /q:"*[System[(Level=1 or Level=2)]]"` 退出码 0、3 条事件（首条 Event ID 36871、Source Schannel、Level Error）；同一查询不加 /c 命中 8 050 条、输出 3 367 610 字节。**这些事件说明等级过滤确实生效**（Level 一栏是 Error）。
+      resultNote: 实测 qe System /c:3 /rd:true /f:text /q:"*[System[(Level=1 or Level=2)]]" 退出码 0、3 条事件（首条 Event ID 36871、Source Schannel、Level Error）；同一查询不加 /c 命中 8 050 条、输出 3 367 610 字节。**这些事件说明等级过滤确实生效**（Level 一栏是 Error）。
     examples:
       - title: System 日志最近 50 条错误与严重事件
         args: ["qe", "System", "/c:50", "/rd:true", "/f:text", "/q:*[System[(Level=1 or Level=2)]]"]
@@ -556,7 +556,7 @@ actions:
     output:
       mode: stream
       showCommandLine: true
-      resultNote: 实测 `qe Application /c:2 /rd:true /f:text /q:"*[System[Provider[@Name='Chkdsk']]]"` 退出码 0、命中 2 条、4 540 字节；正文是完整报告（「Windows 已扫描文件系统并且没有发现问题。」「坏扇区 0 KB。」）。**没有 chkdsk 记录时退出码仍是 0、输出为空**——那不是命令失败。
+      resultNote: 实测 qe Application /c:2 /rd:true /f:text /q:"*[System[Provider[@Name='Chkdsk']]]" 退出码 0、命中 2 条、4 540 字节；正文是完整报告（「Windows 已扫描文件系统并且没有发现问题。」「坏扇区 0 KB。」）。**没有 chkdsk 记录时退出码仍是 0、输出为空**——那不是命令失败。
     examples:
       - title: 查最近的 chkdsk 报告（两类都查）
         args: ["qe", "Application", "/c:5", "/rd:true", "/f:text", "/q:*[System[Provider[@Name='Chkdsk']]]"]
@@ -577,7 +577,7 @@ actions:
         url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/wevtutil
         retrieved: "2026-09-29"
         appliesTo: Windows 10/11
-        note: 查询串形态依据官方 /q 一节；**等级取值与命中量来自实测**：`*[System[(Level=1 or Level=2)]]` 在 Application 日志命中 1 046 条，输出里 `Source` 是 Application Error / .NET Runtime / Microsoft-Windows-AppModel-State，Event ID 1000/1002/13。
+        note: 查询串形态依据官方 /q 一节；**等级取值与命中量来自实测**：*[System[(Level=1 or Level=2)]] 在 Application 日志命中 1 046 条，输出里 Source 是 Application Error / .NET Runtime / Microsoft-Windows-AppModel-State，Event ID 1000/1002/13。
     fields:
       - id: count
         label: 最多读几条（/c）
@@ -602,7 +602,7 @@ actions:
     output:
       mode: stream
       showCommandLine: true
-      resultNote: 实测 `qe Application /c:3 /rd:true /f:text /q:"*[System[(Level=1 or Level=2)]]"` 退出码 0、命中 3 条（首条 Event ID 1000、Source "Application Error"）；不加 /c 命中 1 046 条、647 271 字节。
+      resultNote: 实测 qe Application /c:3 /rd:true /f:text /q:"*[System[(Level=1 or Level=2)]]" 退出码 0、命中 3 条（首条 Event ID 1000、Source "Application Error"）；不加 /c 命中 1 046 条、647 271 字节。
     examples:
       - title: Application 日志最近 50 条错误
         args: ["qe", "Application", "/c:50", "/rd:true", "/f:text", "/q:*[System[(Level=1 or Level=2)]]"]
@@ -620,7 +620,7 @@ actions:
         url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/wevtutil
         retrieved: "2026-09-29"
         appliesTo: Windows 10/11
-        note: 查询串形态依据官方 /q 一节；**Level=3 就是 Warning 来自实测**：本机 `/q:"*[System[(Level=1 or Level=2) or (Level=3)]]"` 命中 15 775 条，而不含 (Level=3) 的同查询命中 8 050 条，差值 7 725 条即 Warning 档。
+        note: 查询串形态依据官方 /q 一节；**Level=3 就是 Warning 来自实测**：本机 /q:"*[System[(Level=1 or Level=2) or (Level=3)]]" 命中 15 775 条，而不含 (Level=3) 的同查询命中 8 050 条，差值 7 725 条即 Warning 档。
     fields:
       - id: count
         label: 最多读几条（/c）
@@ -645,7 +645,7 @@ actions:
     output:
       mode: stream
       showCommandLine: true
-      resultNote: 实测 `qe System /c:3 /rd:true /f:text /q:"*[System[(Level=3)]]"` 退出码 0。**这条查询的命中量很大**（本机 System 日志 Warning 约 7 725 条），不填条数会输出数十兆，见 NOTES.md §7.1。
+      resultNote: 实测 qe System /c:3 /rd:true /f:text /q:"*[System[(Level=3)]]" 退出码 0。**这条查询的命中量很大**（本机 System 日志 Warning 约 7 725 条），不填条数会输出数十兆，见 NOTES.md §7.1。
     examples:
       - title: System 日志最近 50 条警告
         args: ["qe", "System", "/c:50", "/rd:true", "/f:text", "/q:*[System[(Level=3)]]"]
@@ -663,7 +663,7 @@ actions:
         url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/wevtutil
         retrieved: "2026-09-29"
         appliesTo: Windows 10/11
-        note: 查询串形态依据官方 /q 一节；**Provider 名来自实测**：`*[System[Provider[@Name='Microsoft-Windows-WindowsUpdateClient']]]` 在 System 日志命中 479 条（本机），输出里 Source 为 Microsoft-Windows-WindowsUpdateClient、Event ID 19/43/44。
+        note: 查询串形态依据官方 /q 一节；**Provider 名来自实测**：*[System[Provider[@Name='Microsoft-Windows-WindowsUpdateClient']]] 在 System 日志命中 479 条（本机），输出里 Source 为 Microsoft-Windows-WindowsUpdateClient、Event ID 19/43/44。
     fields:
       - id: count
         label: 最多读几条（/c）
@@ -688,7 +688,7 @@ actions:
     output:
       mode: stream
       showCommandLine: true
-      resultNote: 实测 `qe System /c:3 /rd:true /f:text /q:"*[System[Provider[@Name='Microsoft-Windows-WindowsUpdateClient']]]"` 退出码 0、命中 3 条（Event ID 19/43/44）；不加 /c 命中 479 条、203 911 字节。
+      resultNote: 实测 qe System /c:3 /rd:true /f:text /q:"*[System[Provider[@Name='Microsoft-Windows-WindowsUpdateClient']]]" 退出码 0、命中 3 条（Event ID 19/43/44）；不加 /c 命中 479 条、203 911 字节。
     examples:
       - title: 最近的更新客户端事件
         args: ["qe", "System", "/c:30", "/rd:true", "/f:text", "/q:*[System[Provider[@Name='Microsoft-Windows-WindowsUpdateClient']]]"]
@@ -763,7 +763,7 @@ actions:
         required: true
         save: true
         placeholder: 例 System
-        help: 要导出的日志名，来自 `wevtutil el`。导出整个 System 日志实测有 20 MB 量级，建议配合下面的查询串只导出需要的部分。
+        help: 要导出的日志名，来自 wevtutil el。导出整个 System 日志实测有 20 MB 量级，建议配合下面的查询串只导出需要的部分。
         doc: official #parameters 的 {epl | export-log} <Path> <Exportfile>（"By default, you provide a log name for <Path>."）
       - id: targetFile
         label: 导出到哪个文件（.evtx）
@@ -824,7 +824,7 @@ actions:
         style: positional
         required: true
         placeholder: 例 Application
-        help: 要清空的日志名，来自 `wevtutil el`。**填 System 或 Application 会真的清掉本机的系统/应用日志记录**。名字不对会以退出码 15007 失败（不会"清空失败"以外的后果）。
+        help: 要清空的日志名，来自 wevtutil el。**填 System 或 Application 会真的清掉本机的系统/应用日志记录**。名字不对会以退出码 15007 失败（不会"清空失败"以外的后果）。
         doc: official #parameters 的 {cl | clear-log} <Logname>（"You can retrieve a list of log names by typing wevtutil el."）
       - id: backupFile
         label: 清空前先备份到（/bu）
@@ -867,7 +867,7 @@ actions:
         required: true
         save: true
         placeholder: 例 Microsoft-Windows-WindowsUpdateClient/Operational
-        help: 要改配置的日志名，来自 `wevtutil el`。**不要拿 System / Application / Security 试手**。官方还说明：若使用 /c（配置文件）就**不能**给日志名（日志名从配置文件里读）——本清单把两者做成"要么填日志名、要么用配置文件"，但没有做互斥校验（v1 的 visibleWhen 宿主尚未实现），请自己二选一，见 NOTES.md §9.2。
+        help: 要改配置的日志名，来自 wevtutil el。**不要拿 System / Application / Security 试手**。官方还说明：若使用 /c（配置文件）就**不能**给日志名（日志名从配置文件里读）——本清单把两者做成"要么填日志名、要么用配置文件"，但没有做互斥校验（v1 的 visibleWhen 宿主尚未实现），请自己二选一，见 NOTES.md §9.2。
         doc: official #parameters 的 {sl | set-log} <Logname>（"If option /c is specified, <LOG_NAME> should not be specified since it is read from the config file."）
       - id: enabled
         label: 启用还是停用（/e）
@@ -995,7 +995,7 @@ actions:
         advanced: true
         accept: [".xml"]
         placeholder: 例 C:\config.xml
-        help: 官方原文：/c "Specifies the path to a configuration file. This option will cause log properties to be read from the configuration file defined in <Config>. If you use this option, you must not specify a <Logname> parameter. The log name will be read from the configuration file."；而配置文件就是 `wevtutil gl <日志名> /f:xml` 的输出（官方 Remarks 一节给了完整样例）。**用了它就不要填上面的日志名**。
+        help: 官方原文：/c "Specifies the path to a configuration file. This option will cause log properties to be read from the configuration file defined in <Config>. If you use this option, you must not specify a <Logname> parameter. The log name will be read from the configuration file."；而配置文件就是 wevtutil gl <日志名> /f:xml 的输出（官方 Remarks 一节给了完整样例）。**用了它就不要填上面的日志名**。
         doc: official #options 的 /c:<Config> + #remarks 的配置文件样例
     output:
       mode: stream
@@ -1016,13 +1016,13 @@ actions:
     command: im
     danger: overwrite
     confirmText: 这会按清单文件里的声明**往系统里注册事件提供程序与日志**（会写注册表与元数据）。清单文件的内容不会被界面检查——请自己确认它来自你信任的来源。已存在的提供程序/日志会根据清单里的定义被更新。确定继续？
-    description: 从一个事件清单文件（`.man` / `.xml`，由开发者用 Windows Eventing SDK 编写）安装提供程序与日志。普通用户日常不需要它；它的存在是为了让"某个软件的事件源没注册上"这种情况有命令行可查。
+    description: 从一个事件清单文件（.man / .xml，由开发者用 Windows Eventing SDK 编写）安装提供程序与日志。普通用户日常不需要它；它的存在是为了让"某个软件的事件源没注册上"这种情况有命令行可查。
     sources:
       - title: wevtutil 官方参考 —— {im | install-manifest} <Manifest> [/rf] [/mf] [/pf]
         url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/wevtutil
         retrieved: "2026-09-29"
         appliesTo: Windows 10/11
-        note: 官方原文："{im | install-manifest} <Manifest> [/{rf | resourceFilePath}:value] [/{mf | messageFilePath}:value] [/{pf | parameterFilePath}:value] Installs event publishers and logs from a manifest."；/rf、/mf、/pf 分别替换清单里 Provider 元素的 ResourceFileName、MessageFileName、ParameterFileName 属性，"The value is the full path to the mentioned file."。官方示例 "wevtutil im myManifest.xml"（本机 `im /?` 的示例写的是 myManifest.man —— 同一件事，扩展名两种都可以）。**本动作未实跑**，见 NOTES.md §8.4。
+        note: 官方原文："{im | install-manifest} <Manifest> [/{rf | resourceFilePath}:value] [/{mf | messageFilePath}:value] [/{pf | parameterFilePath}:value] Installs event publishers and logs from a manifest."；/rf、/mf、/pf 分别替换清单里 Provider 元素的 ResourceFileName、MessageFileName、ParameterFileName 属性，"The value is the full path to the mentioned file."。官方示例 "wevtutil im myManifest.xml"（本机 im /? 的示例写的是 myManifest.man —— 同一件事，扩展名两种都可以）。**本动作未实跑**，见 NOTES.md §8.4。
     fields:
       - id: manifest
         label: 清单文件路径
@@ -1031,7 +1031,7 @@ actions:
         required: true
         accept: [".man", ".xml"]
         placeholder: 例 D:\sdk\myManifest.man
-        help: 官方说明：<Manifest> 是事件清单文件的路径；清单里定义的**全部**提供程序与日志都会被安装。清单格式见官方指向的 Windows Eventing SDK（MSDN）。**注意**：官方语法行把 /rf /mf /pf 写在方括号外、看起来像必需项，但官方示例 `wevtutil im myManifest.xml` 一个都没给、且本机 `/im /?` 的语法行 `wevtutil { im | install-manifest } <MANIFEST> [/OPTION:VALUE ...]` 把它们都放进可选位置——按"以官方示例为准"处理成可选，见 NOTES.md §6.4。
+        help: 官方说明：<Manifest> 是事件清单文件的路径；清单里定义的**全部**提供程序与日志都会被安装。清单格式见官方指向的 Windows Eventing SDK（MSDN）。**注意**：官方语法行把 /rf /mf /pf 写在方括号外、看起来像必需项，但官方示例 wevtutil im myManifest.xml 一个都没给、且本机 /im /? 的语法行 wevtutil { im | install-manifest } <MANIFEST> [/OPTION:VALUE ...] 把它们都放进可选位置——按"以官方示例为准"处理成可选，见 NOTES.md §6.4。
         doc: official #parameters 的 {im | install-manifest} <Manifest>（"File path to an event manifest. All publishers and logs defined in the manifest will be installed."）
       - id: resourceFilePath
         label: 替换资源文件路径（/rf）
