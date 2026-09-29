@@ -1,7 +1,7 @@
 # icacls 工具包 —— 实测记录
 
 > **本批共用事实**（Windows 自带命令的一般性质、OEM 编码、`/?` 的退出码与流向差异等）见
-> [`docs/ai/windows-commands.md`](../../docs/ai/windows-commands.md)。
+> ``docs/ai/windows-commands.md``。
 > **但 icacls 有几处与已有的 Windows 包不同，别照抄它们的结论**：
 > ① 文档是**一页到底**（本机帮助也只有一页，没有子命令）；
 > ② **路径参数必须是最前面的 token**——把带取值的开关写到路径之前会直接 exit 87（§7.6）；

@@ -2,7 +2,7 @@
 
 > 目标程序：`C:\Windows\System32\NETSTAT.EXE`（文件版本 10.0.26100.8521）—— Windows 自带。
 > 清单：动作 8 个 / 字段 19 个 / 字段出处标注 **100%**
-> **公共事实见 [`docs/ai/windows-commands.md`](../../docs/ai/windows-commands.md)**。
+> **公共事实见 ``docs/ai/windows-commands.md``**。
 > 实测环境：Windows 11 `10.0.26200`，账号 `<机器名>\<用户名>`（非管理员）。
 
 ---

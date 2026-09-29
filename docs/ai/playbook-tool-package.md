@@ -502,3 +502,18 @@ git push
 - [ ] `uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py` 全绿
 - [ ] NOTES 写全：验了什么 / 没验什么 / **为什么没验** / 与官方文档对不上的地方
 - [ ] 临时对象申报：建了什么、何时删的、**怎么复核**
+
+---
+
+---
+
+## 相关文档
+
+| 文档 | 讲什么 |
+|---|---|
+| ``AGENTS.md`` | 硬规则 R1–R7、接手顺序、命令速查、文档地图（**入口**） |
+| [`docs/spec/manifest-v1.md`](../spec/manifest-v1.md) + ``schema.json`` | 清单规范（字段、风格、会话型、三级风险、kind） |
+| [`docs/ai/playbook-tool-package.md`](playbook-tool-package.md) | 做工具包的逐步流程 + **§10 坑清单 + §11 检查单** |
+| [`docs/ai/windows-commands.md`](windows-commands.md) | Windows 自带命令的公共实测结论 |
+| [`docs/reference/README.md`](../reference/README.md) | 我们提取的事实性数据放哪、第三方原文去哪 |
+| `plugins/<id>/NOTES.md` | 该包自己的实测记录（验了什么 / 没验什么） |

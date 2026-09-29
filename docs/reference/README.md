@@ -70,3 +70,18 @@ pwsh -File scripts/extract-7zip-matrix.ps1
   这是**逐命令的开关白名单**，正是 `7zip-switch-matrix.json` / `_switches.json` 的来源。
   白名单只列"有独立帮助页"的开关（如 `-ba` 没有独立页面，只在示例里出现），
   所以提取时要同时收"白名单"与"页面任何位置提到过的开关"两类。
+
+---
+
+---
+
+## 相关文档
+
+| 文档 | 讲什么 |
+|---|---|
+| ``AGENTS.md`` | 硬规则 R1–R7、接手顺序、命令速查、文档地图（**入口**） |
+| [`docs/spec/manifest-v1.md`](../spec/manifest-v1.md) + ``schema.json`` | 清单规范（字段、风格、会话型、三级风险、kind） |
+| [`docs/ai/playbook-tool-package.md`](../ai/playbook-tool-package.md) | 做工具包的逐步流程 + **§10 坑清单 + §11 检查单** |
+| [`docs/ai/windows-commands.md`](../ai/windows-commands.md) | Windows 自带命令的公共实测结论 |
+| [`docs/reference/README.md`](README.md) | 我们提取的事实性数据放哪、第三方原文去哪 |
+| `plugins/<id>/NOTES.md` | 该包自己的实测记录（验了什么 / 没验什么） |

@@ -1,7 +1,7 @@
 # schtasks 工具包 —— 实测记录
 
 > **本批共用事实**（Windows 自带命令的一般性质、OEM 编码、`/?` 的流差异等）见
-> [`docs/ai/windows-commands.md`](../../docs/ai/windows-commands.md)。
+> ``docs/ai/windows-commands.md``。
 > **但 schtasks 有三处与第一批 12 个包不同，别照抄那批的结论**：
 > ① 输出编码是 **UTF-8**（不是 OEM/cp936）；② 帮助文本是**英文**（不是中文）；
 > ③ 官方文档是**一页索引 + 六个子页**（不是"一页到底"）。

@@ -1,7 +1,7 @@
 # wevtutil 工具包 —— 实测记录
 
 > **本批共用事实**（Windows 自带命令的一般性质、OEM 编码、`/?` 的退出码与流向差异等）见
-> [`docs/ai/windows-commands.md`](../../docs/ai/windows-commands.md)。
+> ``docs/ai/windows-commands.md``。
 > **但 wevtutil 有几处与第一批 12 个包不同，别照抄那批的结论**：
 > ① 官方文档是**一页到底**（12 条命令全在一页里，没有子页）；
 > ② 输出编码实测是 **OEM(936)**，但**纯 ASCII 的输出（`el`/`ep`/`gl`）根本看不出编码**，

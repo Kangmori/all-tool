@@ -17,3 +17,9 @@
 ```powershell
 uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py
 ```
+
+---
+
+**本仓库的文档地图**见 ``AGENTS.md``（Claude Code 用 `CLAUDE.md`）的 §1 与 §4；
+工具包开发看 ``docs/ai/playbook-tool-package.md``，
+清单规范看 ``docs/spec/manifest-v1.md``。

@@ -16,7 +16,7 @@
 | 优先级 | 来源 | 落盘位置 | 说明 |
 |---|---|---|---|
 | 1 | **官方 CLI 参考文档** <https://docs.astral.sh/uv/reference/cli/> | `docs/reference/uv-docs/cli-reference.html`（原始 HTML，1 165 371 字节）+ `cli-reference.md`（pandoc 3.11 转出，832 826 字节） | 每个命令都有独立锚点（`#uv-sync`、`#uv-pip-install` …）。清单里每个字段的 `doc` 都指向该锚点。 |
-| 2 | **本机 uv 0.11.15 的内置帮助** | `docs/reference/uv-help/`（49 个命令的 `.txt` + `index.json` + `_meta.json`） | 由 [`scripts/fetch-uv-help.ps1`](../../scripts/fetch-uv-help.ps1) 抓取。与已安装版本严格对应，且比官方长文档紧凑（每个开关都带默认值与取值说明）。 |
+| 2 | **本机 uv 0.11.15 的内置帮助** | `docs/reference/uv-help/`（49 个命令的 `.txt` + `index.json` + `_meta.json`） | 由 ``scripts/fetch-uv-help.ps1`` 抓取。与已安装版本严格对应，且比官方长文档紧凑（每个开关都带默认值与取值说明）。 |
 
 抓取方式（可复现）：
 
@@ -481,7 +481,7 @@ uv 这条事实**不存在**，只能实测。规范没有说明"文档没写时
 
 ## 10. 真机冒烟测试结果
 
-测试脚本：[`scripts/smoke-uv.ps1`](../../scripts/smoke-uv.ps1)（可重跑一次复现本节全部数字）。
+测试脚本：``scripts/smoke-uv.ps1``（可重跑一次复现本节全部数字）。
 它做两件事：逐条实跑清单里的只读 examples，以及用清单里的正则实测 `versionPattern`。
 
 ### 10.1 校验器（先跑，必须全绿）
@@ -682,7 +682,7 @@ if ($Argv[0..($p.Count - 1)] -eq $p) { return $true }  # ← 错
 
 1. **一个"只读 examples 白名单 + 自检"的骨架**（对应 §11.1 第 5 条），
    并写明"冒烟脚本的判定逻辑本身要自检"这条教训。本次的
-   [`scripts/smoke-uv.ps1`](../../scripts/smoke-uv.ps1) 可以直接拿来当模板：
+   ``scripts/smoke-uv.ps1`` 可以直接拿来当模板：
    白名单用一元逗号 `,@(...)` 保住数组边界，判定用"NUL 连接后比字符串"而不是 `-eq`，
    外加 `$MustNeverRun` 自检（漏一条就中止）。
    **特别提醒**：PowerShell 的 `-eq` 用在数组上是**过滤**而不是相等

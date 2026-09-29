@@ -26,16 +26,42 @@ dotnet build src\AllTool.slnx
 pwsh -File scripts/publish-app.ps1
 ```
 
-## 已经带的工具包
+## 已经带的工具包（23 个 / 282 个动作 / 761 个参数字段）
 
-| 工具包 | 动作数 | 说明 |
+| ⚪ 你自己装的工具 | 动作 | 字段 |
 |---|---|---|
-| 7-Zip | 11 | 压缩 / 解压 / 查看 / 校验 / 哈希 / 维护归档 |
-| Scoop | 40 | 应用、桶、缓存、Shim、配置、别名的查询与管理 |
-| uv | 26 | Python 项目、环境、包、版本、全局工具 |
-| **Windows 自带命令 12 个** | 70 | ping、ipconfig、tracert、nslookup、netstat、tasklist、systeminfo、chkdsk、sfc、robocopy、cleanmgr、powercfg |
+| 7-Zip | 11 | 64 |
+| Scoop | 40 | 80 |
+| uv | 26 | 125 |
 
-合计 **147 个动作 / 419 个参数字段**，每个字段都标注了官方文档出处（覆盖率 100%）。
+| 🔵 Windows 自带（开箱即用） | 动作 | 字段 |
+|---|---|---|
+| certutil | 10 | 23 |
+| chkdsk | 5 | 11 |
+| cleanmgr | 7 | 7 |
+| curl | 14 | 50 |
+| icacls | 16 | 57 |
+| ipconfig | 11 | 12 |
+| netstat | 8 | 19 |
+| nslookup | 3 | 11 |
+| ping | 3 | 13 |
+| powercfg | 14 | 23 |
+| robocopy | 4 | 20 |
+| schtasks | 12 | 41 |
+| sfc | 3 | 4 |
+| systeminfo | 3 | 6 |
+| tar | 11 | 37 |
+| tasklist | 5 | 11 |
+| tracert | 4 | 13 |
+| wevtutil | 18 | 49 |
+| winget | 25 | 73 |
+
+| 🔴 高危工具（含不可逆操作） | 动作 | 字段 |
+|---|---|---|
+| DiskPart | 29 | 12 |
+
+每个参数字段都标注了官方文档出处（**覆盖率 100%**）。
+工具包按类型在界面上有图标区分：⚪ 你装的 / 🔵 系统自带 / 🟡 交互式 / 🔴 高危。
 
 ## 它做了哪些"应该有的"事
 
@@ -57,10 +83,25 @@ pwsh -File scripts/publish-app.ps1
 
 ## 给 AI 智能体看的文档
 
-本仓库的**唯一入口是 [`AGENTS.md`](AGENTS.md)**：硬规则、接手顺序、文档地图。
-机器可读状态在 [`本机专属库的 host-dev/project-state.json`](本机专属库的 host-dev/project-state.json)，
-已知陷阱（P1–P28）在 [`本机专属库的 host-dev/development.md`](本机专属库的 host-dev/development.md)。
+本仓库的**唯一入口是 [`AGENTS.md`](AGENTS.md)**：硬规则 R1–R7、接手顺序、命令速查、文档地图。
+如果你的工具是 Claude Code 或 GitHub Copilot，它们各自有指路文件（[`CLAUDE.md`](CLAUDE.md)、
+[`.github/copilot-instructions.md`](.github/copilot-instructions.md)），内容都指向 `AGENTS.md`，不要在那里找项目说明。
+
 设计目标是：**任何一个不了解本项目的 AI 智能体，读完就能安全地继续开发。**
+
+## 文档地图
+
+| 想了解 | 看 |
+|---|---|
+| 硬规则、接手顺序、命令速查 | [`AGENTS.md`](AGENTS.md) |
+| 清单规范（字段、风格、会话型、三级风险、kind） | [`docs/spec/manifest-v1.md`](docs/spec/manifest-v1.md) + [`manifest-v1.schema.json`](docs/spec/manifest-v1.schema.json) |
+| **怎么给一个软件做工具包**（逐步流程） | [`docs/ai/playbook-tool-package.md`](docs/ai/playbook-tool-package.md) |
+| **踩过的坑汇总**（27 条）与新增工具包检查单 | 同上 **§10 / §11** |
+| Windows 自带命令的公共实测结论 | [`docs/ai/windows-commands.md`](docs/ai/windows-commands.md) |
+| 我们提取的事实性数据（开关矩阵/清单） | [`docs/reference/README.md`](docs/reference/README.md) |
+| 每个工具包自己的实测记录 | `plugins/<id>/NOTES.md` |
+
+> 宿主程序（WinUI 3 那套 C#）的开发手册、项目状态与架构决策**不在本仓库**（见 `AGENTS.md` §5）。
 
 ## 许可
 

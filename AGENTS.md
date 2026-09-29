@@ -81,3 +81,11 @@ scripts/                       校验器、抓取脚本、冒烟脚本、发布�
 仓库根目录的 `.local-vault`（**不入库**）指向它；**从那里往本仓库搬内容必须先脱敏**。
 
 判断口径：**"换一台机器还成立吗？"** 成立 → 进本仓库（这是知识）；不成立 → 进本机专属库（这是环境事实）。
+
+## 6. 其它指路文件
+
+| 文件 | 作用 |
+|---|---|
+| `CLAUDE.md` / `.github/copilot-instructions.md` | Claude Code / GitHub Copilot 的指路文件，**内容都只是指向本文件**，不要在那里找项目说明 |
+| `README.md` | 面向使用者：怎么下载/构建、带了哪些工具包、文档地图 |
+| `docs/spec/manifest-v1.schema.json` | 清单的 JSON Schema（校验器与编辑器都用它） |

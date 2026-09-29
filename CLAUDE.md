@@ -12,3 +12,9 @@
 4. `本机专属库的 host-dev/development.md` —— 架构、环境事实、已知陷阱（**动手前必读陷阱清单**）
 5. 若要新增工具包 → `docs/ai/playbook-tool-package.md`
 6. 若要改清单规范 → `docs/spec/manifest-v1.md`
+
+---
+
+**本仓库的文档地图**见 ``AGENTS.md``（Claude Code 用 `CLAUDE.md`）的 §1 与 §4；
+工具包开发看 ``docs/ai/playbook-tool-package.md``，
+清单规范看 ``docs/spec/manifest-v1.md``。

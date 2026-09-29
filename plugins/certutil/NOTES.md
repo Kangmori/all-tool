@@ -1,7 +1,7 @@
 # certutil 工具包 —— 实测记录
 
 > **本批共用事实**（Windows 自带命令的一般性质、OEM 编码、`/?` 的退出码与流向差异等）见
-> [`docs/ai/windows-commands.md`](../../docs/ai/windows-commands.md)。
+> ``docs/ai/windows-commands.md``。
 > **但 certutil 有几处与最早那批 12 个包、也与 wevtutil 不同，别照抄它们的结论**：
 > ① 官方文档是**一页到底**（每个动词一个 `### -verb` 小节，没有子页）；
 > ② 输出编码实测是 **OEM(936)**，但**纯 ASCII 的输出判不出来**，必须用带中文标签的

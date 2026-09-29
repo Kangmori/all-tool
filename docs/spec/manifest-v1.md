@@ -361,3 +361,18 @@ uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py
 - **scoop 工具包**：第二个样板，用来检验这套规范能否表达 28 个命令、子命令、以及需要提权的操作。scoop 的帮助输出是结构化的（`scoop help` 返回对象），且参数依据可直接来自本机安装版本。
 - **宿主壳（WinUI 3）**：进程执行引擎 → 表单生成器 → 流式日志与进度。先打通"7z 解压一个包，有进度、能取消"这条垂直切片。
 - **GitHub Actions**：把上面那个校验命令接进 CI（`windows-latest` 已实测可编译 WinUI 3）。
+
+---
+
+---
+
+## 相关文档
+
+| 文档 | 讲什么 |
+|---|---|
+| ``AGENTS.md`` | 硬规则 R1–R7、接手顺序、命令速查、文档地图（**入口**） |
+| [`docs/spec/manifest-v1.md`](manifest-v1.md) + ``schema.json`` | 清单规范（字段、风格、会话型、三级风险、kind） |
+| [`docs/ai/playbook-tool-package.md`](../ai/playbook-tool-package.md) | 做工具包的逐步流程 + **§10 坑清单 + §11 检查单** |
+| [`docs/ai/windows-commands.md`](../ai/windows-commands.md) | Windows 自带命令的公共实测结论 |
+| [`docs/reference/README.md`](../reference/README.md) | 我们提取的事实性数据放哪、第三方原文去哪 |
+| `plugins/<id>/NOTES.md` | 该包自己的实测记录（验了什么 / 没验什么） |

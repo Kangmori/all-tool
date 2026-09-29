@@ -1,7 +1,7 @@
 # tar（bsdtar）工具包 —— 实测记录
 
 > 共享事实（Windows 自带命令的通用坑：退出码不是"0 = 成功"、帮助可能写到 stderr、输出编码不统一、
-> URL 不能猜规律）见 [`docs/ai/windows-commands.md`](../../docs/ai/windows-commands.md)。
+> URL 不能猜规律）见 ``docs/ai/windows-commands.md``。
 > 本文件只写 tar 特有的部分。
 
 ## 1. 参数知识来源（R1 / R2）

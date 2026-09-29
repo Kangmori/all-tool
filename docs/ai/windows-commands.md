@@ -446,3 +446,18 @@ Windows 自带命令的版本在 exe 的文件版本资源里（例如 `ping.exe
 | `shutdown` | 会改系统状态（关机/重启），**建议永不做**或只做 `/a`（取消关机） |
 | `curl` / `tar` | Windows 10 1803+ 自带，跨平台工具，与 7zip 同类 |
 | cmd 内建命令（`dir`/`echo`/`copy`…） | 写法已验证（`cmd.exe` + `/c`），但输出编码与错误码规律更杂，值得单独一批 |
+
+---
+
+---
+
+## 相关文档
+
+| 文档 | 讲什么 |
+|---|---|
+| ``AGENTS.md`` | 硬规则 R1–R7、接手顺序、命令速查、文档地图（**入口**） |
+| [`docs/spec/manifest-v1.md`](../spec/manifest-v1.md) + ``schema.json`` | 清单规范（字段、风格、会话型、三级风险、kind） |
+| [`docs/ai/playbook-tool-package.md`](playbook-tool-package.md) | 做工具包的逐步流程 + **§10 坑清单 + §11 检查单** |
+| [`docs/ai/windows-commands.md`](windows-commands.md) | Windows 自带命令的公共实测结论 |
+| [`docs/reference/README.md`](../reference/README.md) | 我们提取的事实性数据放哪、第三方原文去哪 |
+| `plugins/<id>/NOTES.md` | 该包自己的实测记录（验了什么 / 没验什么） |
