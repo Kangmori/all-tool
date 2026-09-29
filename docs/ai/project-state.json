@@ -43,7 +43,9 @@
     "vsWorkloadId": "WinUI 开发工作负载的 id 是 Microsoft.VisualStudio.Workload.Universal（显示名 WinUI 应用程序开发）。这是历史改名遗留，不存在名为 WinUI 的 id。",
     "consoleEncoding": "pwsh 捕获含中文的输出前需设 $OutputEncoding = [Console]::OutputEncoding = [Text.Encoding]::UTF8，否则中文乱码。",
     "workspaceAclLesson": "工作区若缺显式 WRITE_DAC，沙箱类写入会被拒绝。遇到时用 icacls 给当前用户完全控制（具体命令见 development.md 的 P11）；**不要把本机的路径与账号写进文档**。",
-    "privacy": "本仓库是公开的：文档里不要写本机用户名、机器名、绝对路径、个人安装目录与邮箱。需要机器相关的事实时，写「用 scripts/check-env.ps1 现测」，而不是抄一份快照进来。"
+    "privacy": "本仓库是公开的：文档里不要写本机用户名、机器名、绝对路径、个人安装目录与邮箱。需要机器相关的事实时，写「用 scripts/check-env.ps1 现测」，而不是抄一份快照进来。",
+    "workspaces": "权威工作区只有一个（历史与 GitHub 一致的那个克隆）；改名前的旧克隆必须切断推送能力（git remote remove origin），否则它里面那条含第三方文档快照的旧历史可能被 force push 送回公开仓库。第三方文档快照放在不受版本控制的地方，只在本地核对时用。",
+    "copyrightBoundary": "可以入库：自己的文档、自己提取的事实性数据（开关矩阵/清单）、官方文档的链接与短引用。不可入库：第三方文档的整篇副本（CHM 提取文本、wiki 克隆、Learn 页面 HTML）、软件自带帮助文件本身。判断口径：这是我做的（含提取出的事实）还是我抄的？"
   },
   "artifacts": [
     {

@@ -20,6 +20,7 @@ id: ipconfig
 name: ipconfig
 manifestVersion: 0.1.0
 appVersion: Windows 10/11 自带（随系统版本发布）
+summary: 查看与刷新 IP 配置
 description: 显示与刷新 TCP/IP 配置：IP 地址、子网掩码、默认网关、DNS 客户端缓存。Windows 自带，无需安装。
 homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ipconfig
 license: 随 Windows 操作系统分发（微软最终用户许可协议）
@@ -193,6 +194,7 @@ actions:
 
   # ================================================================= 地址信息
   - id: release
+    execution: info
     category: 地址信息
     title: 释放 DHCP 地址（/release）
     description: 向 DHCP 服务器发送 DHCPRELEASE，释放并丢弃当前 IPv4 地址租约。
@@ -240,6 +242,7 @@ actions:
 
   # ================================================================= 地址信息
   - id: release6
+    execution: info
     category: 地址信息
     title: 释放 DHCPv6 地址（/release6）
     description: 向 DHCPv6 服务器发送 DHCPRELEASE，释放当前 IPv6 地址租约。

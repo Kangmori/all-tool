@@ -29,6 +29,7 @@ id: cleanmgr
 name: cleanmgr
 manifestVersion: 0.1.0
 appVersion: Windows 10/11 自带（随系统版本发布）
+summary: 清理磁盘空间
 description: 磁盘清理工具。可以手动选择要清理的项目，也可以把选择结果存成编号（/sageset + /sagerun）以后无人值守地重复执行。Windows 自带，是 GUI 程序。
 homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cleanmgr
 license: 随 Windows 操作系统分发（微软最终用户许可协议）
@@ -84,6 +85,7 @@ actions:
 
   # ================================================================= 交互设置
   - id: sageset
+    execution: terminal
     category: 交互设置
     title: 打开设置对话框并保存清理项（/sageset）
     description: 弹出磁盘清理的设置对话框，勾选要清理的项目；选择结果会存进注册表，用编号 n 以后引用。
@@ -124,6 +126,7 @@ actions:
 
   # ================================================================= 执行清理
   - id: sagerun
+    execution: terminal
     category: 执行清理
     title: 按已保存的编号执行清理（/sagerun）
     description: 按之前 /sageset:n 保存的勾选执行磁盘清理。**会真的删除文件**。
@@ -166,6 +169,7 @@ actions:
 
   # ================================================================= 执行清理
   - id: tuneup
+    execution: terminal
     category: 执行清理
     title: 对同一编号先设置再执行（/tuneup）
     description: 官方文档：对同一个 n 依次执行 /sageset 与 /sagerun。也就是打开对话框让你勾选，然后立刻按这个勾选清理。
@@ -206,6 +210,7 @@ actions:
 
   # ================================================================= 自动清理
   - id: lowdisk
+    execution: terminal
     category: 自动清理
     title: 用默认设置清理（/lowdisk）
     description: 官方文档：用默认设置运行。会在**所有驱动器**上按默认勾选清理。可能仍有用户提示。
@@ -234,6 +239,7 @@ actions:
 
   # ================================================================= 自动清理
   - id: verylowdisk
+    execution: terminal
     category: 自动清理
     title: 用默认设置清理且不询问（/verylowdisk）
     description: 官方文档：用默认设置运行，且**没有任何用户提示**。适合无人值守脚本 —— 也正因为如此它最不该被随手点。
@@ -262,6 +268,7 @@ actions:
 
   # ================================================================= 自动清理
   - id: autoclean
+    execution: terminal
     category: 自动清理
     title: 删除升级 Windows 后残留的文件（/autoclean）
     description: 官方文档：自动删除升级 Windows 之后留下的文件（通常就是旧的 Windows 安装）。
@@ -290,6 +297,7 @@ actions:
 
   # ================================================================= 预览
   - id: drive-report
+    execution: terminal
     category: 预览
     title: 打开指定驱动器的清理对话框（/d）
     description: 打开指定驱动器的磁盘清理对话框，让你先看看有哪些项目、各占多少空间。只弹对话框，不执行清理。

@@ -14,6 +14,13 @@ public sealed class ToolManifest
     public string? ManifestVersion { get; init; }
     public string? AppVersion { get; init; }
     public string? Description { get; init; }
+
+    /// <summary>
+    /// 一句话说明这个软件是干什么的（鼠标悬停在工具包条目上时显示）。
+    /// 写不出十个字以内就别写——界面会退回用 <see cref="Description"/> 的第一句。
+    /// </summary>
+    public string? Summary { get; init; }
+
     public string? Homepage { get; init; }
     public string? License { get; init; }
 
@@ -124,6 +131,24 @@ public sealed class ManifestAction
 
     /// <summary>把工具包级的默认值算进来，得到这个动作最终是否需要管理员。</summary>
     public bool RequiresAdminEffective(bool packageDefault) => RequiresAdmin ?? packageDefault;
+
+    /// <summary>
+    /// 这个动作怎么执行：<c>run</c>（默认，宿主直接跑并捕获输出）、
+    /// <c>info</c>（宿主**不执行**，只显示命令行并提供复制/在终端打开）、
+    /// <c>terminal</c>（需要交互或会弹窗，直接在真终端里打开）。
+    ///
+    /// 见规范 §2.6。判断标准是"这一步该不该由工具替你做决定"，
+    /// 而不是"命令危不危险"——例如 ipconfig /release 会切断网络，
+    /// 工具替用户按下回车并不比让他自己按更好。
+    /// </summary>
+    public string? Execution { get; init; }
+
+    /// <summary>规范化后的执行方式：没写就是 <c>run</c>。</summary>
+    public string ExecutionOrDefault =>
+        string.IsNullOrWhiteSpace(Execution) ? "run" : Execution.Trim().ToLowerInvariant();
+
+    /// <summary>宿主是否会直接执行它。</summary>
+    public bool HostRunsIt => ExecutionOrDefault == "run";
 
     /// <summary>执行完之后可以推荐的下一步（见 <see cref="NextStepSpec"/>）。</summary>
     public List<NextStepSpec>? NextSteps { get; init; }

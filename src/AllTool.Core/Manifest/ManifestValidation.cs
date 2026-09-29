@@ -92,6 +92,11 @@ public static class ManifestValidation
                 errors.Add($"{where}：缺少 command（没有子命令的工具请显式写 command: \"\"）");
             }
 
+            if (action.ExecutionOrDefault is not ("run" or "info" or "terminal"))
+            {
+                errors.Add($"{where}：execution '{action.Execution}' 不是合法值（只能是 run / info / terminal）");
+            }
+
             if (action.Sources is null || action.Sources.Count == 0)
             {
                 errors.Add($"{where}：至少要有一条 sources（参数依据）");

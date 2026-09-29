@@ -14,6 +14,7 @@ id: 7zip
 name: 7-Zip
 manifestVersion: 0.1.0
 appVersion: "26.03"
+summary: 压缩与解压
 description: 7-Zip 的命令行版本。压缩、解压、查看、测试、计算哈希。
 homepage: https://www.7-zip.org/
 license: LGPL-2.1-or-later（unRAR 部分另有不得用于开发 RAR 压缩器的限制条款）

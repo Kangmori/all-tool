@@ -92,6 +92,10 @@
       "items": {
         "$ref": "#/$defs/action"
       }
+    },
+    "summary": {
+      "type": "string",
+      "description": "一句话说明这个软件是干什么的（鼠标悬停在工具包条目上时显示）。写不出十个字以内就别写，界面会退回用 description。"
     }
   },
   "$defs": {
@@ -339,6 +343,14 @@
         "requiresAdmin": {
           "type": "boolean",
           "description": "这个动作是否需要管理员权限。不写则跟随 runtime.requiresAdmin。宿主会在界面上标出来，并在以普通权限执行前给出提示。"
+        },
+        "execution": {
+          "enum": [
+            "run",
+            "info",
+            "terminal"
+          ],
+          "description": "这个动作怎么执行。run（默认）= 宿主直接跑并捕获输出；info = 宿主**不执行**，只显示命令行、提供复制与「在终端中打开」，用于风险明显大于收益的系统级命令（例如会切断网络的 ipconfig /release）；terminal = 需要交互或会弹窗，直接在真终端里打开（例如 cleanmgr）。"
         }
       }
     },

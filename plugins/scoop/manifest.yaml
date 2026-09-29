@@ -19,6 +19,7 @@ id: scoop
 name: Scoop
 manifestVersion: "0.1.0"
 appVersion: "0.5.3"
+summary: 安装与管理软件
 description: "Scoop —— Windows 上的命令行安装器（Git 风格）。管理 bucket、安装/更新/卸载应用、维护 shim、查看下载缓存。"
 homepage: https://scoop.sh/
 license: "Unlicense 或 MIT（软件自带 LICENSE 的 SPDX 标识：UNLICENSE or MIT）"
