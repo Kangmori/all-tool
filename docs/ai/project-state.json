@@ -750,6 +750,12 @@
       "task": "工具包类型标识（kind）：系统 / 交互式 / 高危 / 用户，一眼可辨",
       "doneAt": "2026-09-29",
       "evidence": "产品负责人提议：不同工具包类型用字体或标识区分（**只改显示名称**）。新增清单字段 kind（user 默认 / system / interactive / dangerous）与规范 §2.10；显示规则：system → 🔵 细体、interactive → 🟡 粗体、dangerous → 🔴 斜体、user → 默认；悬停提示补一句类型说明。判断口径：同时符合多条时取更需要注意的那条（dangerous > interactive > system > user）。12 个 Windows 自带包标 system、cleanmgr 标 interactive、7-Zip/Scoop/uv 保持默认 user。界面实测：🔵 11 个、🟡 1 个、🔴 0 个（diskpart 尚未加入）、无标记 3 个。"
+    },
+    {
+      "id": "N23",
+      "task": "会话型工具包落地：diskpart（29 动作，三级风险）",
+      "doneAt": "2026-09-29",
+      "evidence": "plugins/diskpart：会话（脚本重放）+ 状态门控（disk/volume/partition）+ 三级风险。参数全部来自 Microsoft Learn 逐页核对；发现 list disk / create partition primary 等**没有独立页**，语法与位置参数取自 create 页的官方示例与参数表；也发现 .../expand 是文件解压命令的页面（diskpart 扩卷是 extend），已避开。界面实测：🔴 标记、会话状态条、requires 未满足时「执行」置灰 + 主面板写明原因、无 requires 的动作可点、info 级动作显示宿主不执行。校验 16/16；交付包 231 MB 含 16 个工具包。**未验证**：需要管理员的成功路径（本机非管理员，diskpart 启动即被拒），已把复核清单写进 plugins/diskpart/NOTES.md。"
     }
   ],
   "plugins": [
@@ -980,16 +986,17 @@
       "id": "N20",
       "task": "会话型工具包（DiskPart 那种「灰显 + 选中后才允许」）—— 设计已写好，待产品负责人确认后开工",
       "why": "产品负责人提出的交互式命令方案：动作要能有状态门控（select disk 之后才允许 clean），而且灰显要能说清原因。现有「一个动作一次进程」的模型做不到——diskpart 的选择状态在进程内部。",
-      "how": "设计见 docs/ai/proposal-session-mode.md（**实现方式是脚本重放**，不是长驻进程）。S1–S3 已完成，下一步就是 S4：写 plugins/diskpart/manifest.yaml，并用它把灰显 → 选择 → 解锁这条链路在界面上验收。",
+      "how": "设计见 docs/ai/proposal-session-mode.md（实现方式是脚本重放）。S1–S4 已完成并推送。要继续的话，优先级建议：① 提权复核 diskpart 的成功路径并订正正则；② 把会话机制用到第二个程序（netsh / sqlite3）验证通用性；③ 回填 N19（第二批 Windows 命令）与 N12（uv 接进漂移检测）。",
       "doneWhen": "S1–S3 通过各自验收（含「确认短语打错就不执行」），S4 的破坏性动作逐条人工核对文案",
       "priority": 1,
       "blockedOn": "设计第 7 节的三个问题要产品负责人确认：逐字确认短语、是否真做 diskpart、会话是否显式开始",
-      "status": "进行中（S1、S2 完成；S3 宿主接线完成；S4 diskpart 清单未开始）",
+      "status": "**已完成（S1–S4）**，但成功路径待管理员环境复核",
       "progress": {
-        "S1 规范与 schema": "已完成（§2.8 会话与状态门控、§2.9 三级风险、§2.10 kind 类型标识；schema 有 session/state、sessionCommand/establishes/requires/requiresHint/confirmPhrase、kind）。",
-        "S2 Core": "已完成：SessionScriptBuilder（脚本重放 + {字段} 替换）、SessionStateUpdater（按 successPattern/errorPattern 推导状态）、SessionSpec/SessionStateSpec、11 个单测。",
-        "S3 宿主": "**接线已完成**：会话状态条（作用目标一眼可见）、换工具包清空状态、动作灰显门控 + 悬浮说明原因、命令行预览显示完整脚本（R6）、执行时按 scriptArgs 生成临时脚本并在跑完后用输出推导状态（成功即解除灰显）、confirmPhrase 逐字确认、info 级会话动作走「复制命令 + 打开空终端让用户自己回车」。构建通过、测试 165/165。**缺口**：没有会话型工具包时这条路径在界面上无法验收——灰显、状态更新、逐字确认都只在选中会话型工具包时才出现。所以 S4 必须做，哪怕只做一个最小清单。",
-        "S4 diskpart 清单": "未开始 —— 需要按 R1/R2 逐个动作核对 Microsoft Learn 的官方页（含各子命令页）再写字段，不能凭记忆。三级风险：低（list/detail/select）正常；中（create partition/assign）执行 + confirmPhrase；极高（clean/clean all/delete partition/format）用 execution: info。建议 kind: dangerous。冒烟只能跑只读与 select；diskpart 需要管理员，本机非管理员，成功路径要提权后才能验。"
+        "S1 规范与 schema": "完成（§2.8 会话、§2.9 三级风险、§2.10 kind）。",
+        "S2 Core": "完成（SessionScriptBuilder / SessionStateUpdater + 11 个单测）。",
+        "S3 宿主": "完成（会话状态条、灰显门控 + 主面板说明原因、脚本预览、脚本重放执行、输出推导状态、逐字确认、info 级走复制命令 + 空终端、执行侧二次拦截）。",
+        "S4 diskpart 清单": "完成：plugins/diskpart/manifest.yaml，29 个动作 / 12 个字段 / 出处 100%。三级风险落地：低（list/detail/select/rescan/attributes/uniqueid/online）正常执行；中（create partition primary|extended|logical、assign、remove、shrink、extend、active）执行 + confirmPhrase；极高（clean、clean all、delete partition、delete volume、format、convert gpt|mbr、offline）用 execution: info。kind: dangerous（🔴）。",
+        "剩余的验证缺口": "**diskpart 需要管理员**（官方主页明确要求；本机实测非管理员下连 list disk 都启动失败：请求的操作需要提升）。所以只能验证灰显与拒绝路径：list-partition（requires disk）的「执行」置灰 + 主面板写明原因、select-disk（无 requires）可点、clean（info + requires）显示宿主不执行。**没验到**：select 成功后状态条变化与解锁、逐字确认走完、info 的复制+空终端实际点击。这些要用「文件 → 以管理员身份重新启动」复核，详见 plugins/diskpart/NOTES.md。会话的 successPattern / errorPattern 也是照官方输出格式写的，**未在真机核对过**，NOTES.md 里留了复核清单。"
       }
     },
     {

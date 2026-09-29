@@ -1,0 +1,793 @@
+spec: 1
+id: diskpart
+manifestVersion: 0.1.0
+name: DiskPart
+kind: dangerous
+summary: 管理磁盘、分区与卷
+appVersion: "10.0.26100"
+description: >-
+  Windows 自带的磁盘分区管理工具。列出磁盘/分区/卷，切换"焦点"，创建与删除分区、分配盘符、格式化。
+  **它是交互式解释器**：所有命令都在同一个 diskpart 会话里对"当前焦点"生效——所以本工具包用
+  「脚本重放」的方式执行：先重放你已经做过的选择（select disk / select volume），再跑这条命令。
+  极高风险的命令（clean / delete / format / convert）**不由宿主执行**，只把命令拼好给你看，
+  由你自己在终端里回车——那是不可逆的数据销毁，该由你亲自按下。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/diskpart
+license: 随 Windows 提供
+
+locate:
+  executable: diskpart.exe
+  searchPaths:
+    - ${SystemRoot}\System32\diskpart.exe
+    - ${SystemRoot}\SysWOW64\diskpart.exe
+  notFoundHint: 找不到 diskpart.exe。它是 Windows 自带命令，检查系统目录是否完整。
+
+runtime:
+  encoding: oem
+  requiresAdmin: true
+
+# 会话：一次动作 = 把"当前生效的选择类命令" + "这条命令" 拼成脚本，交给 diskpart /s 执行。
+# 见 docs/spec/manifest-v1.md §2.8。为什么用脚本重放而不是长驻进程，见 SessionScriptBuilder.cs 顶部注释。
+session:
+  executable: diskpart.exe
+  scriptArgs: ["/s", "{script}"]
+  scriptExtension: .txt
+  exitCommand: exit
+  errorPattern: '(?im)^(Virtual Disk Service error|DiskPart has encountered an error|The (specified|selected) [a-z]+ is not|There is no [a-z]+ selected|The disk you specified is not valid)'
+  state:
+    - key: disk
+      title: 已选中磁盘
+      capture: disk
+      successPattern: '(?im)^Disk (\d+) is now the selected disk'
+    - key: volume
+      title: 已选中卷
+      capture: volume
+      successPattern: '(?im)^Volume (\d+) is now the selected volume'
+    - key: partition
+      title: 已选中分区
+      capture: partition
+      successPattern: '(?im)^Partition (\d+) is now the selected partition'
+
+actions:
+  # ============================================================ 查看（低风险，不改动任何数据）
+  - id: list-disk
+    title: 列出所有磁盘
+    description: 列出本机磁盘：编号、状态、大小、可用空间、分区表类型（MBR / GPT）。
+    category: 查看
+    command: ""
+    execution: run
+    sessionCommand: "list disk"
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 list 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/list
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "语法：list { disk | partition | volume | vdisk }；list disk 显示磁盘列表。有焦点的对象带 *。"
+
+  - id: list-volume
+    title: 列出所有卷
+    description: 列出所有磁盘上的基本卷与动态卷：卷号、盘符、卷标、文件系统、类型、大小。
+    category: 查看
+    command: ""
+    execution: run
+    sessionCommand: "list volume"
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 list 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/list
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "语法：list { disk | partition | volume | vdisk }；list volume 列出所有磁盘上的卷。"
+
+  - id: list-partition
+    title: 列出当前磁盘的分区
+    description: 列出"已选中磁盘"的分区表内容：分区号、类型、大小、偏移。
+    category: 查看
+    command: ""
+    execution: run
+    sessionCommand: "list partition"
+    requires: [disk]
+    requiresHint: 先执行「选择磁盘」——list partition 列的是"当前焦点磁盘"的分区
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 list 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/list
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "list partition 显示当前磁盘分区表里的分区（文档 Remarks：带 * 的是有焦点的对象）。"
+
+  - id: detail-disk
+    title: 查看当前磁盘详情
+    description: 显示已选中磁盘的详细信息：分区表类型、状态、大小、以及它上面各卷/分区的占用关系。
+    category: 查看
+    command: ""
+    execution: run
+    sessionCommand: "detail disk"
+    requires: [disk]
+    requiresHint: 先执行「选择磁盘」
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 detail 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/detail
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "语法：detail { disk | partition | volume | vdisk }。"
+
+  - id: detail-volume
+    title: 查看当前卷详情
+    description: 显示已选中卷的详细信息（所在磁盘、类型、文件系统等）。
+    category: 查看
+    command: ""
+    execution: run
+    sessionCommand: "detail volume"
+    requires: [volume]
+    requiresHint: 先执行「选择卷」
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 detail 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/detail
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "语法：detail { disk | partition | volume | vdisk }。"
+
+  - id: filesystems
+    title: 查看当前卷支持的文件系统
+    description: 显示已选中卷当前的文件系统，以及格式化它时可用的文件系统列表。
+    category: 查看
+    command: ""
+    execution: run
+    sessionCommand: "filesystems"
+    requires: [volume]
+    requiresHint: 先执行「选择卷」
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 filesystems 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/filesystems
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "主页面命令表：filesystems —— 显示当前卷的文件系统信息与可用的格式化文件系统。"
+
+  - id: rescan
+    title: 重新扫描磁盘
+    description: 让 diskpart 重新扫描总线上所有磁盘与卷，找回新接入或状态异常的磁盘。只读，不改动数据。
+    category: 查看
+    command: ""
+    execution: run
+    sessionCommand: "rescan"
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 rescan 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/rescan
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "语法就是 rescan（无参数）。"
+
+  # ============================================================ 选择（低风险：只改会话焦点，不动磁盘）
+  - id: select-disk
+    title: 选择磁盘
+    description: 把焦点切换到指定磁盘。后续"创建分区 / 清除磁盘"等命令都作用在这块磁盘上。
+    category: 选择
+    command: ""
+    execution: run
+    sessionCommand: "select disk {index}"
+    establishes: disk
+    fields:
+      - id: index
+        label: 磁盘号
+        type: number
+        style: positional
+        placeholder: "0"
+        required: true
+        help: 磁盘号来自「列出所有磁盘」的输出。
+        doc: official create 页示例 select disk <disk-number>；list disk 输出的磁盘号
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 select 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/select
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "语法：select { disk | partition | volume | vdisk }；参数表：Select disk —— 把焦点切到磁盘。"
+      - title: Microsoft Learn —— diskpart 的 create 命令（示例里的写法）
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/create
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "官方示例：select disk <disk-number>（replace <disk-number> with the number of the basic disk you want）。"
+
+  - id: select-volume
+    title: 选择卷
+    description: 把焦点切换到指定卷。分配盘符、格式化、缩小等都作用在这个卷上。
+    category: 选择
+    command: ""
+    execution: run
+    sessionCommand: "select volume {index}"
+    establishes: volume
+    fields:
+      - id: index
+        label: 卷号
+        type: number
+        style: positional
+        placeholder: "3"
+        required: true
+        help: 卷号来自「列出所有卷」的输出（不是盘符）。
+        doc: official select 页的参数表 Select volume；卷号来自 list volume 输出
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 select 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/select
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "参数表：Select volume —— 把焦点切到卷。卷号取 list volume 输出的第一列。"
+
+  - id: select-partition
+    title: 选择分区
+    description: 把焦点切换到指定分区（配合"标记为活动分区 / 删除分区"使用）。
+    category: 选择
+    command: ""
+    execution: run
+    sessionCommand: "select partition {index}"
+    establishes: partition
+    requires: [disk]
+    requiresHint: 先执行「选择磁盘」——分区号是"当前磁盘内"的编号
+    fields:
+      - id: index
+        label: 分区号
+        type: number
+        style: positional
+        placeholder: "1"
+        required: true
+        doc: official select 页的参数表 Select partition；分区号来自 list partition 输出
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 select 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/select
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "参数表：Select partition —— 把焦点切到分区。"
+
+  # ============================================================ 扩展（低风险）
+  - id: extend
+    title: 扩展当前卷
+    description: 把已选中卷（连同文件系统）向同一磁盘上的未分配空间扩展。
+    category: 扩展
+    command: ""
+    execution: run
+    sessionCommand: "extend size={size}"
+    requires: [volume]
+    requiresHint: 先执行「选择卷」
+    danger: overwrite
+    confirmText: 扩展会改动分区表与文件系统。若同一磁盘上没有相邻的未分配空间，命令会失败（不会损坏数据）。
+    fields:
+      - id: size
+        label: 扩展大小（MB）
+        type: number
+        style: positional
+        required: true
+        placeholder: "10240"
+        doc: official extend 页的语法 extend [size=<n>]
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 extend 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/extend
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "extend 把焦点卷连同文件系统扩展到同一磁盘上的相邻未分配空间；size=<n> 指定扩展量（MB）。"
+
+  # ============================================================ 创建与分配（中风险：会改动分区表/卷，但不销毁已有数据）
+  - id: create-partition-primary
+    title: 创建主分区
+    description: 在当前磁盘上创建主分区。省略大小则使用剩余全部可用空间。
+    category: 创建
+    command: ""
+    execution: run
+    sessionCommand: "create partition primary size={size}"
+    requires: [disk]
+    requiresHint: 先执行「选择磁盘」
+    danger: overwrite
+    confirmPhrase: "在磁盘 {disk} 上创建分区"
+    confirmText: 会在磁盘 {disk} 上写入分区表项。已有数据不会被动，但分区表将改变。
+    fields:
+      - id: size
+        label: 大小（MB）
+        type: number
+        style: positional
+        required: true
+        placeholder: "1024"
+        help: 官方示例用 size=1000 创建 1000 MB 的主分区；省略 size 表示使用剩余全部空间。
+        doc: official create 页示例 create partition primary size=1000
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 create 命令（含 create partition primary 示例）
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/create
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "参数表：create partition primary —— 在焦点基本磁盘上创建主分区；示例：create partition primary size=1000（1000 MB）。"
+
+  - id: create-partition-extended
+    title: 创建扩展分区
+    description: 在当前磁盘上创建扩展分区（逻辑分区要建在扩展分区里）。
+    category: 创建
+    command: ""
+    execution: run
+    sessionCommand: "create partition extended size={size}"
+    requires: [disk]
+    requiresHint: 先执行「选择磁盘」
+    danger: overwrite
+    confirmPhrase: "在磁盘 {disk} 上创建扩展分区"
+    confirmText: 会在磁盘 {disk} 上写入分区表项。
+    fields:
+      - id: size
+        label: 大小（MB）
+        type: number
+        style: positional
+        required: true
+        placeholder: "10240"
+        doc: official create-partition-extended 页语法 create partition extended [size=<n>] [offset=<n>] [align=<n>] [noerr]
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 create partition extended
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/create-partition-extended
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "语法：create partition extended [size=<n>] [offset=<n>] [align=<n>] [noerr]。"
+
+  - id: create-partition-logical
+    title: 创建逻辑分区
+    description: 在已有的扩展分区里创建逻辑分区。
+    category: 创建
+    command: ""
+    execution: run
+    sessionCommand: "create partition logical size={size}"
+    requires: [disk]
+    requiresHint: 先执行「选择磁盘」（并且该磁盘上已有扩展分区）
+    danger: overwrite
+    confirmPhrase: "在磁盘 {disk} 上创建逻辑分区"
+    confirmText: 会在磁盘 {disk} 的扩展分区里写入逻辑分区。
+    fields:
+      - id: size
+        label: 大小（MB）
+        type: number
+        style: positional
+        required: true
+        placeholder: "10240"
+        doc: official create 页参数表 create partition logical —— 在已有扩展分区中创建逻辑分区
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 create 命令（参数表 create partition logical）
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/create
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "参数表：create partition logical command —— Creates a logical partition in an existing extended partition。"
+
+  - id: assign-letter
+    title: 分配盘符
+    description: 给当前卷分配一个盘符或挂载点，分配后资源管理器里就能看到它。
+    category: 分配
+    command: ""
+    execution: run
+    sessionCommand: "assign letter={letter}"
+    requires: [volume]
+    requiresHint: 先执行「选择卷」
+    danger: overwrite
+    confirmPhrase: "给卷 {volume} 分配盘符 {letter}"
+    confirmText: 会改动卷的挂载信息；若该盘符已被占用会失败。
+    fields:
+      - id: letter
+        label: 盘符
+        type: text
+        style: positional
+        required: true
+        placeholder: "E"
+        help: 只写字母，不要冒号（官方示例是 assign letter=E 的写法）。
+        doc: official assign 页语法 assign [{letter=<d> | mount=<path>}] [noerr]
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 assign 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/assign
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "语法：assign [{letter=<d> | mount=<path>}] [noerr]；把盘符或挂载点分配给焦点卷。"
+
+  - id: remove-letter
+    title: 移除盘符
+    description: 移除当前卷的盘符或挂载点（卷仍然存在，只是不再出现在资源管理器里）。
+    category: 分配
+    command: ""
+    execution: run
+    sessionCommand: "remove letter={letter}"
+    requires: [volume]
+    requiresHint: 先执行「选择卷」
+    danger: overwrite
+    confirmPhrase: "移除卷 {volume} 的盘符 {letter}"
+    confirmText: 移除后该卷在资源管理器里会消失（数据仍在，可再次分配盘符）。
+    fields:
+      - id: letter
+        label: 盘符
+        type: text
+        style: positional
+        required: true
+        placeholder: "E"
+        doc: official remove 页语法 remove [{letter=<drive> | mount=<path> [all]}] [noerr]
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 remove 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/remove
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "语法：remove [{letter=<drive> | mount=<path> [all]}] [noerr]。"
+
+  - id: shrink
+    title: 缩小当前卷
+    description: 把当前卷缩小指定大小，腾出的空间变成未分配空间（可用来建新分区）。
+    category: 扩展
+    command: ""
+    execution: run
+    sessionCommand: "shrink desired={size}"
+    requires: [volume]
+    requiresHint: 先执行「选择卷」
+    danger: destructive
+    confirmPhrase: "把卷 {volume} 缩小 {size} MB"
+    confirmText: 缩小卷会改动文件系统布局。官方提示：先备份，且不要超过"可用收缩空间"。
+    fields:
+      - id: size
+        label: 缩小量（MB）
+        type: number
+        style: positional
+        required: true
+        placeholder: "10240"
+        help: 先用 shrink querymax 查可缩小上限（本工具包未收录该动作，可在终端里跑）。
+        doc: official shrink 页语法 shrink [desired=<n>] [minimum=<n>] [nowait] [noerr]
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 shrink 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/shrink
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "语法：shrink [desired=<n>] [minimum=<n>] [nowait] [noerr]；shrink querymax [noerr]。"
+
+  - id: active
+    title: 标记分区为活动分区
+    description: 把当前分区标记为活动分区（MBR 磁盘上用于指示从哪里引导）。
+    category: 创建
+    command: ""
+    execution: run
+    sessionCommand: "active"
+    requires: [partition]
+    requiresHint: 先执行「选择分区」
+    danger: destructive
+    confirmPhrase: "把磁盘 {disk} 的分区 {partition} 标记为活动"
+    confirmText: 活动分区决定 MBR 磁盘从哪里引导；标错会导致无法启动。
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 active 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/active
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "语法就是 active；把焦点分区标记为活动分区（MBR 磁盘）。"
+      - title: Microsoft Learn —— diskpart 的 select 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/select
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "该页 Related links 里明确指向 select partition command，说明 active 作用于焦点分区。"
+
+  # ============================================================ 极高风险：宿主不执行，只给解释与命令
+  - id: clean
+    title: 清除磁盘（清空分区表）
+    description: >-
+      把当前磁盘上的分区与卷信息**全部清除**（相当于抹掉分区表）。数据不可恢复。
+      本工具包**不会替你执行它**：命令拼好放在下面，需要你复制到终端里自己回车。
+    category: 危险操作
+    command: ""
+    execution: info
+    sessionCommand: "clean"
+    requires: [disk]
+    requiresHint: 先执行「选择磁盘」——不选磁盘它也不知道清哪块
+    danger: destructive
+    confirmText: 官方描述：Removes any and all partition or volume formatting from the disk with focus。这是不可逆的。
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 clean 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/clean
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "语法：clean [all]；all 表示把每个扇区清零（更慢）。主页面命令表描述：Removes any and all partition or volume formatting from the disk with focus。"
+
+  - id: clean-all
+    title: 清除磁盘并把每个扇区清零
+    description: >-
+      在 clean 的基础上把磁盘每个扇区都写零，耗时很长（大容量盘可能数小时）。同样不可恢复，
+      **不由宿主执行**。
+    category: 危险操作
+    command: ""
+    execution: info
+    sessionCommand: "clean all"
+    requires: [disk]
+    requiresHint: 先执行「选择磁盘」
+    danger: destructive
+    confirmText: clean all 会把所有扇区清零，用于彻底抹除；官方 syntax 里就是 clean [all]。
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 clean 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/clean
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "语法：clean [all]。"
+
+  - id: delete-partition
+    title: 删除分区
+    description: >-
+      删除当前分区（分区上的数据随之不可访问，且在重建文件系统前无法恢复）。
+      **不由宿主执行**。
+    category: 危险操作
+    command: ""
+    execution: info
+    sessionCommand: "delete partition"
+    requires: [partition]
+    requiresHint: 先执行「选择分区」
+    danger: destructive
+    confirmText: 删除分区会移除该分区及其文件系统信息，属于不可逆操作。
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 delete 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/delete
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "语法：delete { disk | partition | volume }；参数表：Delete partition —— Deletes a partition。"
+
+  - id: delete-volume
+    title: 删除卷
+    description: >-
+      删除当前卷（数据随之不可访问）。**不由宿主执行**。
+    category: 危险操作
+    command: ""
+    execution: info
+    sessionCommand: "delete volume"
+    requires: [volume]
+    requiresHint: 先执行「选择卷」
+    danger: destructive
+    confirmText: 删除卷会移除该卷及其文件系统信息，属于不可逆操作。
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 delete 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/delete
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "参数表：Delete volume —— Deletes a volume。"
+
+  - id: format
+    title: 格式化当前卷
+    description: >-
+      格式化当前卷（可指定文件系统与卷标）。**格式化会清空该卷上的数据**，所以不由宿主执行——
+      命令拼好后由你复制到终端里自己回车。
+    category: 危险操作
+    command: ""
+    execution: info
+    sessionCommand: "format fs={fs} label={label} quick"
+    requires: [volume]
+    requiresHint: 先执行「选择卷」
+    danger: destructive
+    confirmText: 官方语法：format volume [/FS:file-system] [/V:label] [/Q] ...；/Q 是快速格式化，仍然会清空卷上的数据。
+    fields:
+      - id: fs
+        label: 文件系统
+        type: enum
+        style: positional
+        required: true
+        values:
+          - { value: ntfs, label: "ntfs —— Windows 默认", isDefault: true }
+          - { value: refs, label: "refs —— 弹性文件系统（服务器场景）" }
+          - { value: fat, label: "fat —— 老式 FAT16" }
+          - { value: fat32, label: "fat32 —— U 盘常用，单文件上限 4 GB" }
+          - { value: exfat, label: "exfat —— 大容量移动介质" }
+        help: 可选值见「查看当前卷支持的文件系统」（filesystems 动作）。
+        doc: official format 页语法 /FS:file-system
+      - id: label
+        label: 卷标
+        type: text
+        style: positional
+        required: false
+        placeholder: "DATA"
+        doc: official format 页语法 /V:label
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 format 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/format
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "语法：format volume [/FS:file-system] [/V:label] [/Q] [/L[:state]] [/A:size] [/C] [/I:state] [/X] [/P:passes] [/S:state]（另有 FAT/FAT32 专用形式）。"
+
+  - id: convert-gpt
+    title: 把磁盘转换为 GPT
+    description: >-
+      把当前磁盘的分区表从 MBR 转换为 GPT。转换会**重写分区结构**，旧分区可能无法访问，
+      因此不由宿主执行。
+    category: 危险操作
+    command: ""
+    execution: info
+    sessionCommand: "convert gpt"
+    requires: [disk]
+    requiresHint: 先执行「选择磁盘」
+    danger: destructive
+    confirmText: 官方把 convert 描述为转换分区风格；对含数据的分区表改动属于不可逆操作。
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 convert 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/convert
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "语法：convert { basic | dynamic | gpt | mbr }。"
+      - title: Microsoft Learn —— diskpart（主页面命令表）
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/diskpart
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "主页面说明磁盘分区风格 MBR / GPT，以及运行 diskpart 需要管理员权限。"
+
+  - id: convert-mbr
+    title: 把磁盘转换为 MBR
+    description: >-
+      把当前磁盘的分区表从 GPT 转换为 MBR。同样会重写分区结构，不由宿主执行。
+    category: 危险操作
+    command: ""
+    execution: info
+    sessionCommand: "convert mbr"
+    requires: [disk]
+    requiresHint: 先执行「选择磁盘」
+    danger: destructive
+    confirmText: 转换分区风格会重写分区表，属于不可逆操作。
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 convert 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/convert
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "语法：convert { basic | dynamic | gpt | mbr }。"
+
+  - id: offline-disk
+    title: 让磁盘脱机
+    description: >-
+      把当前磁盘置为脱机状态（卷不可访问）。常用于从"外部磁盘"里安全摘出一块盘。
+      **不由宿主执行**——脱机会立刻影响该盘上的所有卷。
+    category: 危险操作
+    command: ""
+    execution: info
+    sessionCommand: "offline disk"
+    requires: [disk]
+    requiresHint: 先执行「选择磁盘」
+    danger: destructive
+    confirmText: 脱机后该磁盘上的卷在系统里不可访问，直到重新联机。
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 offline 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/offline
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "语法：offline { disk | volume }。"
+
+  - id: online-disk
+    title: 让磁盘联机
+    description: 把脱机的磁盘恢复为联机状态。
+    category: 危险操作
+    command: ""
+    execution: run
+    sessionCommand: "online disk"
+    requires: [disk]
+    requiresHint: 先执行「选择磁盘」
+    danger: overwrite
+    confirmPhrase: "让磁盘 {disk} 联机"
+    confirmText: 联机后该磁盘上的卷会重新出现在系统里。若上面的分区来自其他系统，可能被提示需要初始化——不要随手点初始化。
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 online 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/online
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "语法：online { disk | volume }。"
+
+  - id: attributes-disk
+    title: 查看磁盘属性
+    description: 显示当前磁盘的属性位（只读、隐藏、无默认盘符、可移动等）。
+    category: 查看
+    command: ""
+    execution: run
+    sessionCommand: "attributes disk"
+    requires: [disk]
+    requiresHint: 先执行「选择磁盘」
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 attributes 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/attributes
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "主页面命令表：attributes —— Displays, sets, or clears the attributes of a disk or volume；语法：attributes disk / attributes volume。"
+
+  - id: uniqueid-disk
+    title: 查看磁盘 GUID
+    description: 显示当前磁盘的 GUID 或 MBR 签名（用于确认"这两块盘是不是同一块"）。
+    category: 查看
+    command: ""
+    execution: run
+    sessionCommand: "uniqueid disk"
+    requires: [disk]
+    requiresHint: 先执行「选择磁盘」
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: Microsoft Learn —— diskpart 的 uniqueid 命令
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/uniqueid
+        retrieved: "2026-09-29"
+        appliesTo: Windows 10/11
+        note: "语法：uniqueid disk [id={<dword> | <GUID>}] [noerr]；不带 id 就是显示当前磁盘的标识。"

@@ -657,6 +657,10 @@ public sealed partial class MainWindow : Window
             : $"{_manifest.Name} —— {_manifest.Summary}";
 
         ActionDescription.Text = BuildPackageIntro(_manifest);
+
+        // 没选动作时也要刷新会话条：状态（"已选中磁盘 0"）与选没选动作无关，
+        // 用户切换工具包之后应当立刻能看到"现在作用于什么"。
+        RefreshSessionBar();
         FormPanel.Children.Clear();
         CommandLineBox.Text = string.Empty;
         NextStepsPanel.Children.Clear();
@@ -709,9 +713,22 @@ public sealed partial class MainWindow : Window
         var mode = _action.ExecutionOrDefault;
         var hostRuns = _action.HostRunsIt;
 
-        RunButton.IsEnabled = hostRuns;
+        // 前置条件没满足时，「执行」也一并置灰（运行侧还有一道拦截，这里是提前告知）
+        var gateOpen = _sessionState.Satisfies(_action.Requires);
+
+        RunButton.IsEnabled = hostRuns && gateOpen;
         RunButton.Content = hostRuns ? "执行" : "（此动作不直接执行）";
         TerminalButton.IsEnabled = true;
+
+        // 前置条件没满足时，把原因直接写在主面板上——只靠灰显 + 悬浮提示，
+        // 用户很容易以为是界面坏了（尤其是从上次会话恢复过来的动作）。
+        if (!gateOpen)
+        {
+            ActionDescription.Text += Environment.NewLine + Environment.NewLine
+                + "⚠ 现在还不能执行：" + (SessionHintFor(_action) ?? "前置条件未满足")
+                + Environment.NewLine
+                + "会话型工具包的动作有先后顺序：先做「选择」类动作，相关动作会自动恢复可用。";
+        }
 
         if (hostRuns)
         {
@@ -2718,6 +2735,14 @@ public sealed partial class MainWindow : Window
         if (!await ConfirmPhraseAsync())
         {
             StatusText.Text = "已取消（需要逐字输入确认短语才会执行）";
+            return;
+        }
+
+        // 门控的执行侧：灰显只是提示，这里才是真正拦住的地方
+        // （预选动作、恢复上次动作都可能绕过界面上的灰显）
+        if (!_sessionState.Satisfies(_action.Requires))
+        {
+            StatusText.Text = "前置条件还没满足，没有执行：" + (SessionHintFor(_action) ?? string.Empty);
             return;
         }
 
