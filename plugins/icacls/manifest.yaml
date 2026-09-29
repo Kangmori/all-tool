@@ -1,0 +1,1431 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# icacls —— Windows 自带的 ACL（访问控制列表）查看与修改工具（C:\Windows\System32\icacls.exe）。
+#
+# 参数知识来源（两边逐条核对，冲突记进 NOTES.md §6）：
+#   1) 官方文档（Microsoft Learn，单页到底，实测 HTTP 200、Last updated 2025-06-09）
+#      https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls
+#      Applies to 含 Windows 10/11 与 Server 2016–2025。
+#   2) 本机 `icacls /?` 的真实输出（5286 字节、退出码 0、全 ASCII、写 stdout）——
+#      快照未入库，可用 `icacls /?` 随时重取。
+#
+# **输出编码：OEM 代码页（本机 936）——实测判定，见 NOTES.md §4。**
+#   判据：对含中文名的路径跑 `icacls <路径>`，文件名字节为
+#   d6 d0 ce c4 c4 bf c2 bc（=「中文目录」的 cp936 编码）；
+#   按 cp936 解正确，按 UTF-8 解是乱码，用 UTF8Encoding(throwOnInvalidBytes) 解**抛异常**。
+#   这与本批 tar=oem、schtasks=utf-8、wevtutil=oem 的结果对照过，icacls 属于 oem 一类。
+#
+# **字段风格与顺序：实测判定，见 NOTES.md §7。**
+#
+# ① 风格：icacls 的开关一律是**独立的 token**，绝不用 `attached` 去粘开关取值：
+#     ✓ icacls <路径> /T              -> exit 0
+#     ✗ icacls <路径>:/T              -> exit 123  The filename, directory name, or volume label syntax is incorrect.
+#     ✓ icacls <路径> /setowner 用户  -> exit 0（两个 token）
+#   注意这**与同批 wevtutil 的结论相反**（wevtutil 只认 `/q:值` 单 token），不要互抄。
+#   本清单只在 `/inheritancelevel:取值` 这一处用 attached——那是上游把冒号规定在开关名里的写法。
+#
+# ② 顺序：**路径（位置参数）必须是最前面的 token**，任何带取值的开关都不能排在它前面：
+#     ✓ icacls <路径> /save <文件> /T        -> exit 0
+#     ✓ icacls <路径> /grant Users:(R)       -> exit 0
+#     ✗ icacls /save <文件> <路径>           -> exit 87  First parameter must be a file name pattern or "/?"
+#     ✗ icacls /T <路径>                     -> exit 87  同上
+#   这一条**极容易踩错**，因为上游文档自相矛盾：官方语法行写 `icacls name [/save aclfile] …`
+#   （路径在前，与实测一致），本机帮助的 `/setowner user` 那一行却像是"开关要排在 name 之前"；
+#   而两者的**示例**都写 `icacls c:\windows\* /save AclFile /T`（路径最前）。
+#   实测的答案是**路径永远最前**，所以本清单所有动作的路径字段都声明在第一位。
+#
+# **版本：icacls 没有版本开关**（`/version` 与 `/v` 都给 exit 87、`-version` 被当成文件名给 exit 2），
+#   所以按 R1 不写 versionArgs/versionPattern。exe 文件版本实测 10.0.26100.8875，只记进 NOTES。
+#
+# **管理员权限：分动作判断，不搞一刀切（规范 §2.5）。实测（本机账号 KANGMORI\Steve，非管理员）：**
+#   - 只读查看全部不需要管理员（连 C:\Windows\System32\config 都能读，exit 0）；
+#   - /grant /grant:r /deny /remove /remove:g /remove:d /reset /inheritancelevel 在**有 WriteDAC
+#     权限的文件**上不需要管理员（实测连"所有者已被改成 Administrators"的文件也能改，exit 0）；
+#   - /save 不需要管理员；
+#   - **/restore 需要管理员**：非管理员一律 exit 1300（Not all privileges or groups referenced are
+#     assigned to the caller.），换成父目录、换成不存在的文件都一样，见 NOTES.md §8.2；
+#   - **/setowner 改成别人需要管理员**：非管理员 exit 1307，提权后 exit 0 且 Get-Acl 确认所有者真的变了。
+
+spec: 1
+id: icacls
+name: icacls
+manifestVersion: 0.1.0
+appVersion: Windows 10/11 自带（随系统版本发布）
+kind: system
+summary: 查看与修改文件权限
+description: >-
+  查看和修改文件、目录的访问控制列表（ACL）。最常用的用法就是"看一眼这个文件谁能访问"——
+  在命令行里敲 icacls 跟上路径，比在图形界面的属性对话框里翻好几层安全选项卡快得多，
+  而且能一口气看整棵目录树。也可以授予/拒绝/移除某个账号的权限、切断或恢复继承、
+  把整棵树的权限导出成一个文件、需要时再恢复回去。Windows 自带，无需安装。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 权限, ACL, 访问控制, 拒绝访问]
+
+sources:
+  - title: icacls 官方参考（Microsoft Learn）—— 语法、参数表、Remarks、示例
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls
+    retrieved: "2026-09-30"
+    appliesTo: Windows 10/11 / Windows Server 2016–2025 / Azure Local 2311.2+
+    note: >-
+      单页到底，没有子页。页内三行 Syntax 覆盖了全部开关：name [/save aclfile] [/setowner user]
+      [/findsid Sid] [/verify] [/reset] [/T] [/C] [/L] [/Q]、name [/grant[:r] Sid:perm[…]]
+      [/deny Sid:perm […]] [/remove[:g|:d]] Sid[…]]] [/setintegritylevel Level:policy[…]] [/T] [/C] [/L] [/Q]、
+      directory [/substitute SidOld SidNew […]] [/restore aclfile] [/C] [/L] [/Q]。Remarks 里有权限掩码表
+      （简单权限 N/F/M/RX/R/W/D 与括号内的具体权限 DE/RC/WDAC/WO/S/AS/MA/GR/GW/GE/GA/RD/WD/AD/REA/WEA/X/DC/RA/WA，
+      以及继承权限 (I)/(OI)/(CI)/(IO)/(NP)）。页面里**没有任何退出码章节**，也没有权限要求说明。
+  - title: 本机 `icacls /?` 的真实输出
+    url: file:///%SystemRoot%/System32/icacls.exe
+    retrieved: "2026-09-30"
+    appliesTo: Windows 11 26200 / icacls.exe 文件版本 10.0.26100.8875
+    note: >-
+      实测 5286 字节、退出码 0、stderr 0 字节、写 stdout、文本全 ASCII。内容与官方页一致，
+      但有三处措辞不同，逐条记在 NOTES.md §6：
+      ① 本机只写 `/inheritance:e|d|r`，官方写 `/inheritancelevel:e|d|r`（实测两种都能跑，清单按官方名字写）；
+      ② 本机写 `/setintegritylevel [(CI)(OI)]Level`（没有 policy），官方写 `/setintegritylevel Level:policy`；
+      ③ 本机第三行 `/remove[:g|:d]] Sid[...]]]` 多处一个方括号（官方语法行同样如此），按官方 Parameters 表的
+      `/remove: g | d <sid>` 理解。
+  - title: 本包真机冒烟（33 条 argv 实测 + 15 条红线自检；含退出码、编码判定、字段风格判定）
+    url: file:///%TEMP%/__AllToolProbe_icacls（**临时目录，收尾前已删除**）
+    retrieved: "2026-09-30"
+    appliesTo: Windows 11 26200 / icacls.exe 10.0.26100.8875
+    note: >-
+      全部在 %TEMP%\__AllToolProbe_icacls 自建的文件/目录上跑，改 ACL 的动作只碰这个探测目录；
+      结果逐条抄进 NOTES.md §5 / §7 / §9。改动类动作**也在探测目录里真跑过**（并核对 Get-Acl 的真实 ACE），
+      测完把所有者/权限交回自己再删目录；收尾用 `Test-Path` 复核为 False。
+      可复跑：`pwsh -NoProfile -File plugins/icacls/smoke.ps1`（自带两层红线自检）。
+
+locate:
+  executable: icacls.exe
+  searchPaths:
+    - ${SystemRoot}\System32\icacls.exe
+    - ${SystemRoot}\SysWOW64\icacls.exe
+  notFoundHint: icacls.exe 是 Windows 自带命令，正常情况下都在 C:\Windows\System32 下。
+
+runtime:
+  encoding: oem
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  usePseudoConsole: false
+
+# 退出码：官方页面**没有任何退出码章节**（已逐行核对），下面的语义全部来自实测
+# + `net helpmsg <码>` 的 Windows 系统错误文本（同一套 Win32 码），见 NOTES.md §5.4。
+exitCodes:
+  - code: 0
+    meaning: 成功。实测包含：查看权限、/save 导出、/verify 校验、以及在有 WriteDAC 权限的文件上做 /grant /deny /remove /reset /inheritancelevel
+    severity: ok
+  - code: 2
+    meaning: 找不到文件（The system cannot find the file specified.，`net helpmsg 2`）。实测：路径本身不存在时，stderr 打印该路径 + 这句
+    severity: error
+  - code: 3
+    meaning: 找不到路径（The system cannot find the path specified.，`net helpmsg 3`）。实测：不带任何参数直接跑 `icacls` 就是 3
+    severity: error
+  - code: 5
+    meaning: 拒绝访问（Access is denied.，`net helpmsg 5`）。实测：非管理员读 C:\Windows\System32\config、C:\System Volume Information，或在系统文件上执行 /grant 都是 5
+    severity: error
+  - code: 87
+    meaning: 参数不正确（The parameter is incorrect.，`net helpmsg 87`）。实测：开关拼错（/zz）、/inheritancelevel 不给取值或给非法取值、/setintegritylevel 给非法取值
+    severity: error
+  - code: 123
+    meaning: 文件名/目录名/卷标语法不正确（The filename, directory name, or volume label syntax is incorrect.，`net helpmsg 123`）。实测的最典型情形是把开关粘到路径后面（`<路径>:/T`）
+    severity: error
+  - code: 1300
+    meaning: 调用方没有被分配所需的全部特权（Not all privileges or groups referenced are assigned to the caller.，`net helpmsg 1300`）。**实测 /restore 在非管理员下必然是这个码**，与 ACL 文件在不在、目录参数对不对都无关
+    severity: error
+  - code: 1307
+    meaning: 这个安全 ID 不能被指定为该对象的所有者（This security ID may not be assigned as the owner of this object.，`net helpmsg 1307`）。实测：非管理员用 /setowner 把文件所有者的名字填成 Users（本机 Users = BUILTIN\Users）时
+    severity: error
+  - code: 1332
+    meaning: 账户名与安全 ID 之间没有映射（No mapping between account names and security IDs was done.，`net helpmsg 1332`）。实测两种情形：账号名写错（NoSuchUser123），以及 /findsid 用不带 `*` 前缀的数值 SID（那会被当成"友好名"去找，见 NOTES.md §7.3）
+    severity: error
+
+quickActions:
+  - title: 查看某个文件或目录的权限
+    action: show-acl
+  - title: 递归查看整棵目录树的权限
+    action: show-acl-recursive
+  - title: 校验 ACL 是否规范
+    action: verify-acl
+
+actions:
+
+  # ============================================================ 查看权限（只读，不标 danger）
+  - id: show-acl
+    category: 查看权限
+    title: 查看权限（icacls <路径>）
+    command: ""
+    description: >-
+      这就是 icacls 最常用的用法：给一个文件或目录，列出它的 DACL——谁能访问、能做什么。
+      不加任何开关时只处理你指定的那一个对象（不会往下钻），这是 icacls 自己的默认行为。
+    sources:
+      - title: icacls 官方参考 —— 语法行第一行与 <name> 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：icacls "Displays or modifies discretionary access control lists (DACLs) on specified
+          files and applies stored DACLs to files in specified directories."；参数表里 <name>
+          "Specifies the file for which to display or modify DACLs."。页面的三行语法都以 name 开头，
+          没有"子命令"这一段，所以本动作的 command 是空字符串（规范 §2.5）。
+      - title: 本机 `icacls /?` 的真实输出
+        url: file:///%SystemRoot%/System32/icacls.exe
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / icacls.exe 10.0.26100.8875
+        note: 本机帮助第一行是 `ICACLS name /save aclfile [/T] [/C] [/L] [/Q]`，同样以 name 开头，没有任何子命令。
+    fields:
+      - id: path
+        label: 文件或目录
+        type: paths
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 C:\Windows\System32\drivers\etc\hosts
+        help: >-
+          可以填多个（每行一个），一次看几个对象的权限。填目录时**只列这个目录本身**的权限，
+          想看它下面所有文件的权限请用「递归查看权限（/T）」。路径里有空格不用手动加引号
+          （宿主按 argv 数组传参，不经过 shell）。也可以用通配符，例如 C:\Windows\*.exe。
+        doc: official #parameters 的 <name>；本机帮助每一条语法行开头的 `ICACLS name`
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测（本机、非管理员）`icacls <探测目录>\a.txt` -> 退出码 0、325 字节，输出形如
+        `C:\…\a.txt NT AUTHORITY\SYSTEM:(I)(F)` 换行后每行一个 ACE（大写对齐到文件名宽度）。
+        ACE 里的 (I) 表示"继承来的"、(OI)/(CI) 表示"会往下继承给对象/容器"、
+        (F)/(R)/(RX)/(M) 是权限掩码。输出末尾固定一句
+        `Successfully processed 1 files; Failed processing 0 files`。
+        注意：**默认输出里不含所有者**，要改所有者请用「改所有者（/setowner）」，
+        要看所有者请用图形界面或 PowerShell 的 Get-Acl。
+    examples:
+      - title: 看 hosts 文件的权限
+        args: ["C:\\Windows\\System32\\drivers\\etc\\hosts"]
+      - title: 看一个目录本身的权限
+        args: ["C:\\Windows\\System32\\drivers\\etc"]
+
+  # ============================================================ 查看权限
+  - id: show-acl-recursive
+    category: 查看权限
+    title: 递归查看权限（/T）
+    command: ""
+    description: >-
+      从你给的目录开始，把它自己和下面所有子目录、所有文件的权限全部列出来。
+      这是排查"为什么这个文件打不开"最直接的命令：一层层看下去就知道是哪一级的 ACL 拦住了。
+    sources:
+      - title: icacls 官方参考 —— /t
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/t "Performs the operation on all specified files in the current directory and its
+          subdirectories."。**注意官方措辞是"当前目录及其子目录"**，实测的行为是"以 name 指定的目录为根，
+          连同根一起往下全部处理"（见 NOTES.md §7.4）。
+      - title: 本机 `icacls /?` 的真实输出 —— /T 一节
+        url: file:///%SystemRoot%/System32/icacls.exe
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / icacls.exe 10.0.26100.8875
+        note: 本机原文：/T indicates that this operation is performed on all matching files/directories below the directories specified in the name.
+    fields:
+      - id: path
+        label: 起始目录
+        type: directory
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 C:\Users\Steve\Documents
+        help: >-
+          从这里往下递归。**范围可能非常大**：对 C:\ 跑一次要遍历整块盘，输出几百 MB 是正常的
+          （实测对 C:\Windows\System32 目录树跑 /verify /T 就已经很大、耗时以秒计）。
+          建议先对具体出问题的子目录跑，而不是一上来就整个盘。
+        doc: official #parameters 的 <name>（配合 /t 使用）
+      - id: recursive
+        label: 连同子目录（/T）
+        type: bool
+        style: flag
+        prefix: "/T"
+        group: 开关
+        default: true
+        help: >-
+          本动作按定义就是递归的，所以默认勾上；**取消勾选就等于"只看这一个目录"**（与本工具包的
+          「查看权限」动作同效）。这个开关本身是独立的 token，写成 `/T`（不能粘到路径后面）。
+        doc: official #parameters 的 /t
+      - id: quiet
+        label: 安静模式（/Q）
+        type: bool
+        style: flag
+        prefix: "/Q"
+        group: 开关
+        default: false
+        help: >-
+          官方原文：/q "Suppresses success messages."。**实测它的效果比字面意思窄得多**
+          （NOTES.md §7.2）：只抑制每个对象的 `processed file: …` 那一行，**不抑制最后的
+          `Successfully processed N files` 汇总，也不抑制任何错误**；对只读查看的输出更是完全没有影响。
+          所以递归处理很多文件、只关心汇总与错误时才值得勾。
+        doc: official #parameters 的 /q
+      - id: continueOnError
+        label: 出错继续（/C）
+        type: bool
+        style: flag
+        prefix: "/C"
+        group: 开关
+        default: false
+        help: >-
+          官方原文：/c "Continues the operation even if file errors occur. Error messages are still shown."。
+          递归目录树里几乎一定会撞上拒绝访问的子目录（实测 System32 下有 12 个），不勾就会漏掉后面的结果。
+        doc: official #parameters 的 /c
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测 `icacls <探测目录> /T` -> 退出码 0、1159 字节；加 `/Q` 后**字节数完全一样**（1159），
+        因为只读输出里没有 `processed file:` 行可抑制。每个对象一段：首行是完整路径 + 第一个 ACE，
+        其余 ACE 缩进对齐，段与段之间空一行。
+    examples:
+      - title: 递归看一个目录树的权限
+        args: ["C:\\Windows\\System32\\drivers\\etc", "/T"]
+      - title: 递归 + 出错继续
+        args: ["C:\\Windows\\System32\\drivers\\etc", "/T", "/C"]
+
+  # ============================================================ 查看权限
+  - id: show-acl-wildcard
+    category: 查看权限
+    title: 按通配符批量查看（icacls <模式>）
+    command: ""
+    description: 一次看一批同类型的对象的权限，例如某个目录下所有 exe。icacls 自己会在内部展开通配符。
+    sources:
+      - title: icacls 官方参考 —— 官方示例 icacls c:\windows\* /save aclfile /t
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          官方把"带 * 的模式"用在自己的示例里（`icacls c:\windows\* /save aclfile /t`），
+          说明 name 位置接受通配符模式。
+      - title: 本机 `icacls /?` 的真实输出 —— 退出码 87 时那句提示
+        url: file:///%SystemRoot%/System32/icacls.exe
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / icacls.exe 10.0.26100.8875
+        note: >-
+          本机在第一个参数不是模式时会报 `First parameter must be a file name pattern or "/?"`，
+          用的词就是 pattern（模式）。实测 `<目录>\*`、`<目录>\*.txt` 都被正常展开（NOTES.md §5.2）。
+    fields:
+      - id: pattern
+        label: 路径模式
+        type: text
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 C:\Windows\System32\*.exe
+        help: >-
+          可以用 `*` 与 `?`。**匹配由 icacls 自己做**，所以不用管 shell 展开那一套。
+          想让通配符往下钻子目录，就再加 /T。
+        doc: official 示例行的 c:\windows\*（#examples）；本机帮助的 file name pattern 措辞
+      - id: recursive
+        label: 连同子目录（/T）
+        type: bool
+        style: flag
+        prefix: "/T"
+        group: 开关
+        default: false
+        help: 官方原文：/t "Performs the operation on all specified files in the current directory and its subdirectories."
+        doc: official #parameters 的 /t
+      - id: quiet
+        label: 安静模式（/Q）
+        type: bool
+        style: flag
+        prefix: "/Q"
+        group: 开关
+        default: false
+        help: 官方原文：/q "Suppresses success messages."；实测只抑制 `processed file:` 行，见 NOTES.md §7.2。
+        doc: official #parameters 的 /q
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 `icacls <探测目录>\*` -> 退出码 0、609 字节（列出该目录下 2 个对象）；加 /T 后 887 字节。
+    examples:
+      - title: 看一个目录下所有 exe 的权限
+        args: ["C:\\Windows\\System32\\drivers\\etc\\*"]
+      - title: 通配符 + 递归
+        args: ["C:\\Windows\\System32\\drivers\\etc\\*", "/T", "/C"]
+
+  # ============================================================ 检查与诊断
+  - id: verify-acl
+    category: 检查与诊断
+    title: 校验 ACL 是否规范（/verify）
+    command: ""
+    description: >-
+      检查指定的文件/目录的 ACL 是否是规范形态（canonical form），以及长度和 ACE 条目数是否自相矛盾。
+      这是"权限看着怪、但说不清哪里怪"时的一条排查命令。
+    sources:
+      - title: icacls 官方参考 —— /verify
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/verify "Finds all files with ACLs that aren't canonical or have lengths inconsistent
+          with access control entry (ACE) counts."。Remarks 里解释了"规范顺序"是什么：
+          Explicit denials -> Explicit grants -> Inherited denials -> Inherited grants
+          （这也是 icacls 修改 ACL 后维持的顺序）。
+      - title: 本机 `icacls /?` 的真实输出 —— /verify 一节
+        url: file:///%SystemRoot%/System32/icacls.exe
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / icacls.exe 10.0.26100.8875
+        note: >-
+          本机原文：/verify "finds all files whose ACL is not in canonical form or whose lengths are
+          inconsistent with ACE counts."。**本机帮助没有说它发现问题时退出码会变**——实测量化见 NOTES.md §5.3。
+    fields:
+      - id: path
+        label: 文件或目录
+        type: paths
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 C:\Users\Steve\Documents
+        help: 可以填多个（每行一个）。
+        doc: official #parameters 的 <name>
+      - id: recursive
+        label: 连同子目录（/T）
+        type: bool
+        style: flag
+        prefix: "/T"
+        group: 开关
+        default: false
+        help: 官方原文：/t "Performs the operation on all specified files in the current directory and its subdirectories."
+        doc: official #parameters 的 /t
+      - id: continueOnError
+        label: 出错继续（/C）
+        type: bool
+        style: flag
+        prefix: "/C"
+        group: 开关
+        default: false
+        help: 官方原文：/c "Continues the operation even if file errors occur. Error messages are still shown."。递归时建议勾上。
+        doc: official #parameters 的 /c
+      - id: quiet
+        label: 安静模式（/Q）
+        type: bool
+        style: flag
+        prefix: "/Q"
+        group: 开关
+        default: false
+        help: 官方原文：/q "Suppresses success messages."；实测只抑制 `processed file:` 行。
+        doc: official #parameters 的 /q
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测**没发现非规范 ACL 的样本**：`icacls <探测目录> /verify /T` -> 退出码 0，
+        每个对象一行 `processed file: <路径>`，末尾 `Successfully processed N files; Failed processing 0 files`。
+        **没有构造出"发现非规范 ACL"的对照**，所以"发现问题时输出什么样、退出码是否变化"这一条
+        本包没有实测证据（NOTES.md §5.3 如实记录）。
+    examples:
+      - title: 校验一个目录树里的 ACL
+        args: ["C:\\Users\\Steve\\Documents", "/T", "/C"]
+
+  - id: find-sid
+    category: 检查与诊断
+    title: 找出 ACL 里提到某个账号的对象（/findsid）
+    command: ""
+    description: >-
+      在指定的目录树里找出"ACL 中明确提到了某个 SID"的所有文件/目录。
+      排查"这个账号到底在哪些地方被单独授过权"时很直接。
+    sources:
+      - title: icacls 官方参考 —— /findsid
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/findsid <sid> "Finds all matching files that contain a DACL explicitly mentioning
+          the specified security identifier (SID)."；Remarks 里补了一句关键的：SIDs may be in either
+          numerical or friendly name form. If you use a numerical form, affix the wildcard character *
+          to the beginning of the SID.
+      - title: 本机 `icacls /?` 的真实输出 —— Note 一节
+        url: file:///%SystemRoot%/System32/icacls.exe
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / icacls.exe 10.0.26100.8875
+        note: >-
+          本机原文同样强调"数值形式的 SID 要在最前面加 `*`"。**实测这条是硬要求**：
+          写 `S-1-5-32-545` 会被当成友好名去找，exit 1332（No mapping…）；
+          写 `*S-1-5-32-545` 或写 `Users` 都 exit 0（NOTES.md §7.3）。
+    fields:
+      - id: path
+        label: 起始目录
+        type: directory
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 D:\projects
+        help: 从这里往下找。官方说这个参数是 `<name>`，配合 /T 才有意义。
+        doc: official #parameters 的 <name> 与 /findsid <sid>
+      - id: sid
+        label: 账号名或 SID
+        type: text
+        style: separate
+        prefix: "/findsid"
+        required: true
+        placeholder: 例 Users 或 *S-1-5-32-545
+        help: >-
+          **填数值 SID 时必须带 `*` 前缀**（例如 `*S-1-5-32-545`），否则 icacls 会把它当账号名去解析，
+          直接以退出码 1332 失败。填账号名（例如 `Users`、`Administrators`）则不用加。
+          本机是中文系统，账号名要用**英文/系统名**（实测 `Users` 可用；中文显示名不一定能解析）。
+        doc: official #remarks 的 "If you use a numerical form, affix the wildcard character * to the beginning of the SID."
+      - id: recursive
+        label: 连同子目录（/T）
+        type: bool
+        style: flag
+        prefix: "/T"
+        group: 开关
+        default: true
+        help: 不递归通常只能命中所给的这一个对象，排查时基本都要递归。
+        doc: official #parameters 的 /t
+      - id: continueOnError
+        label: 出错继续（/C）
+        type: bool
+        style: flag
+        prefix: "/C"
+        group: 开关
+        default: false
+        help: 官方原文：/c "Continues the operation even if file errors occur. Error messages are still shown."
+        doc: official #parameters 的 /c
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测（本机、非管理员）：`icacls <目录> /findsid *S-1-5-32-545 /T` -> 退出码 0，
+        每个命中一行 `SID Found: <路径>.`（注意行尾那个句点），末尾一句
+        `Successfully processed 6 files; Failed processing 0 files`。
+        **一个都没命中时**退出码是 1332（不是 0）并打印 `No files with a matching SID was found`——
+        这与 /verify 的 0 不同，是实测出来的。
+    examples:
+      - title: 找出目录树里明确授过权给 Users 的文件
+        args: ["C:\\Users\\Steve\\Documents", "/findsid", "*S-1-5-32-545", "/T", "/C"]
+
+  # ============================================================ 导出与还原
+  - id: save-acl
+    category: 导出与还原
+    title: 导出权限到文件（/save）
+    command: ""
+    danger: overwrite
+    confirmText: >-
+      这会把指定目录树里每个对象的 DACL 写进你选的 ACL 文件（同名文件会被**直接覆盖**）。
+      ACL 文件本身不含所有者、不含 SACL，恢复时也只恢复 DACL。确定继续？
+    description: >-
+      把一棵目录树里所有对象的 DACL 全部导出到一个文件，之后可以用 /restore 原样恢复回去。
+      这是"改权限之前先备份权限"的标准做法。
+    sources:
+      - title: icacls 官方参考 —— /save <ACLfile>
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/save <ACLfile> "Stores DACLs for all matching files into an access control list (ACL)
+          file for later use with /restore."；官方示例 icacls c:\windows\* /save aclfile /t。
+      - title: 本机 `icacls /?` 的真实输出 —— /save 一节
+        url: file:///%SystemRoot%/System32/icacls.exe
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / icacls.exe 10.0.26100.8875
+        note: >-
+          本机原文多了一句官方页面没有的重要限制：stores the DACLs for the files and folders that match
+          the name into aclfile for later use with /restore. **Note that SACLs, owner, or integrity labels
+          are not saved.**（SACL、所有者、完整性标签都不会被保存）。实测确认文件里不含 owner 字样（NOTES.md §5.5）。
+    fields:
+      - id: path
+        label: 要导出的范围
+        type: directory
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 D:\projects
+        help: >-
+          通常配合 /T 导出整棵树。官方示例用的是带通配符的模式（`c:\windows\*`），两种都行。
+          **它必须是最前面的参数**：官方语法行写的是 `icacls name [/save aclfile] …`，
+          但把 /save 写在路径之前会直接以 exit 87 失败（实测 `First parameter must be a file name
+          pattern or "/?"`）——只有官方**示例**的形态（`icacls c:\windows\* /save aclfile /t`）能跑通。
+          本清单全部按"路径在最前"排列，见 NOTES.md §7.6。
+        doc: official #parameters 的 <name> 与官方示例 icacls c:\windows\* /save aclfile /t
+      - id: aclFile
+        label: ACL 文件（写到哪）
+        type: file
+        style: separate
+        prefix: "/save"
+        required: true
+        save: true
+        placeholder: 例 D:\backup\projects-acl.txt
+        help: >-
+          目标文件的父目录**必须已经存在**，否则 exit 87 + `No such file or directory`（实测）。
+          这个文件是 **UTF-16LE + CRLF** 的文本（实测首字节 `5f 00 5f 00 41 00 6c 00 …`），
+          用记事本能打开，但不要用普通 UTF-8 工具去改它，改坏了 /restore 就没法用了。
+        doc: official #parameters 的 /save <ACLfile>
+      - id: recursive
+        label: 连同子目录（/T）
+        type: bool
+        style: flag
+        prefix: "/T"
+        group: 开关
+        default: true
+        help: 只导出根对象还是导出整棵树。实际用起来基本都是整棵树。
+        doc: official #parameters 的 /t（官方示例就带 /t）
+      - id: quiet
+        label: 安静模式（/Q）
+        type: bool
+        style: flag
+        prefix: "/Q"
+        group: 开关
+        default: false
+        help: 官方原文：/q "Suppresses success messages."；实测会把每个 `processed file:` 行去掉，只留汇总。
+        doc: official #parameters 的 /q
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测 `icacls <探测目录> /save <探测目录>\acl.txt /T` -> 退出码 0，
+        每个对象一行 `processed file: …`，末尾 `Successfully processed 6 files; Failed processing 0 files`，
+        产出 1288 字节的 UTF-16LE 文件。**文件内容是按命令行参数原样记的相对路径**（实测 NOTES.md §5.5）：
+        命令行写的是绝对路径 `<探测目录>`，文件里记的就是 `__AllToolProbe_icacls`（那一级目录的名字）；
+        命令行写相对路径、工作目录是 P，文件里记的就是那个相对路径。
+        **这个"相对路径"形态决定了 /restore 时目录参数该填什么**，见「从文件恢复权限」的说明。
+    examples:
+      - title: 把一棵目录树的权限导出到文件
+        args: ["D:\\projects", "/save", "D:\\backup\\projects-acl.txt", "/T"]
+
+  - id: restore-acl
+    category: 导出与还原
+    title: 从文件恢复权限（/restore）
+    command: ""
+    danger: destructive
+    requiresAdmin: true
+    confirmPhrase: "恢复 {path} 的权限"
+    confirmText: >-
+      这会用 ACL 文件里保存的内容**覆盖**目标目录树里每个对象的 DACL——文件里记的是当时那种权限，
+      所以"恢复"同时也意味着"把之后的权限改动全部撤掉"。ACL 文件里不含所有者与 SACL，
+      恢复的只有 DACL。**另外：这个动作必须由管理员执行**（非管理员一律以 1300 失败，实测）。
+      确定继续？
+    description: >-
+      把 /save 导出的 ACL 文件应用回目录树。它是 icacls 里唯一能"把权限整体还原成备份那天"的手段，
+      但也是本工具包里改动面最大的动作。**需要管理员权限。**
+    sources:
+      - title: icacls 官方参考 —— /restore <ACLfile>
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/restore <ACLfile> /c | /l | /q "Applies stored DACLs from <ACLfile> to files in the
+          specified directory. Requires using with the <directory> parameter."；官方示例
+          icacls c:\windows\ /restore aclfile。**注意官方语法行里 /restore 只允许配 /c /l /q，没有 /T**，
+          所以本动作不提供 /T 字段（本机帮助里那句 `/restore aclfile [/C] [/L] [/Q]` 也没有 /T）。
+      - title: 本机 `icacls /?` 的真实输出 —— /restore 一节
+        url: file:///%SystemRoot%/System32/icacls.exe
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / icacls.exe 10.0.26100.8875
+        note: 本机原文：ICACLS directory [/substitute SidOld SidNew [...]] /restore aclfile [/C] [/L] [/Q] — applies the stored DACLs to files in directory.
+    fields:
+      - id: path
+        label: 目录参数（必须是"被保存那棵树的父目录"）
+        type: directory
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 D:\（而不是 D:\projects）
+        help: >-
+          **这一项最容易填错。** ACL 文件里存的是**相对于"保存时的基准"的路径**，所以这里要填
+          "能让那些相对路径重新拼成正确绝对路径"的那个目录。实测（NOTES.md §5.5）：
+          保存时的工作目录是 P、被保存的是 `P\x\a.txt`（命令行写的是相对路径 `x\a.txt`），
+          ACL 文件里记成 `x\a.txt`；恢复时目录参数填 P -> **每一条都成功**，
+          填 P\x -> 每条都变成去找 `P\x\x\a.txt`、"系统找不到指定的路径"。
+          官方的例子是保存 c:\windows\* 之后用 `icacls c:\windows\ /restore aclfile`
+          ——那里保存时的基准就是 c:\windows，所以两次的参数一样。**总之：填你导出时所在的那个父目录。**
+          它同时**必须是最前面的参数**（与 /save 同一条硬要求，见 NOTES.md §7.6）。
+        doc: official #parameters 的 <directory> 与 /restore <ACLfile>（"Requires using with the <directory> parameter."）
+      - id: aclFile
+        label: ACL 文件（从哪读）
+        type: file
+        style: separate
+        prefix: "/restore"
+        required: true
+        save: true
+        placeholder: 例 D:\backup\projects-acl.txt
+        help: 由「导出权限到文件（/save）」生成的 UTF-16LE 文件。
+        doc: official #parameters 的 /restore <ACLfile>
+      - id: continueOnError
+        label: 出错继续（/C）
+        type: bool
+        style: flag
+        prefix: "/C"
+        group: 开关
+        default: true
+        help: >-
+          官方原文：/c "Continues the operation even if file errors occur. Error messages are still shown."。
+          一棵树里总有 ACL 文件记着、但现在已经不存在的路径，不勾就会半途停下。
+        doc: official #parameters 的 /c（/restore 行允许的开关之一）
+      - id: quiet
+        label: 安静模式（/Q）
+        type: bool
+        style: flag
+        prefix: "/Q"
+        group: 开关
+        default: false
+        help: 官方原文：/q "Suppresses success messages."
+        doc: official #parameters 的 /q
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测（本机账号非管理员）：无论目录参数填对还是填错、ACL 文件存在还是不存在，
+        一律 **exit 1300 + stderr `Not all privileges or groups referenced are assigned to the caller.`**
+        ——也就是说它在动手之前就因为没有特权而失败，连"文件在不在"都还没检查到。
+        提权后实测：目录参数填对时 exit 0、每个对象一行 `已处理的文件: …`（提权进程是中文消息）、
+        `已成功处理 5 个文件; 处理 0 个文件时失败`；填错时 exit 0 但每个条目都以"系统找不到指定的路径"失败
+        ——**退出码 0 不代表恢复成功，要看 `处理 N 个文件时失败` 这一句**（更准确地说：这句也出现在 stdout 里，
+        icacls 对"部分失败"仍然返回 0，实测见 NOTES.md §5.5）。
+    examples:
+      - title: 把备份的权限恢复到父目录（示例路径换成你自己的）
+        args: ["D:\\projects", "/restore", "D:\\backup\\projects-acl.txt", "/C"]
+
+  # ============================================================ 修改权限
+  - id: grant-perm
+    category: 修改权限
+    title: 授予权限（/grant[:r]）
+    command: ""
+    danger: overwrite
+    confirmText: >-
+      这会往对象的 DACL 里写入一条授权 ACE（加了 `:r` 时是**替换**该账号原有的显式授权）。
+      请先核对账号名与权限掩码，改错了要自己改回来。确定继续？
+    description: >-
+      给某个账号授予权限。不带 `:r` 时是"在原有显式授权上追加"，带 `:r` 时是"替换该账号原有的显式授权"。
+      这是 icacls 用得最多的写操作。
+    sources:
+      - title: icacls 官方参考 —— /grant[:r] <sid>:<perm>
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/grant[:r] <sid>:<perm> "Grants specified user access rights. Permissions replace
+          previously granted explicit permissions. Not adding :r means that permissions are added to any
+          previously granted explicit permissions."；官方示例 icacls test1 /grant User1:(d,wdac) 与
+          icacls TestFile /grant *S-1-1-0:(d,wdac)。Remarks 里给了全部权限掩码的取值表。
+      - title: 本机 `icacls /?` 的真实输出 —— /grant 一节
+        url: file:///%SystemRoot%/System32/icacls.exe
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / icacls.exe 10.0.26100.8875
+        note: >-
+          本机原文：/grant[:r] Sid:perm grants the specified user access rights. With :r, the permissions
+          replace any previously granted explicit permissions. Without :r, the permissions are added to any
+          previously granted explicit permissions.
+    fields:
+      - id: path
+        label: 文件或目录
+        type: paths
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 D:\projects\build
+        help: 可以填多个（每行一个），也可以写通配符（实测 `<目录>\*.txt` 会被 icacls 展开并逐个处理）。
+        doc: official #parameters 的 <name>
+      - id: grantSwitch
+        label: 授权方式（/grant 还是 /grant:r）
+        type: enum
+        style: literal
+        switchBase: "/grant"
+        required: true
+        help: >-
+          `/grant` 是在该账号原有的**显式授权上追加**；`/grant:r` 是**替换**它原有的显式授权。
+          **刻意不给默认值**——这是语义差别而不是格式偏好，必须由用户选定；
+          留空则不产生任何开关，icacls 会因为找不到 /grant 参数而以 87 失败。
+        doc: official #parameters 的 /grant[:r] <sid>:<perm>（"Not adding :r means that permissions are added to any previously granted explicit permissions."）
+        values:
+          - value: ""
+            label: 不指定（不产生任何参数）
+            args: []
+            isDefault: true
+          - value: grant
+            label: /grant —— 追加到原有的显式授权
+            args: ["/grant"]
+          - value: grantReplace
+            label: /grant:r —— 替换该账号原有的显式授权
+            args: ["/grant:r"]
+      - id: grantSpec
+        label: 账号与权限（<Sid>:<perm>）
+        type: text
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 Users:(R)　或　*S-1-5-32-545:(M)
+        help: >-
+          **账号名与权限掩码必须用冒号粘成一个整体**（官方语法 `<sid>:<perm>`，中间**不能有空格**），
+          而 v1 清单没有"把两个字段的值拼进同一个 token"的能力（`attached` 只能把前缀粘到本字段
+          自己的值上），所以这一整段只能由一个字段承载，见 NOTES.md §7.5。
+          它与上面的开关是**两个独立 token**：写成 `/grant Users:(R)` 一个 token 会被 icacls 拒绝
+          （实测 exit 87 `Invalid parameter "/grant Users:(R)"`），而宿主按字段顺序展开正好是两个 token。
+          - 账号名可以写 `Users`、`Administrators`、`DOMAIN\someone`，或数值 SID
+            （数值 SID **必须带 `*` 前缀**，官方 Remarks 原文：If you use a numerical form, affix the
+            wildcard character * to the beginning of the SID；不带 `*` 会被当账号名解析，实测 exit 1332）；
+          - 掩码两族：**简单权限**直接写字母、不带括号（N 无访问 / F 完全控制 / M 修改 /
+            RX 读取与执行 / R 只读 / W 只写 / D 删除）；**具体权限**写在一对圆括号里、逗号分隔
+            （DE / RC / WDAC / WO / S / MA / GR / GW / GE / GA / RD / WD / AD / REA / WEA / X / DC / RA / WA）；
+          - 想让它往下继承，可在掩码前再加 `(OI)`/`(CI)`（只对目录有效）。
+          本机是中文系统：命令里要用**系统账号名**（实测 `Users` 可用），不要用中文显示名。
+        doc: official #parameters 的 /grant[:r] <sid>:<perm> 与 #remarks 的权限掩码表 + `*` 前缀规则
+      - id: recursive
+        label: 连同子目录（/T）
+        type: bool
+        style: flag
+        prefix: "/T"
+        group: 开关
+        default: false
+        help: 官方原文：/t "Performs the operation on all specified files in the current directory and its subdirectories."
+        doc: official #parameters 的 /t
+      - id: continueOnError
+        label: 出错继续（/C）
+        type: bool
+        style: flag
+        prefix: "/C"
+        group: 开关
+        default: false
+        help: 官方原文：/c "Continues the operation even if file errors occur. Error messages are still shown."
+        doc: official #parameters 的 /c
+      - id: quiet
+        label: 安静模式（/Q）
+        type: bool
+        style: flag
+        prefix: "/Q"
+        group: 开关
+        default: false
+        help: 官方原文：/q "Suppresses success messages."；实测把每个 `processed file:` 行去掉，只留汇总那一句。
+        doc: official #parameters 的 /q
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测（本机、非管理员，在探测目录里）：`icacls a.txt /grant Users:(R)` -> exit 0、138 字节，
+        输出 `processed file: …` + `Successfully processed 1 files; Failed processing 0 files`；
+        账号名写错（NoSuchUser123）-> exit 1332；对系统文件（C:\Windows\System32\drivers\etc\hosts）-> exit 5（Access is denied.）。
+    examples:
+      - title: 给某个目录里的文件授只读
+        args: ["D:\\projects\\build", "/grant", "Users:(R)"]
+      - title: 用数值 SID 授予修改权限并替换原有授权（官方示例形态）
+        args: ["D:\\projects\\build", "/grant:r", "*S-1-5-32-545:(M)", "/T"]
+
+  - id: deny-perm
+    category: 修改权限
+    title: 拒绝权限（/deny）
+    command: ""
+    danger: overwrite
+    confirmText: >-
+      这会写入一条**显式拒绝** ACE——它的优先级高于任何授权（Windows 的判定是"任一 DENY 命中即拒绝"），
+      也就是说这个账号会立刻被挡在门外，即使它同时属于某个被授权的组。
+      **实测它连管理员都挡得住**：给一个文件加上拒绝 Users 写入之后，提权执行删除仍然是"访问被拒绝"，
+      只能用 /remove:d（或 /reset）先把这条拒绝摘掉。确定继续？
+    description: >-
+      显式拒绝某个账号的权限。注意：拒绝 ACE 会压过授权，而且**同时会把该账号在显式授权里
+      相同的权限移除**（官方原文），所以它比 /grant 更容易造成"谁都进不去"的局面——
+      实测一条 `Users:(W)` 就足以让管理员也删不掉那个文件（见 NOTES.md §7.9），
+      要摘掉它得用「移除账号的权限条目」里的 `/remove:d`。
+    sources:
+      - title: icacls 官方参考 —— /deny <sid>:<perm>
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/deny <sid>:<perm> "Explicitly denies specified user access rights. An explicit deny
+          ACE is added for the stated permissions and the same permissions in any explicit grant are removed."
+      - title: 本机 `icacls /?` 的真实输出 —— /deny 一节
+        url: file:///%SystemRoot%/System32/icacls.exe
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / icacls.exe 10.0.26100.8875
+        note: >-
+          本机原文与官方一致。本机帮助还提到 icacls 会维持 ACE 的规范顺序：
+          Explicit denials / Explicit grants / Inherited denials / Inherited grants。
+    fields:
+      - id: path
+        label: 文件或目录
+        type: paths
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 D:\projects\secret
+        help: 可以填多个（每行一个），也可以用通配符。
+        doc: official #parameters 的 <name>
+      - id: denySwitch
+        label: 拒绝开关（/deny）
+        type: enum
+        style: literal
+        switchBase: "/deny"
+        required: true
+        help: >-
+          `/deny` 没有变体（不像 /grant 有 `:r`），所以这里只有一个取值。
+          它必须**单独选出来**才能让宿主产出 `/deny` 这个 token——`switchBase` 只是给校验器看出处用的，
+          **不会自己产生参数**（这一条是实测踩出来的：只写 `switchBase` 时展开出来的是
+          `icacls <路径> Users:(W)`，少了 `/deny`）。
+        doc: official #parameters 的 /deny <sid>:<perm>
+        values:
+          - value: ""
+            label: 不指定（不产生任何参数）
+            args: []
+            isDefault: true
+          - value: deny
+            label: /deny —— 写入一条显式拒绝 ACE
+            args: ["/deny"]
+      - id: denySpec
+        label: 账号与权限（<Sid>:<perm>）
+        type: text
+        style: positional
+        required: true
+        placeholder: 例 Users:(W)　或　*S-1-5-32-545:(DE,WDAC)
+        help: >-
+          **账号名与权限掩码必须用冒号粘成一个整体**（官方语法 `/deny <sid>:<perm>`，
+          中间**不能有空格**），而 v1 清单没有"把两个字段的值拼进同一个 token"的能力
+          （`attached` 只能把前缀粘到本字段自己的值上），所以这一整段只能由一个字段承载，见 NOTES.md §7.5。
+          它与 `/deny` 开关是**两个独立 token**；写成 `/deny Users:(W)` 一个 token 会被拒绝
+          （实测 exit 87 `Invalid parameter "/deny Users:(W)"`）。
+          数值 SID 要带 `*` 前缀；掩码可用简单权限（N/F/M/RX/R/W/D）或括号里的具体权限
+          （DE/RC/WDAC/WO/S/MA/GR/GW/GE/GA/RD/WD/AD/REA/WEA/X/DC/RA/WA）。
+          本机是中文系统：请用系统账号名（实测 `Users` 可用）。
+        doc: official #parameters 的 /deny <sid>:<perm> 与 #remarks 的权限掩码表
+      - id: recursive
+        label: 连同子目录（/T）
+        type: bool
+        style: flag
+        prefix: "/T"
+        group: 开关
+        default: false
+        help: 官方原文：/t "Performs the operation on all specified files in the current directory and its subdirectories."
+        doc: official #parameters 的 /t
+      - id: quiet
+        label: 安静模式（/Q）
+        type: bool
+        style: flag
+        prefix: "/Q"
+        group: 开关
+        default: false
+        help: 官方原文：/q "Suppresses success messages."
+        doc: official #parameters 的 /q
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测（探测目录内）：`icacls a.txt /deny Users:(W)` -> exit 0；Get-Acl 确认多了一条
+        `BUILTIN\Users : Deny : Write, Synchronize`，与原有的 Allow 并存（deny 写在前面）。
+    examples:
+      - title: 显式拒绝某个账号写入
+        args: ["D:\\projects\\secret", "/deny", "Users:(W)"]
+
+  - id: remove-perm
+    category: 修改权限
+    title: 移除账号的权限条目（/remove[:g|:d]）
+    command: ""
+    danger: overwrite
+    confirmText: >-
+      这会把指定账号在 DACL 里的**显式**条目删掉。不清 :g/:d 时授权与拒绝一起删；
+      只删掉显式条目不会影响它从父目录继承来的权限。确定继续？
+    description: >-
+      从 DACL 里移除某个账号的条目。三种口径：不加后缀把该账号的授权与拒绝条目都删掉、
+      `:g` 只删授权条目、`:d` 只删拒绝条目。注意它只动**显式**条目。
+    sources:
+      - title: "icacls 官方参考 —— /remove: g | d <sid>"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/remove: g | d <sid> "Removes all occurrences of the specified SID from the DACL.
+          This command can also use: g - Removes all occurrences of granted rights to the specified SID;
+          d - Removes all occurrences of denied rights to the specified SID"。
+          官方语法行把三种形态写成 `/remove[:g|:d]]`（多一个方括号，是官方自己的笔误）。
+      - title: 本机 `icacls /?` 的真实输出 —— /remove 一节
+        url: file:///%SystemRoot%/System32/icacls.exe
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / icacls.exe 10.0.26100.8875
+        note: >-
+          本机原文：/remove[:[g|d]] Sid removes all occurrences of Sid in the ACL. With :g, it removes all
+          occurrences of granted rights to that Sid. With :d, it removes all occurrences of denied rights to that Sid.
+    fields:
+      - id: path
+        label: 文件或目录
+        type: paths
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 D:\projects\build
+        help: >-
+          可以填多个（每行一个），也可以用通配符。**必须是最前面的参数**（见 NOTES.md §7.6）。
+        doc: official #parameters 的 <name>
+      - id: removeSwitch
+        label: 移除范围（/remove[:g|:d]）
+        type: enum
+        style: literal
+        switchBase: "/remove"
+        required: true
+        help: >-
+          官方三个口径：`/remove` 把该账号的授权与拒绝条目**都**删掉；`/remove:g` 只删授权条目；
+          `/remove:d` 只删拒绝条目。**刻意不给默认值**——它和下面的账号是**同一个参数的两半**
+          （`/remove:g Users` 连在一起才是完整参数），必须由用户一次选定口径；
+          留空则整个动作只会在路径参数处失败（第一个参数不是路径模式时 icacls 直接报 exit 87）。
+        doc: "official #parameters 的 /remove: g | d <sid>"
+        values:
+          - value: ""
+            label: 不指定（不产生任何参数）
+            args: []
+            isDefault: true
+          - value: plain
+            label: 授权与拒绝都移除（/remove）
+            args: ["/remove"]
+          - value: granted
+            label: 只移除授权条目（/remove:g）
+            args: ["/remove:g"]
+          - value: denied
+            label: 只移除拒绝条目（/remove:d）
+            args: ["/remove:d"]
+      - id: account
+        label: 账号或 SID
+        type: text
+        style: positional
+        required: true
+        placeholder: 例 Users 或 *S-1-5-32-545
+        help: >-
+          **独立的一个 token**，跟在 `/remove`（或 `/remove:g` / `/remove:d`）后面——
+          官方语法就是 `/remove[:g|:d] Sid[...]`，中间是空格。注意它和「授予权限」那种
+          `账号:掩码` 粘成一个 token 的形态**不一样**，这里不需要冒号。
+          数值 SID 同样要带 `*` 前缀（官方 Remarks），否则 exit 1332。
+        doc: "official #parameters 的 /remove: g | d <sid>"
+      - id: recursive
+        label: 连同子目录（/T）
+        type: bool
+        style: flag
+        prefix: "/T"
+        group: 开关
+        default: false
+        help: 官方原文：/t "Performs the operation on all specified files in the current directory and its subdirectories."
+        doc: official #parameters 的 /t
+      - id: quiet
+        label: 安静模式（/Q）
+        type: bool
+        style: flag
+        prefix: "/Q"
+        group: 开关
+        default: false
+        help: 官方原文：/q "Suppresses success messages."
+        doc: official #parameters 的 /q
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测三条都在探测目录里真跑过（NOTES.md §5.6）：先 /grant 再 /deny 造成两种条目并存，
+        然后 `/remove:d Users` 只剩 Allow、`/remove:g Users` 把 Allow 也去掉了，三条都 exit 0。
+        **账号名写错时是 exit 1332 但 stdout 只有 `Successfully processed 0 files; Failed processing 0 files`**
+        （一条错误信息都没有）——这是最容易误判成成功的一种失败。
+    examples:
+      - title: 把某个账号的显式权限条目全部移除
+        args: ["D:\\projects\\build", "/remove", "Users"]
+      - title: 只移除拒绝条目
+        args: ["D:\\projects\\build", "/remove:d", "Users", "/T"]
+
+  - id: set-inheritance
+    category: 修改权限
+    title: 设置继承（/inheritancelevel）
+    command: ""
+    danger: overwrite
+    confirmText: >-
+      这会改变该对象与父目录之间的权限继承关系。选 d（禁用继承并复制 ACE）会让当前的继承权限
+      变成该对象自己的显式权限、从此不再随父目录变化；选 r（禁用继承并移除继承来的 ACE）
+      会**直接把继承来的权限条目删掉**。确定继续？
+    description: >-
+      控制"这个对象的权限是否跟着父目录走"。三个取值：启用继承、禁用继承但把继承来的 ACE 复制成自己的、
+      禁用继承并把继承来的 ACE 删掉。它是 icacls 里唯一能单独操作继承关系的开关。
+    sources:
+      - title: "icacls 官方参考 —— /inheritancelevel: e | d | r"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/inheritancelevel: e | d | r "Sets the inheritance level, which can be: e - Enables
+          inheritance; d - Disables inheritance and copies the ACEs; r - Disables inheritance and removes
+          only inherited ACEs"。**官方用的是 /inheritancelevel 这个长名字，语法行里也没有它的简写。**
+      - title: 本机 `icacls /?` 的真实输出 —— /inheritance:e|d|r 一节
+        url: file:///%SystemRoot%/System32/icacls.exe
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / icacls.exe 10.0.26100.8875
+        note: >-
+          本机帮助写的是 `/inheritance:e|d|r`（**短名字**），与官方页面不一致。
+          实测**两种拼法都能跑通、退出码 0**（e/d/r 三个取值各试了两种拼法，6 条全 0，NOTES.md §6.1），
+          所以按"官方为准"写 /inheritancelevel，并在 NOTES 里记下本机的简写。
+    fields:
+      - id: path
+        label: 文件或目录
+        type: paths
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 D:\\projects\\shared
+        help: 可以填多个（每行一个），也可以用通配符。
+        doc: official #parameters 的 <name>
+      - id: level
+        label: 继承级别
+        type: enum
+        style: attached
+        switchBase: "/inheritancelevel"
+        prefix: "/inheritancelevel:"
+        required: true
+        help: >-
+          官方三个取值，含义差别很大，**刻意不给默认值**（三个都会改动权限，选哪个是用户的决定）：
+          e = 启用继承；d = 禁用继承**并把继承来的 ACE 复制成自己的显式 ACE**；
+          r = 禁用继承**并把继承来的 ACE 删掉**。选 r 之后这个对象就只剩自己的显式条目，
+          很容易变成"除了所有者谁也不能访问"，请先想清楚。
+        doc: "official #parameters 的 /inheritancelevel: e | d | r"
+        values:
+          - value: e
+            label: e —— 启用继承
+          - value: d
+            label: d —— 禁用继承，并把继承来的 ACE 复制过来
+          - value: r
+            label: r —— 禁用继承，并移除继承来的 ACE
+      - id: recursive
+        label: 连同子目录（/T）
+        type: bool
+        style: flag
+        prefix: "/T"
+        group: 开关
+        default: false
+        help: 官方原文：/t "Performs the operation on all specified files in the current directory and its subdirectories."
+        doc: official #parameters 的 /t
+      - id: quiet
+        label: 安静模式（/Q）
+        type: bool
+        style: flag
+        prefix: "/Q"
+        group: 开关
+        default: false
+        help: 官方原文：/q "Suppresses success messages."
+        doc: official #parameters 的 /q
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测（探测目录内的文件，用 Get-Acl 核对真实效果）：原本 ACE 全是 `IsInherited=True`、
+        `AreAccessRulesProtected=False`；跑 `/inheritancelevel:d` 之后变成 `IsInherited=False`、
+        `AreAccessRulesProtected=True`（继承确实被切断了，且 ACE 被复制成显式条目）。
+        `/inheritancelevel:e` 与 `:r` 也各 exit 0。**无效取值**（例如 `x`）与**不给取值**都是 exit 87。
+    examples:
+      - title: 切断继承并把现有权限复制为显式权限
+        args: ["D:\\projects\\shared", "/inheritancelevel:d"]
+      - title: 恢复继承
+        args: ["D:\\projects\\shared", "/inheritancelevel:e"]
+
+  - id: set-integrity
+    category: 修改权限
+    title: 设置完整性级别（/setintegritylevel）
+    command: ""
+    danger: overwrite
+    confirmText: >-
+      这会写入一条完整性 ACE，直接改变该对象在强制完整性控制（MIC）里的等级。
+      低完整性（L）常被用来"让程序在沙箱里跑"，高完整性（H）则相反。确定继续？
+    description: >-
+      设置对象的完整性级别（Low / Medium / High）。完整性级别不是"谁能访问"，
+      而是"这个对象的可信等级"，影响的是完整性机制下的读写判定。
+    sources:
+      - title: icacls 官方参考 —— /setintegritylevel <perm><level>
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/setintegritylevel <perm><level> "Explicitly adds an integrity ACE to all matching
+          files. The level can be specified as: l - Low, m - Medium, h - High. Inheritance options for the
+          integrity ACE may precede the level and are applied only to directories."；
+          官方示例 icacls "myDirectory" /setintegritylevel (CI)(OI)H。**注意官方参数表写的是
+          `<perm><level>`（像是还要给一个策略后缀），但语法行与示例里都只有级别本身**，见 NOTES.md §6.3。
+      - title: 本机 `icacls /?` 的真实输出 —— /setintegritylevel 一节
+        url: file:///%SystemRoot%/System32/icacls.exe
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / icacls.exe 10.0.26100.8875
+        note: >-
+          本机原文：/setintegritylevel [(CI)(OI)]Level explicitly adds an integrity ACE to all matching
+          files. The level is to be specified as one of L[ow] / M[edium] / H[igh]. Inheritance options for
+          the integrity ACE may precede the level and are applied only to directories.
+          ——**本机帮助里完全没有那个 policy**，与官方参数表的 `<perm><level>` 对不上（NOTES.md §6.3）。
+    fields:
+      - id: path
+        label: 文件或目录
+        type: paths
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 D:\\sandbox
+        help: 可以填多个（每行一个），也可以用通配符。
+        doc: official #parameters 的 <name>
+      - id: level
+        label: 完整性级别
+        type: text
+        style: positional
+        switchBase: "/setintegritylevel"
+        required: true
+        placeholder: 例 L、M、H 或 (CI)(OI)H
+        help: >-
+          官方只有三个级别：`L`（Low，低完整性）、`M`（Medium，中完整性）、`H`（High，高完整性）；
+          官方示例给目录加继承前缀的写法是 `(CI)(OI)H`（本机帮助写的是 `[(CI)(OI)]Level`，实测这个形态可用）。
+          取值也可以写成全拼（本机帮助写的是 `L[ow] / M[edium] / H[igh]`）。
+          **必须给值**：不给就是 exit 87；实测给非法值（例如 `X`）也是 exit 87
+          + stderr `X: The parameter is incorrect.`。
+        doc: official #parameters 的 /setintegritylevel <perm><level> 与官方示例 icacls "myDirectory" /setintegritylevel (CI)(OI)H
+      - id: recursive
+        label: 连同子目录（/T）
+        type: bool
+        style: flag
+        prefix: "/T"
+        group: 开关
+        default: false
+        help: 官方原文：/t "Performs the operation on all specified files in the current directory and its subdirectories."
+        doc: official #parameters 的 /t
+      - id: quiet
+        label: 安静模式（/Q）
+        type: bool
+        style: flag
+        prefix: "/Q"
+        group: 开关
+        default: false
+        help: 官方原文：/q "Suppresses success messages."
+        doc: official #parameters 的 /q
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测（探测目录内的文件）：`/setintegritylevel L`、`/setintegritylevel M`、
+        `/setintegritylevel (CI)(OI)H` 三条都是 exit 0；`/setintegritylevel X` 是 exit 87
+        + stderr `X: The parameter is incorrect.`。
+    examples:
+      - title: 给一个目录设高完整性并让子项继承（官方示例形态）
+        args: ["D:\\sandbox", "/setintegritylevel", "(CI)(OI)H"]
+
+  - id: reset-acl
+    category: 修改权限
+    title: 重置为继承的权限（/reset）
+    command: ""
+    danger: destructive
+    confirmPhrase: "重置 {path} 的权限"
+    confirmText: >-
+      这会把对象上的 ACL **整个换成"从父目录继承来的默认权限"**：所有单独设置的显式授权、
+      显式拒绝、以及之前切断继承留下的结果都会被丢弃，而且 icacls 没有撤销功能
+      （要还原只能靠事先用 /save 导出的备份，或手工重设）。确定继续？
+    description: >-
+      把 ACL 恢复成"只由父目录继承而来"的默认状态。这是 icacls 里改动面最大的单个操作之一：
+      它会一次性丢掉这个对象上所有单独做的权限设置。
+    sources:
+      - title: icacls 官方参考 —— /reset
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/reset "Replaces ACLs with default inherited ACLs for all matching files."。
+          配合 /t 就是对整棵树统一重置。
+      - title: 本机 `icacls /?` 的真实输出 —— /reset 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / icacls.exe 10.0.26100.8875
+        note: 本机原文：/reset "replaces ACLs with default inherited ACLs for all matching files."（与官方一字不差）。
+    fields:
+      - id: path
+        label: 文件或目录
+        type: paths
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 D:\\projects\\broken
+        help: 可以填多个（每行一个），也可以用通配符。**建议先用「导出权限到文件（/save）」留一份备份。**
+        doc: official #parameters 的 <name>
+      - id: recursive
+        label: 连同子目录（/T）
+        type: bool
+        style: flag
+        prefix: "/T"
+        group: 开关
+        default: false
+        help: >-
+          官方原文：/t "Performs the operation on all specified files in the current directory and its
+          subdirectories."。**勾上就是对整棵树统一重置**，改动面会成倍放大，请先确认范围。
+        doc: official #parameters 的 /t
+      - id: continueOnError
+        label: 出错继续（/C）
+        type: bool
+        style: flag
+        prefix: "/C"
+        group: 开关
+        default: false
+        help: 官方原文：/c "Continues the operation even if file errors occur. Error messages are still shown."
+        doc: official #parameters 的 /c
+      - id: quiet
+        label: 安静模式（/Q）
+        type: bool
+        style: flag
+        prefix: "/Q"
+        group: 开关
+        default: false
+        help: 官方原文：/q "Suppresses success messages."。**注意失败消息不会被抑制**（实测）。
+        doc: official #parameters 的 /q
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测（探测目录内的文件，用 Get-Acl 核对）：先把继承切断（ACE 全变成 `IsInherited=False`），
+        再跑 `/reset` -> exit 0，ACE 全部回到 `IsInherited=True`、`AreAccessRulesProtected=False`
+        ——确认它确实把对象恢复成"只继承父目录"的状态。
+        **本动作没有在任何探测目录之外的对象上跑过**，见 NOTES.md §9。
+    examples:
+      - title: 把一个目录重置为继承来的权限
+        args: ["D:\\projects\\broken", "/reset"]
+      - title: 整棵树重置（先备份！）
+        args: ["D:\\projects\\broken", "/reset", "/T", "/C"]
+
+  - id: set-owner
+    category: 修改权限
+    title: 改所有者（/setowner）
+    command: ""
+    danger: destructive
+    requiresAdmin: true
+    confirmPhrase: "改所有者 {path}"
+    confirmText: >-
+      这会把这个对象的所有者改成另一个账号。所有者随时可以重写该对象的整个 DACL
+      （"拿到所有权就等于拿到控制权"），而且改完之后你自己可能就不再有修改权限了。
+      **实测：改成别的账号需要管理员权限**（非管理员 exit 1307）。确定继续？
+    description: >-
+      把文件/目录的所有者改成指定账号。所有者是一种"最高权限"：无论 DACL 怎么写，
+      所有者都可以重新打开给自己授权。**注意官方特别说明：这个命令不会强制夺取所有权**
+      （那要用 takeown.exe），所以别把它当成 takeown 用。
+    sources:
+      - title: icacls 官方参考 —— /setowner <user>
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/setowner <user> "Changes the owner of all matching files to the specified user."。
+      - title: 本机 `icacls /?` 的真实输出 —— /setowner 一节
+        url: file:///%SystemRoot%/System32/icacls.exe
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / icacls.exe 10.0.26100.8875
+        note: >-
+          本机原文多了一句官方页面**没有**的关键限制：changes the owner of all matching names.
+          **This option does not force a change of ownership; use the takeown.exe utility for that purpose.**
+          也就是说它不能像 takeown 那样强行夺取所有权（NOTES.md §6.2）。
+    fields:
+      - id: path
+        label: 文件或目录
+        type: paths
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 D:\projects\handover
+        help: >-
+          可以填多个（每行一个），也可以用通配符。**必须是最前面的参数**（见 NOTES.md §7.6）。
+        doc: official #parameters 的 <name>
+      - id: account
+        label: 新所有者
+        type: text
+        style: separate
+        prefix: "/setowner"
+        required: true
+        placeholder: 例 Administrators 或 *S-1-5-32-544
+        help: >-
+          账号名或数值 SID（数值要带 `*` 前缀，官方 Remarks）。**实测：**
+          改成自己（`Steve`）不需要管理员，exit 0；
+          改成 Users 或 Administrators 在非管理员下 exit 1307
+          （This security ID may not be assigned as the owner of this object.），提权后才成功。
+          本机是中文系统，请用系统账号名（`Users`、`Administrators`、`NT SERVICE\TrustedInstaller` 等）。
+        doc: official #parameters 的 /setowner <user> 与 #remarks 的 `*` 前缀规则
+      - id: recursive
+        label: 连同子目录（/T）
+        type: bool
+        style: flag
+        prefix: "/T"
+        group: 开关
+        default: false
+        help: 官方原文：/t "Performs the operation on all specified files in the current directory and its subdirectories."
+        doc: official #parameters 的 /t
+      - id: continueOnError
+        label: 出错继续（/C）
+        type: bool
+        style: flag
+        prefix: "/C"
+        group: 开关
+        default: false
+        help: 官方原文：/c "Continues the operation even if file errors occur. Error messages are still shown."
+        doc: official #parameters 的 /c
+      - id: quiet
+        label: 安静模式（/Q）
+        type: bool
+        style: flag
+        prefix: "/Q"
+        group: 开关
+        default: false
+        help: 官方原文：/q "Suppresses success messages."
+        doc: official #parameters 的 /q
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测（探测目录内、**用 Start-Process -Verb RunAs 提权后**跑的）：`/setowner Users` exit 0，
+        随后用 Get-Acl 从普通会话复核，`Owner` 确实从 `KANGMORI\Steve` 变成了 `BUILTIN\Users`。
+        非管理员跑同一条是 exit 1307。收尾时又提权跑了一次 `/setowner KANGMORI\Steve /T`
+        把所有者交回自己，然后才删除探测目录（NOTES.md §10）。
+    examples:
+      - title: 把一个目录的所有者改成管理员组（需要管理员权限）
+        args: ["D:\\projects\\handover", "/setowner", "Administrators", "/T"]
+
+  # ============================================================ 其它
+  - id: install-info
+    category: 其它
+    title: 版本与出处（icacls 没有版本开关）
+    command: ""
+    execution: info
+    description: >-
+      icacls **没有版本开关**（实测 `/version` 与 `/v` 都返回 exit 87，`-version` 被当成文件名）。
+      这里展示的是"到哪去看它的文件版本"与它的出处——命令里的路径不是 icacls 的参数，
+      所以本动作只展示、不执行。
+    sources:
+      - title: 本机 `icacls /?` 的真实输出（命令总表里没有版本开关）
+        url: file:///%SystemRoot%/System32/icacls.exe
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / icacls.exe 10.0.26100.8875
+        note: >-
+          实测 `icacls /version` -> exit 87、`icacls /v` -> exit 87（输出帮助文本 + First parameter must be
+          a file name pattern or "/?"）、`icacls /help` -> exit 87；帮助里也没有任何版本项。
+          按 R1 不编造版本命令，改为展示 exe 的文件版本（文件版本实测 10.0.26100.8875 (WinBuild.160101.0800)）。
+      - title: 官方文档的 Applies to 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11 / Windows Server 2016–2025 / Azure Local 2311.2+
+        note: 页面 Applies to 列出的受支持系统版本，用于判断当前系统在不在支持范围内。
+    fields: []
+    output:
+      mode: capture
+      showCommandLine: true
+      resultNote: >-
+        文件位置 C:\Windows\System32\icacls.exe；文件版本 10.0.26100.8875 (WinBuild.160101.0800)；
+        产品版本 10.0.26100.8875。看版本的办法是在 PowerShell 里跑
+        `(Get-Item C:\Windows\System32\icacls.exe).VersionInfo.FileVersion`
+        ——**这不是 icacls 的参数，所以本动作不执行它**。
+    examples:
+      - title: "展示用途（本动作 execution: info，宿主不会真的执行）"
+        args: ["/?"]
+
+  - id: help
+    category: 其它
+    title: 查看 icacls 自带帮助（/?）
+    command: "/?"
+    description: >-
+      打印 icacls 自己的帮助：四段语法行、每个开关的说明、权限掩码表、四个官方示例。
+      本机这份帮助是**英文 5286 字节**，退出码 0。
+    sources:
+      - title: 本机 `icacls /?` 的真实输出
+        url: file:///%SystemRoot%/System32/icacls.exe
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / icacls.exe 10.0.26100.8875
+        note: >-
+          实测 5286 字节、退出码 0、stderr 0 字节、全部写 stdout、文本是纯 ASCII（5286 字节里 0 个 >0x7F）。
+          内容覆盖 /save /restore /setowner /findsid /verify /reset /grant /deny /remove
+          /setintegritylevel /inheritance 与 Note 一节（SID 的 `*` 形态、/T /C /L /Q 的含义、
+          ACE 规范顺序、权限掩码表），末尾 4 个示例。
+    fields: []
+    output:
+      mode: capture
+      showCommandLine: true
+      resultNote: 实测 exit 0、5286 字节、纯 ASCII、写 stdout。没有任何中文，也不带任何选项——它不从 stdin 读东西。
+    examples:
+      - title: 查看自带帮助
+        args: ["/?"]
