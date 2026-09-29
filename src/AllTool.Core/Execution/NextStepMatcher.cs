@@ -8,7 +8,9 @@ public sealed record NextStepSuggestion(
     string Title,
     ManifestAction Target,
     string? Reason,
-    IReadOnlyDictionary<string, object?> Values);
+    IReadOnlyDictionary<string, object?> Values,
+    string? GroupId = null,
+    string? GroupTitle = null);
 
 /// <summary>
 /// 根据刚执行完的动作与它的输出，算出可以推荐哪些"下一步"。
@@ -61,7 +63,8 @@ public static class NextStepMatcher
             // 没写 when：总是推荐一条（values 原样使用）
             if (string.IsNullOrWhiteSpace(step.When))
             {
-                result.Add(new NextStepSuggestion(step.Title!, target, step.Reason, template));
+                result.Add(new NextStepSuggestion(
+                    step.Title!, target, step.Reason, template, GroupKey(step), GroupTitle(step)));
 
                 continue;
             }
@@ -94,7 +97,8 @@ public static class NextStepMatcher
 
             if (!usesPlaceholder)
             {
-                result.Add(new NextStepSuggestion(step.Title!, target, step.Reason, template));
+                result.Add(new NextStepSuggestion(
+                    step.Title!, target, step.Reason, template, GroupKey(step), GroupTitle(step)));
                 continue;
             }
 
@@ -111,7 +115,9 @@ public static class NextStepMatcher
                     Fill(step.Title, match) ?? step.Title!,
                     target,
                     step.Reason,
-                    values));
+                    values,
+                    GroupKey(step),
+                    GroupTitle(step)));
             }
         }
 
@@ -142,5 +148,16 @@ public static class NextStepMatcher
 
             return named.Success ? named.Value : m.Value;
         });
+    }
+
+    /// <summary>同一条规则生成的多条建议共用一个 GroupId，界面据此把它们收进一个列表选择。</summary>
+    private static string GroupKey(NextStepSpec step) => $"{step.Action}|{step.Title}";
+
+    /// <summary>分组标题：把规则标题里的占位符去掉（例如「更新 {1}」→「更新」）。</summary>
+    private static string GroupTitle(NextStepSpec step)
+    {
+        var title = Regex.Replace(step.Title ?? string.Empty, @"\{[A-Za-z0-9_]+\}", string.Empty);
+
+        return title.Trim();
     }
 }

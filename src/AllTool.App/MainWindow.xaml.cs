@@ -2485,7 +2485,9 @@ public sealed partial class MainWindow : Window
 
         var suggestions = NextStepMatcher.Match(_action, _manifest.Actions ?? [], output);
 
-        NextStepsPanel.Children.Add(new TextBlock
+        var content = new StackPanel { Spacing = 6 };
+
+        content.Children.Add(new TextBlock
         {
             Text = "下一步",
             FontWeight = FontWeights.SemiBold,
@@ -2493,9 +2495,15 @@ public sealed partial class MainWindow : Window
         });
 
         // ---- 清单声明的建议（领域相关，例如 scoop status → 一键更新）----
-        foreach (var suggestion in suggestions)
+        // **同一条规则命中多行时收进一个下拉列表**：一屏十几个按钮既挤又容易溢出
+        // （产品负责人实测反馈「下一步全乱了」）。列表选择更清楚，而且下拉本身就能滚动。
+        foreach (var group in suggestions.GroupBy(s => s.GroupId ?? s.Title))
         {
-            NextStepsPanel.Children.Add(BuildSuggestionRow(suggestion));
+            var items = group.ToList();
+
+            content.Children.Add(items.Count == 1
+                ? BuildSuggestionRow(items[0])
+                : BuildSuggestionPicker(group.Key, items));
         }
 
         // ---- 通用选项 ----
@@ -2513,8 +2521,75 @@ public sealed partial class MainWindow : Window
         folderButton.Click += (_, _) => _ = OpenCurrentPackageFolderAsync();
         generic.Children.Add(folderButton);
 
-        NextStepsPanel.Children.Add(generic);
+        content.Children.Add(generic);
+
+        // 「下一步」区整体加**高度上限 + 滚动**：建议再多也不会把输出区挤没。
+        NextStepsPanel.Children.Add(new ScrollViewer
+        {
+            Content = content,
+            MaxHeight = 180,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        });
+
         NextStepsPanel.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// 同一条规则命中多行时（例如 scoop status 的「逐应用更新」）用**下拉列表 + 执行**呈现。
+    /// 理由：一屏十几个按钮既挤又容易溢出，而且用户看不出它们其实是同一类操作；
+    /// 列表选择既清楚、下拉本身也天然可滚动。
+    /// </summary>
+    private StackPanel BuildSuggestionPicker(string groupKey, IReadOnlyList<NextStepSuggestion> items)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+
+        var title = items[0].GroupTitle;
+
+        if (!string.IsNullOrWhiteSpace(title))
+        {
+            row.Children.Add(new TextBlock
+            {
+                Text = title,
+                VerticalAlignment = VerticalAlignment.Center,
+                Opacity = 0.75,
+            });
+        }
+
+        var picker = new ComboBox
+        {
+            MinWidth = 240,
+            ItemsSource = items.Select(i => i.Title).ToList(),
+            SelectedIndex = 0,
+        };
+
+        AutomationProperties.SetName(picker, title ?? groupKey);
+        row.Children.Add(picker);
+
+        var run = new Button { Content = "执行" };
+        run.Click += async (_, _) =>
+        {
+            var index = picker.SelectedIndex;
+
+            if (index >= 0 && index < items.Count)
+            {
+                await RunSuggestionAsync(items[index]);
+            }
+        };
+
+        row.Children.Add(run);
+
+        if (!string.IsNullOrWhiteSpace(items[0].Reason))
+        {
+            row.Children.Add(new TextBlock
+            {
+                Text = items[0].Reason,
+                VerticalAlignment = VerticalAlignment.Center,
+                Opacity = 0.75,
+                TextWrapping = TextWrapping.Wrap,
+            });
+        }
+
+        return row;
     }
 
     /// <summary>把一条"下一步"建议渲染成一行（按钮 + 理由）。</summary>

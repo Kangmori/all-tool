@@ -90,7 +90,9 @@
                 <TextBlock x:Name="ActionTitle" Text="请先在左侧选择工具包与动作"
                            Style="{StaticResource SubtitleTextBlockStyle}" TextWrapping="Wrap" />
 
-                <TextBlock x:Name="ActionDescription" Grid.Row="1" Opacity="0.75" TextWrapping="Wrap" />
+                <ScrollViewer Grid.Row="1" MaxHeight="140" VerticalScrollBarVisibility="Auto">
+                    <TextBlock x:Name="ActionDescription" Opacity="0.75" TextWrapping="Wrap" />
+                </ScrollViewer>
 
                 <!-- 会话型工具包（例如 diskpart）：显示"当前作用于什么"，并提供清除 -->
                 <StackPanel Grid.Row="2" x:Name="SessionBar" Spacing="4" Visibility="Collapsed"
