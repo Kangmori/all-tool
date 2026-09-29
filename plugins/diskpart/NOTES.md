@@ -118,3 +118,36 @@ $s="$env:TEMP\dp.txt"; Set-Content $s "list disk`r`nselect disk 9999`r`nexit" -E
 
 把 `select disk 9999` 的中文报错原文抄进 `errorPatterns` 即可（一条正则）。
 本次尝试提权时 UAC 未在 60 秒内确认，所以没有拿到真实文案——**没有编造中文模式**。
+
+## 14. 中文系统的失败判定（已补齐，2026-09-30）
+
+第 13 节留的尾巴已补上。产品负责人用**管理员 PowerShell** 实跑：
+
+```powershell
+$s="$env:TEMP\dp.txt"; Set-Content $s "select disk 9999`r`nexit" -Encoding ascii; diskpart /s $s
+```
+
+真实输出（原样抄录）：
+
+```
+Microsoft DiskPart 版本 10.0.26100.1150
+
+Copyright (C) Microsoft Corporation.
+在计算机上: <机器名>
+
+你指定的磁盘无效。
+
+没有选择磁盘。
+```
+
+于是 `errorPatterns` 现在是**两种语言各一条**：
+
+| 语言 | 模式 |
+|---|---|
+| 英文 | `Virtual Disk Service error` / `DiskPart has encountered an error` / `The ... is not` / `There is no ... selected` / `The disk you specified is not valid` |
+| 中文 | `你指定的磁盘无效` / `没有选择磁盘` / `指定的…无效` / `未选择…`（**实测原文**，不是猜的） |
+
+**顺带印证了一件事**：这条输出同时确认了"本地化"这个根因——
+中文系统上 diskpart 的提示**全是中文**，所以早期那版"靠英文 `successPattern` 判断成功"的实现
+在任何中文机器上都不可能生效（这正是"select 之后依赖动作仍灰显"的真因之一）。
+现在成功判定只看"有没有命中 errorPattern"，与语言无关；状态值从字段值取，也与语言无关。

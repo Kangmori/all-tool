@@ -99,18 +99,7 @@ public sealed partial class MainWindow : Window
 
         LoadPackages();
 
-        // 启动欢迎界面：**必须等窗口加载完**——构造函数里 XamlRoot 还没准备好，
-        // 那时调 ContentDialog.ShowAsync 会抛异常（被 catch 吞掉，表现为"欢迎界面不弹"）。
-        if (Content is FrameworkElement root)
-        {
-            void OnLoadedOnce(object? sender, RoutedEventArgs args)
-            {
-                root.Loaded -= OnLoadedOnce;
-                _ = ShowWelcomeAsync();
-            }
-
-            root.Loaded += OnLoadedOnce;
-        }
+        // 欢迎界面不是弹窗：它由 ShowWelcomePanel() 画在「未选中工具包」时的中栏（见 LoadPackages）。
     }
 
     /// <summary>
@@ -242,6 +231,97 @@ public sealed partial class MainWindow : Window
         LoadPackages();
     }
 
+    /// <summary>欢迎面板要恢复的目标（工具包 + 上次的动作 id）。启动不自动选中，点按钮才恢复。</summary>
+    private (PackageEntry Package, string? ActionId)? _resumeTarget;
+
+    /// <summary>
+    /// 未选中任何工具包时，中栏显示的内容：一句话说明 + 「继续上次」+ 按类型列出的全部工具包。
+    ///
+    /// 产品负责人的要求：欢迎界面**不是弹出窗口**，而是「启动时没选工具包」的那一屏。
+    /// 顺带解决「一打开就选中 DiskPart」的困惑——启动不再自动选中，要不要回到上次由用户点。
+    /// </summary>
+    private void ShowWelcomePanel()
+    {
+        ActionTitle.Text = "欢迎使用 All Tool";
+        ActionDescription.Text =
+            "把 Windows 上已安装的命令行软件，变成可以点的界面。" + Environment.NewLine +
+            "选一个工具包 → 选一个动作 → 填参数 → 执行；执行前一定能看到完整命令行。";
+
+        FormPanel.Children.Clear();
+        CommandLineBox.Visibility = Visibility.Collapsed;
+        NextStepsPanel.Visibility = Visibility.Collapsed;
+        SessionBar.Visibility = Visibility.Collapsed;
+        RunButton.IsEnabled = false;
+        CancelButton.IsEnabled = false;
+
+        if (_resumeTarget is { } resume)
+        {
+            var text = resume.Package.Manifest.Name ?? resume.Package.Manifest.Id ?? string.Empty;
+
+            if (!string.IsNullOrWhiteSpace(resume.ActionId))
+            {
+                var action = resume.Package.Manifest.Actions?.FirstOrDefault(
+                    a => string.Equals(a.Id, resume.ActionId, StringComparison.Ordinal));
+
+                if (action is not null)
+                {
+                    text += " · " + (action.Title ?? action.Id ?? string.Empty);
+                }
+            }
+
+            var resumeButton = new Button
+            {
+                Content = $"继续上次：{text}",
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Margin = new Thickness(0, 4, 0, 8),
+            };
+
+            resumeButton.Click += (_, _) => SelectPackage(resume.Package, restoreAction: true);
+            FormPanel.Children.Add(resumeButton);
+        }
+
+        var kinds = new (string Kind, string Title)[]
+        {
+            ("user", "⚪ 我装的工具"),
+            ("system", "🔵 系统自带"),
+            ("interactive", "🟡 交互式程序"),
+            ("dangerous", "🔴 高危工具"),
+        };
+
+        foreach (var (kind, title) in kinds)
+        {
+            var members = _packages.Where(p => p.Manifest.KindOrDefault == kind).ToList();
+
+            if (members.Count == 0)
+            {
+                continue;
+            }
+
+            FormPanel.Children.Add(new TextBlock
+            {
+                Text = $"{title}（{members.Count}）",
+                FontWeight = FontWeights.SemiBold,
+                Opacity = 0.75,
+                Margin = new Thickness(0, 8, 0, 2),
+            });
+
+            var wrap = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+
+            foreach (var entry in members)
+            {
+                var button = new Button { Content = entry.Manifest.Name ?? entry.Manifest.Id ?? "?" };
+                var captured = entry;
+
+                button.Click += (_, _) => SelectPackage(captured, restoreAction: true);
+                ToolTipService.SetToolTip(button, TooltipFor(entry.Manifest));
+                AutomationProperties.SetName(button, captured.Manifest.Name ?? captured.Manifest.Id ?? "?");
+                wrap.Children.Add(button);
+            }
+
+            FormPanel.Children.Add(wrap);
+        }
+    }
+
     private void LoadPackages()
     {
         try
@@ -268,16 +348,35 @@ public sealed partial class MainWindow : Window
             // 自动化冒烟可以用 ALLTOOL_SELECT_PACKAGE 钉住工具包——只靠 ALLTOOL_SELECT_ACTION 不够，
             // 因为"恢复上次选择"会让那个序号套用到别的包上（脚本会静默失灵，踩过）。
             var forcedPackage = Environment.GetEnvironmentVariable("ALLTOOL_SELECT_PACKAGE");
+
+            if (!string.IsNullOrWhiteSpace(forcedPackage))
+            {
+                // 自动化（界面验收脚本）：钉住工具包，直接进正常界面，不显示欢迎面板
+                var forced = _packages.FirstOrDefault(
+                    p => string.Equals(p.Manifest.Id, forcedPackage, StringComparison.OrdinalIgnoreCase));
+
+                if (forced is not null)
+                {
+                    SelectPackage(forced, restoreAction: true);
+                    return;
+                }
+            }
+
+            // 启动**不自动选中**工具包：让中栏显示欢迎界面（所有工具包的选择列表）。
+            // 上次用的是哪个记下来，作为欢迎面板里的「继续上次」按钮。
             var lastPackage = _lastValues.Get(UiStateScope, "state", "lastPackage");
 
-            var target = _packages.FirstOrDefault(p => p.Manifest.Id == forcedPackage)
-                ?? _packages.FirstOrDefault(p => p.Manifest.Id == lastPackage)
-                ?? _packages.FirstOrDefault();
-
-            if (target is not null)
+            if (!string.IsNullOrWhiteSpace(lastPackage))
             {
-                SelectPackage(target, restoreAction: true);
+                var resume = _packages.FirstOrDefault(p => string.Equals(p.Manifest.Id, lastPackage, StringComparison.Ordinal));
+
+                if (resume is not null)
+                {
+                    _resumeTarget = (resume, _lastValues.Get(UiStateScope, "state", $"lastAction:{lastPackage}"));
+                }
             }
+
+            ShowWelcomePanel();
         }
         catch (Exception ex)
         {
@@ -680,6 +779,10 @@ public sealed partial class MainWindow : Window
             _sessionState.Clear();
         }
 
+        // 从欢迎界面切到具体工具包：把中栏恢复成正常形态（欢迎面板会把它们隐藏）
+        CommandLineBox.Visibility = Visibility.Visible;
+        RunButton.IsEnabled = true;
+
         _manifest = entry.Manifest;
         _executablePath = null;
 
@@ -784,148 +887,6 @@ public sealed partial class MainWindow : Window
         ActionDescription.Text += Environment.NewLine + Environment.NewLine
             + "⚠ " + why + Environment.NewLine
             + "命令已经拼好并且随时可复制；要执行就点「在终端中打开」，它会在真正的命令行窗口里跑同一条命令。";
-    }
-
-    /// <summary>「不再显示欢迎界面」的标记文件。</summary>
-    private static string WelcomeFlagPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AllTool", "welcome-dismissed");
-
-    /// <summary>
-    /// 启动欢迎界面：一句话说清这个软件干什么、可以「继续上次」、按类型列出工具包。
-    ///
-    /// 为什么要它：启动会**恢复上次选中的工具包与动作**（有意的，免得每次重新找），
-    /// 但用户看到的是「一打开就选中了 DiskPart」，分不清是自己上次选的还是程序擅自选的。
-    /// 欢迎界面把这个状态**显式说出来**，并给一个重新挑的入口。
-    ///
-    /// 自动化验收（设了 ALLTOOL_SELECT_*）或勾过「不再显示」时不弹，否则模态框会挡住验收脚本。
-    /// </summary>
-    private async Task ShowWelcomeAsync()
-    {
-        try
-        {
-            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ALLTOOL_SELECT_PACKAGE"))
-                || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ALLTOOL_SELECT_ACTION")))
-            {
-                return;
-            }
-
-            if (File.Exists(WelcomeFlagPath))
-            {
-                return;
-            }
-
-            var panel = new StackPanel { Spacing = 10 };
-
-            panel.Children.Add(new TextBlock
-            {
-                Text = "把 Windows 上已安装的命令行软件，变成可以点的界面。" + Environment.NewLine
-                       + "选一个工具包 → 选一个动作 → 填参数 → 执行；执行前一定能看到完整命令行。",
-                TextWrapping = TextWrapping.Wrap,
-                Opacity = 0.85,
-            });
-
-            ContentDialog? dialog = null;
-
-            if (_manifest is not null)
-            {
-                var lastText = _manifest.Name ?? _manifest.Id ?? string.Empty;
-
-                if (_action is not null)
-                {
-                    lastText += " · " + (_action.Title ?? _action.Id ?? string.Empty);
-                }
-
-                var resume = new Button
-                {
-                    Content = $"继续上次：{lastText}",
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
-                };
-
-                resume.Click += (_, _) => dialog?.Hide();
-                panel.Children.Add(resume);
-            }
-
-            var kinds = new (string Kind, string Title)[]
-            {
-                ("user", "⚪ 我装的工具"),
-                ("system", "🔵 系统自带"),
-                ("interactive", "🟡 交互式程序"),
-                ("dangerous", "🔴 高危工具"),
-            };
-
-            foreach (var (kind, title) in kinds)
-            {
-                var members = _packages.Where(p => p.Manifest.KindOrDefault == kind).ToList();
-
-                if (members.Count == 0)
-                {
-                    continue;
-                }
-
-                panel.Children.Add(new TextBlock
-                {
-                    Text = $"{title}（{members.Count}）",
-                    FontWeight = FontWeights.SemiBold,
-                    Opacity = 0.75,
-                    Margin = new Thickness(0, 6, 0, 0),
-                });
-
-                var wrap = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-
-                foreach (var entry in members)
-                {
-                    var pick = new Button { Content = entry.Manifest.Name ?? entry.Manifest.Id ?? "?" };
-                    var captured = entry;
-
-                    pick.Click += (_, _) =>
-                    {
-                        SelectPackage(captured, restoreAction: false);
-                        dialog?.Hide();
-                    };
-
-                    wrap.Children.Add(pick);
-                }
-
-                panel.Children.Add(wrap);
-            }
-
-            var hide = new CheckBox { Content = "下次不再显示这个欢迎界面" };
-            panel.Children.Add(hide);
-
-            dialog = new ContentDialog
-            {
-                Title = "欢迎使用 All Tool",
-                Content = new ScrollViewer
-                {
-                    Content = panel,
-                    MaxHeight = 460,
-                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                },
-                PrimaryButtonText = "开始",
-                CloseButtonText = "知道了",
-                DefaultButton = ContentDialogButton.Primary,
-                XamlRoot = (Content as FrameworkElement)?.XamlRoot,
-            };
-
-            await dialog.ShowAsync();
-
-            if (hide.IsChecked == true)
-            {
-                try
-                {
-                    Directory.CreateDirectory(Path.GetDirectoryName(WelcomeFlagPath)!);
-                    File.WriteAllText(WelcomeFlagPath, DateTime.Now.ToString("O"));
-                }
-                catch (IOException)
-                {
-                    // 记不住就下次再弹，不影响使用
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.Exception("显示欢迎界面时", ex);
-        }
     }
 
     /// <summary>

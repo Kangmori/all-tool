@@ -37,7 +37,13 @@ session:
   # 下面这条只覆盖英文输出；中文系统上 diskpart 输出中文时它匹配不到——那时的保护是
   # "下一步命令自己会报错"，以及 NOTES 里留的"实测到中文错误文案后补一条"的清单。
   errorPatterns:
+    # 英文输出（英文系统）
     - '(?im)^(Virtual Disk Service error|DiskPart has encountered an error|The (specified|selected) [a-z]+ is not|There is no [a-z]+ selected|The disk you specified is not valid)'
+    # 中文输出（中文系统实测原文，2026-09-30 由产品负责人提权跑 `select disk 9999` 得到）：
+    #   「你指定的磁盘无效。」「没有选择磁盘。」
+    # 之所以要两条语言都写：本机是中文系统，只写英文等于失败判定形同虚设（状态值不受影响，
+    # 因为状态值现在从字段值取；但"选了不存在的磁盘"必须被判为失败）。
+    - '(?im)^(你指定的磁盘无效|没有选择磁盘|指定的.{0,6}无效|未选择.{0,4})'
   state:
     - key: disk
       title: 已选中磁盘
