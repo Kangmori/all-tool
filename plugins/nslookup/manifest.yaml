@@ -22,6 +22,7 @@ id: nslookup
 name: nslookup
 manifestVersion: 0.1.0
 appVersion: Windows 10/11 自带（随系统版本发布）
+kind: system
 summary: 查询 DNS 记录
 description: 查询 DNS 域名与地址记录。可以指定查询的记录类型（A / AAAA / MX / NS / TXT 等）与要使用的 DNS 服务器。Windows 自带，无需安装。
 homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/nslookup

@@ -20,6 +20,7 @@ id: ipconfig
 name: ipconfig
 manifestVersion: 0.1.0
 appVersion: Windows 10/11 自带（随系统版本发布）
+kind: system
 summary: 查看与刷新 IP 配置
 description: 显示与刷新 TCP/IP 配置：IP 地址、子网掩码、默认网关、DNS 客户端缓存。Windows 自带，无需安装。
 homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ipconfig

@@ -29,6 +29,7 @@ id: cleanmgr
 name: cleanmgr
 manifestVersion: 0.1.0
 appVersion: Windows 10/11 自带（随系统版本发布）
+kind: interactive
 summary: 清理磁盘空间
 description: 磁盘清理工具。可以手动选择要清理的项目，也可以把选择结果存成编号（/sageset + /sagerun）以后无人值守地重复执行。Windows 自带，是 GUI 程序。
 homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cleanmgr

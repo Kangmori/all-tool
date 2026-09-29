@@ -16,6 +16,17 @@ public sealed class ToolManifest
     public string? Description { get; init; }
 
     /// <summary>
+    /// 工具包类型，**只影响界面显示方式**（见 MainWindow 的 PackageDisplay）：
+    /// user（默认，用户自己装的）/ system（系统自带）/ interactive（交互式、会弹窗）/
+    /// dangerous（含不可逆的高危操作）。
+    /// </summary>
+    public string? Kind { get; init; }
+
+    /// <summary>规范化后的类型：没写就是 user。</summary>
+    public string KindOrDefault =>
+        string.IsNullOrWhiteSpace(Kind) ? "user" : Kind.Trim().ToLowerInvariant();
+
+    /// <summary>
     /// 一句话说明这个软件是干什么的（鼠标悬停在工具包条目上时显示）。
     /// 写不出十个字以内就别写——界面会退回用 <see cref="Description"/> 的第一句。
     /// </summary>

@@ -25,6 +25,7 @@ id: chkdsk
 name: chkdsk
 manifestVersion: 0.1.0
 appVersion: Windows 10/11 自带（随系统版本发布）
+kind: system
 summary: 检查与修复磁盘
 description: 检查磁盘卷的文件系统与扇区，并显示状态报告；可用开关修复错误、恢复坏扇区上的可读信息。Windows 自带，无需安装。
 homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/chkdsk

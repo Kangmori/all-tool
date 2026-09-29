@@ -99,6 +99,15 @@
     },
     "session": {
       "$ref": "#/$defs/session"
+    },
+    "kind": {
+      "enum": [
+        "user",
+        "system",
+        "interactive",
+        "dangerous"
+      ],
+      "description": "工具包类型。**只影响界面显示方式，不影响任何功能**：user（默认，用户自己装的）/ system（系统自带）/ interactive（交互式、会弹窗）/ dangerous（含不可逆的高危操作）。显示规则：system → 🔵 细体；interactive → 🟡 粗体；dangerous → 🔴 斜体；user → 默认。"
     }
   },
   "$defs": {

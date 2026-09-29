@@ -207,6 +207,27 @@ actions:
 判断"极高"的口径：**不可逆地毁掉现有数据**（清盘、删分区、格式化）。
 "创建"类操作不动已有数据，属于中风险，正常加入。
 
+### 2.10 工具包类型 `kind`：让左栏一眼看出"这是什么"
+
+```yaml
+kind: system        # user（默认）/ system / interactive / dangerous
+```
+
+**只影响显示方式，不影响任何功能。** 左栏的规矩是：
+
+| kind | 含义 | 显示 |
+|---|---|---|
+| `user`（默认） | 用户自己装的工具（7-Zip、Scoop、uv） | 普通字重，无标记 |
+| `system` | Windows 自带（ping、chkdsk…） | 🔵 + 细体 |
+| `interactive` | 交互式 / GUI 程序（cleanmgr） | 🟡 + 粗体 |
+| `dangerous` | 含不可逆的高危操作（diskpart） | 🔴 + 斜体 |
+
+为什么要区分：左栏一眼扫过去，用户应该能分清"这是我装的"还是"系统本来就有的"，
+以及**哪些点了会弹窗、哪些点了要格外小心**。悬停提示里也会补一句类型说明。
+
+判断口径：一个工具包同时符合多条时，取**更需要注意**的那条
+（dangerous > interactive > system > user）。
+
 ## 3. 执行模型（宿主怎么用这份清单）
 
 1. **发现**：用 `locate.executable` 在 PATH 中查找，找不到再依次试 `alternativeNames` 与 `searchPaths`（支持 `%ENV%` 展开）。找到后按 `versionArgs` 取版本，用 `versionPattern` 提取版本号，与 `minVersion` 比较；不满足则禁用该工具包并提示。

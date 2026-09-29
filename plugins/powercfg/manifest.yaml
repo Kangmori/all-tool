@@ -30,6 +30,7 @@ id: powercfg
 name: powercfg
 manifestVersion: 0.1.0
 appVersion: Windows 10/11 自带（随系统版本发布）
+kind: system
 summary: 电源与睡眠设置
 description: 管理 Windows 电源方案：列出与查看方案、查看可用睡眠状态、修改超时与休眠设置、生成电池与能耗报告。Windows 自带，部分子命令需要管理员权限。
 homepage: https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options

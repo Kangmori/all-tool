@@ -22,6 +22,7 @@ id: tasklist
 name: tasklist
 manifestVersion: 0.1.0
 appVersion: Windows 10/11 自带（随系统版本发布）
+kind: system
 summary: 查看运行中的进程
 description: 列出本机（或远程）正在运行的进程，可按条件筛选、可切换表格/列表/CSV 输出格式。Windows 自带，无需安装。
 homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tasklist

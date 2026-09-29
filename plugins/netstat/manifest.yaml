@@ -24,6 +24,7 @@ id: netstat
 name: netstat
 manifestVersion: 0.1.0
 appVersion: Windows 10/11 自带（随系统版本发布）
+kind: system
 summary: 查看网络连接与端口
 description: 显示 TCP/IP 协议统计与当前连接：活动连接、侦听端口、路由表、按协议的收发统计。Windows 自带，无需安装。
 homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netstat

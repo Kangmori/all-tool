@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using System.Globalization;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Text;
@@ -61,6 +62,9 @@ public sealed partial class MainWindow : Window
     /// 换工具包时清空——不同工具包的「选中磁盘」没有关系。
     /// </summary>
     private readonly SessionState _sessionState = new();
+
+    /// <summary>会话动作执行时生成的临时脚本路径，跑完就删。</summary>
+    private string? _sessionScriptPath;
 
     /// <summary>字段 id → 生成的控件，用于必填校验时高亮与聚焦。</summary>
     private readonly Dictionary<string, FrameworkElement> _fieldControls = new(StringComparer.Ordinal);
@@ -277,6 +281,39 @@ public sealed partial class MainWindow : Window
         ?? (string.IsNullOrWhiteSpace(action.Category) ? "未分组" : action.Category!);
 
     /// <summary>
+    /// 工具包类型 → 显示方式（**只影响显示，不影响功能**）：
+    ///   system      系统自带（Windows 命令）→ 🔵 细体
+    ///   interactive 交互式 / GUI（cleanmgr）→ 🟡 粗体
+    ///   dangerous   高危、不可逆（diskpart）→ 🔴 斜体
+    ///   user        用户自己装的工具（7-Zip / Scoop / uv）→ 默认
+    ///
+    /// 为什么要区分：左栏一眼看过去，用户应该能分清"这是我装的"还是"系统本来就有的"，
+    /// 以及哪些点了会弹窗、哪些点了要格外小心。
+    /// </summary>
+    private static (string Text, Windows.UI.Text.FontWeight Weight, Windows.UI.Text.FontStyle Style)
+        PackageDisplay(ToolManifest manifest)
+    {
+        var display = manifest.Name ?? manifest.Id ?? string.Empty;
+
+        return manifest.KindOrDefault switch
+        {
+            "system" => ($"🔵 {display}", FontWeights.Light, Windows.UI.Text.FontStyle.Normal),
+            "interactive" => ($"🟡 {display}", FontWeights.Bold, Windows.UI.Text.FontStyle.Normal),
+            "dangerous" => ($"🔴 {display}", FontWeights.SemiBold, Windows.UI.Text.FontStyle.Italic),
+            _ => (display, FontWeights.Normal, Windows.UI.Text.FontStyle.Normal),
+        };
+    }
+
+    /// <summary>类型的文字说明，挂在悬停提示后面。</summary>
+    private static string KindCaption(ToolManifest manifest) => manifest.KindOrDefault switch
+    {
+        "system" => "系统自带工具",
+        "interactive" => "交互式程序（会弹窗或需要交互）",
+        "dangerous" => "高危工具（含不可逆操作）",
+        _ => "你安装的工具",
+    };
+
+    /// <summary>
     /// 工具包条目的悬停说明：优先用清单里的 <c>summary</c>（一句话），
     /// 没有就退回 <c>description</c> 的第一句——总比什么都不显示强。
     /// </summary>
@@ -284,7 +321,7 @@ public sealed partial class MainWindow : Window
     {
         if (!string.IsNullOrWhiteSpace(manifest.Summary))
         {
-            return $"{manifest.Name}：{manifest.Summary}";
+            return $"{manifest.Name}：{manifest.Summary}（{KindCaption(manifest)}）";
         }
 
         var description = manifest.Description;
@@ -320,11 +357,13 @@ public sealed partial class MainWindow : Window
                 group.Items,
                 entry => new GroupItem(
                     entry.Manifest.Id ?? string.Empty,
-                    entry.Display,
+                    PackageDisplay(entry.Manifest).Text,
                     ReferenceEquals(entry.Manifest, _manifest),
                     () => SelectPackage(entry, restoreAction: false),
                     menu => BuildPackageMenu(menu, entry),
-                    TooltipFor(entry.Manifest)),
+                    TooltipFor(entry.Manifest),
+                    Weight: PackageDisplay(entry.Manifest).Weight,
+                    Style: PackageDisplay(entry.Manifest).Style),
                 isPackageScope: true,
                 _packageVisuals));
         }
@@ -361,7 +400,8 @@ public sealed partial class MainWindow : Window
                     ReferenceEquals(entry.Action, _action),
                     () => SelectAction(entry),
                     menu => BuildActionMenu(menu, entry),
-                    entry.Action.Description),
+                    SessionHintFor(entry.Action) ?? entry.Action.Description,
+                    Enabled: _sessionState.Satisfies(entry.Action.Requires)),
                 isPackageScope: false,
                 _actionVisuals));
         }
@@ -422,7 +462,10 @@ public sealed partial class MainWindow : Window
         bool Selected,
         Action Select,
         Action<MenuFlyout> BuildMenu,
-        string? Tooltip = null);
+        string? Tooltip = null,
+        bool Enabled = true,
+        Windows.UI.Text.FontWeight? Weight = null,
+        Windows.UI.Text.FontStyle? Style = null);
 
     /// <summary>
     /// 条目的可视元素（按钮 + 左侧那根强调色标记），用于**原地改高亮**。
@@ -486,6 +529,13 @@ public sealed partial class MainWindow : Window
                 FontWeight = info.Selected ? FontWeights.SemiBold : FontWeights.Normal,
             };
             button.Click += (_, _) => info.Select();
+
+            // 工具包类型只影响**显示方式**（清单里的 kind）：一眼能分出系统自带 / 交互式 / 高危
+            button.FontWeight = info.Weight ?? (info.Selected ? FontWeights.SemiBold : FontWeights.Normal);
+            button.FontStyle = info.Style ?? Windows.UI.Text.FontStyle.Normal;
+
+            // 会话型：前置条件没满足的动作灰显。**不隐藏**——用户要能看到"有这个功能"
+            button.IsEnabled = info.Enabled;
 
             var menu = new MenuFlyout();
             info.BuildMenu(menu);
@@ -582,6 +632,12 @@ public sealed partial class MainWindow : Window
 
     private void SelectPackage(PackageEntry entry, bool restoreAction)
     {
+        if (!ReferenceEquals(_manifest, entry.Manifest))
+        {
+            // 会话状态只在同一个工具包内有意义（不同工具包的"选中磁盘"没有关系）
+            _sessionState.Clear();
+        }
+
         _manifest = entry.Manifest;
         _executablePath = null;
 
@@ -691,6 +747,59 @@ public sealed partial class MainWindow : Window
         SessionStateText.Text = "会话状态（后续命令的作用对象）：" + _sessionState.Describe(session.State);
     }
 
+    /// <summary>
+    /// 逐字确认。返回 true = 可以继续。
+    ///
+    /// 为什么不用普通的"确定/取消"：对"清空磁盘 0"这种**不可逆**操作，
+    /// 点一下按钮和"意识到自己在擦哪块盘"之间没有认知负担，而**打字有**。
+    /// 短语里的 {字段} 会替换成真实值（例如"清空磁盘 0"），所以用户必须看着目标打字。
+    /// </summary>
+    private async Task<bool> ConfirmPhraseAsync()
+    {
+        if (_action is null)
+        {
+            return true;
+        }
+
+        var phrase = SessionScriptBuilder.Substitute(_action.ConfirmPhrase ?? string.Empty, _values);
+
+        if (string.IsNullOrWhiteSpace(phrase))
+        {
+            return true;
+        }
+
+        var input = new TextBox { PlaceholderText = phrase };
+        var hint = new TextBlock
+        {
+            Text = $"这个操作不可逆。请逐字输入：{phrase}",
+            TextWrapping = TextWrapping.Wrap,
+        };
+
+        var dialog = new ContentDialog
+        {
+            Title = _action.Title ?? "确认执行",
+            Content = new StackPanel { Spacing = 10, Children = { hint, input } },
+            PrimaryButtonText = "执行",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = (Content as FrameworkElement)?.XamlRoot,
+        };
+
+        // 输入对了才让"执行"可点——省得用户点了才发现打错
+        dialog.IsPrimaryButtonEnabled = false;
+        input.TextChanged += (_, _) =>
+            dialog.IsPrimaryButtonEnabled = string.Equals(input.Text.Trim(), phrase, StringComparison.Ordinal);
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            _logger.Info($"逐字确认未通过（动作 {_action.Id}，短语「{phrase}」）");
+            return false;
+        }
+
+        _logger.Info($"逐字确认通过（动作 {_action.Id}，短语「{phrase}」）");
+        return true;
+    }
+
     /// <summary>清除会话状态：清掉「已选中磁盘 / 卷」，需要重新选择。</summary>
     private void OnClearSessionClicked(object sender, RoutedEventArgs e)
     {
@@ -719,6 +828,34 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             StatusText.Text = "参数有误，无法打开终端：" + ex.Message;
+            return;
+        }
+
+        // 会话型 + 不执行（execution: info）：这是"高危动作只提供信息"的落地——
+        // 复制命令、开一个**空**终端窗口，由用户自己粘贴回车。
+        // 刻意不把命令塞进 cmd /k：那会变成"我们替他执行"，与 info 的语义相反。
+        if (_manifest.Session is not null && _action.SessionCommand is not null)
+        {
+            var sessionCommand = SessionScriptBuilder.Substitute(_action.SessionCommand, _values);
+
+            try
+            {
+                CopyToClipboard(sessionCommand, "命令");
+                Process.Start(new ProcessStartInfo("cmd.exe")
+                {
+                    UseShellExecute = true,
+                    WorkingDirectory = ResolveWorkingDirectory() ?? Environment.CurrentDirectory,
+                });
+
+                _logger.Info($"高危会话动作（只提供信息，未执行）：{sessionCommand}");
+                StatusText.Text = "命令已复制。终端窗口里粘贴后回车即执行——是否执行由你决定";
+            }
+            catch (Exception ex)
+            {
+                _logger.Exception("打开终端时", ex);
+                StatusText.Text = "打不开终端：" + ex.Message;
+            }
+
             return;
         }
 
@@ -775,6 +912,70 @@ public sealed partial class MainWindow : Window
 
         _executablePath = location.ExecutablePath;
         OpenInTerminal();
+    }
+
+    /// <summary>
+    /// 动作灰显时显示的说明。**灰显必须说清原因**，否则用户只会以为界面坏了。
+    /// </summary>
+    private string? SessionHintFor(ManifestAction action)
+    {
+        if (_sessionState.Satisfies(action.Requires))
+        {
+            return null;
+        }
+
+        var missing = (action.Requires ?? [])
+            .Where(key => !_sessionState.Captures.ContainsKey(key))
+            .Select(key => _manifest?.Session?.State?.FirstOrDefault(s => s.Key == key)?.Title ?? key)
+            .ToList();
+
+        var reason = string.IsNullOrWhiteSpace(action.RequiresHint)
+            ? $"需要先满足：{string.Join("、", missing)}"
+            : action.RequiresHint!;
+
+        return $"（暂时不可用）{reason}";
+    }
+
+    /// <summary>
+    /// 会话动作的**完整脚本**（重放当前生效的选择类命令 + 这次要跑的命令）。
+    /// 预览与实际执行调用的是同一个方法——不会出现"看到的和跑的不一样"。
+    /// </summary>
+    private string? BuildSessionScript()
+    {
+        var session = _manifest?.Session;
+
+        if (session is null || string.IsNullOrWhiteSpace(_action?.SessionCommand))
+        {
+            return null;
+        }
+
+        SyncValues();
+
+        var command = SessionScriptBuilder.Substitute(_action!.SessionCommand!, _values);
+
+        return SessionScriptBuilder.Build(_sessionState, command, session.ExitCommand);
+    }
+
+    /// <summary>把脚本写到临时文件（跑完由调用方删）。</summary>
+    private string WriteSessionScript(string script)
+    {
+        var extension = _manifest?.Session?.ScriptExtension;
+
+        if (string.IsNullOrWhiteSpace(extension))
+        {
+            extension = ".txt";
+        }
+        else if (!extension.StartsWith('.'))
+        {
+            extension = "." + extension;
+        }
+
+        var path = Path.Combine(Path.GetTempPath(), $"alltool-session-{Guid.NewGuid():N}{extension}");
+
+        // diskpart 之类按 OEM 代码页读脚本，写无 BOM 的 UTF-8 最稳
+        File.WriteAllText(path, script, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+        return path;
     }
 
     /// <summary>选中工具包但还没选动作时展示的介绍。</summary>
@@ -2431,6 +2632,20 @@ public sealed partial class MainWindow : Window
 
         try
         {
+            var script = BuildSessionScript();
+
+            if (script is not null)
+            {
+                // 会话型：显示"将交给程序的完整脚本"（R6：不能把真正要跑的东西藏起来）
+                var program = _manifest.Session?.Executable ?? _manifest.Locate?.Executable ?? "?";
+                var lines = SessionScriptBuilder.Describe(script);
+
+                CommandLineBox.Text = $"{program}（按脚本执行，共 {lines.Count} 条；下面每一条都会真的执行）"
+                    + Environment.NewLine
+                    + string.Join(Environment.NewLine, lines.Select(l => "  " + l));
+                return;
+            }
+
             var argv = ArgvBuilder.Build(_action, _values);
             var executable = _executablePath ?? _manifest.Locate?.Executable ?? "?";
             CommandLineBox.Text = ArgvBuilder.FormatForDisplay(executable, argv);
@@ -2498,6 +2713,14 @@ public sealed partial class MainWindow : Window
         SyncValues();
         ClearValidationMarks();
 
+        // 逐字确认：只对声明了 confirmPhrase 的动作要求。
+        // 点一下"确定"和"意识到自己在擦哪块盘"之间没有认知负担，打字才有。
+        if (!await ConfirmPhraseAsync())
+        {
+            StatusText.Text = "已取消（需要逐字输入确认短语才会执行）";
+            return;
+        }
+
         // 必填校验放在最前面：宁可不执行，也不要生成一条少参数的"看起来对"的命令
         if (!TryValidateRequired(out var validationMessage))
         {
@@ -2527,9 +2750,23 @@ public sealed partial class MainWindow : Window
         }
 
         IReadOnlyList<string> argv;
+        var sessionScript = BuildSessionScript();
+
         try
         {
-            argv = ArgvBuilder.Build(_action, _values);
+            if (sessionScript is not null)
+            {
+                // 会话型：脚本写临时文件，argv 由清单的 scriptArgs 给出（{script} 换成真实路径）
+                _sessionScriptPath = WriteSessionScript(sessionScript);
+                var scriptArgs = _manifest.Session?.ScriptArgs ?? ["{script}"];
+                argv = scriptArgs
+                    .Select(a => a.Replace("{script}", _sessionScriptPath, StringComparison.Ordinal))
+                    .ToList();
+            }
+            else
+            {
+                argv = ArgvBuilder.Build(_action, _values);
+            }
         }
         catch (Exception ex)
         {
@@ -2541,6 +2778,15 @@ public sealed partial class MainWindow : Window
         var encoding = EncodingResolver.Resolve(_manifest.Runtime?.Encoding);
         ClearOutput();
         AppendOutput($"> {ArgvBuilder.FormatForDisplay(_executablePath, argv)}");
+
+        if (sessionScript is not null)
+        {
+            AppendOutput("# 会话脚本（重放当前生效的选择 + 本次命令）：");
+            foreach (var line in SessionScriptBuilder.Describe(sessionScript))
+            {
+                AppendOutput("#   " + line);
+            }
+        }
 
         _logger.Info($"开始执行：{_action.Id}（{_manifest.Id}）");
         _logger.Info($"  命令：{ArgvBuilder.FormatForDisplay(_executablePath, argv)}");
@@ -2646,6 +2892,39 @@ public sealed partial class MainWindow : Window
 
         // 跑完立刻把攒下的输出刷出来（否则用户会看到"结论先出现、正文还没到"）
         FlushOutput(force: true);
+
+        if (_sessionScriptPath is not null)
+        {
+            try
+            {
+                File.Delete(_sessionScriptPath);
+            }
+            catch (IOException)
+            {
+                // 删不掉就留着，不影响使用
+            }
+
+            _sessionScriptPath = null;
+        }
+
+        // 会话型：从输出推导状态。成功了就解除相关动作的灰显。
+        if (sessionScript is not null && _manifest.Session is not null)
+        {
+            var sessionCommand = SessionScriptBuilder.Substitute(_action.SessionCommand ?? string.Empty, _values);
+            var fullOutput = string.Join(Environment.NewLine, result.Lines);
+
+            if (SessionStateUpdater.Apply(_manifest.Session, _action.Id ?? string.Empty, sessionCommand, fullOutput, _sessionState, out var established))
+            {
+                _logger.Info($"会话状态已更新：{established} = {_sessionState.Captures.GetValueOrDefault(established!)}");
+                AppendOutput($"# 会话状态：{_sessionState.Describe(_manifest.Session.State)}");
+                RefreshSessionBar();
+                RebuildActionList();
+            }
+            else
+            {
+                _logger.Info("会话状态未变化（输出里没有成功标志，或命中了错误模式）");
+            }
+        }
 
         if (result.Truncated)
         {

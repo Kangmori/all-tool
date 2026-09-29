@@ -20,6 +20,7 @@ id: systeminfo
 name: systeminfo
 manifestVersion: 0.1.0
 appVersion: Windows 10/11 自带（随系统版本发布）
+kind: system
 summary: 查看系统信息
 description: 显示操作系统配置信息：系统版本与内部版本号、处理器、内存、已安装更新、网卡等。Windows 自带，无需安装。
 homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/systeminfo
