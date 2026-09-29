@@ -74,34 +74,28 @@ project-state   │
 
 ---
 
-## 4. 环境事实（2026-09-27 实测，用 `scripts/check-env.ps1` 复核）
+## 4. 环境事实
 
-### 4.1 机器与账号
+**这一节刻意不写死具体值。** 早期版本把「本机实测到的版本号与路径」抄进了文档，代价是：
+① 它会过期（Windows 更新、工具升级之后就是错的）；② 转公开时这些路径与账号信息不该公开。
+所以现在改成**两条原则**：
 
-| 项 | 值 |
-|---|---|
-| OS | Windows 11 专业工作站版，`10.0.26200`，x64 |
-| 用户 | `KANGMORI\Steve`，**非管理员** |
-| 工作区 | `D:\AI\All Tool`（NTFS，已授予当前用户完全控制；此前 ACL 缺失曾导致沙箱无法写） |
-| 开发者模式 | 已开启（WinUI 打包应用调试需要） |
-| 长路径 | 已开启 |
+1. **影响开发决策的事实**写在这里（下表）；
+2. **具体版本与路径**一律现测：`pwsh -File scripts/check-env.ps1`
+   （它会打印本机的 OS build、SDK 版本、Visual Studio 工作负载、各工具版本与路径），
+   机器可读的结果在 `docs/ai/project-state.json` 的 `environment` 段。
 
-### 4.2 工具链（均已实测可用）
-
-| 工具 | 版本 | 路径 |
+| 项 | 值 | 为什么它影响开发 |
 |---|---|---|
-| .NET SDK | `10.0.401` | `C:\Program Files\dotnet\dotnet.exe` |
-| Visual Studio | Community **2026** `18.10.12217.157` | `C:\Program Files\Microsoft Visual Studio\18\Community` |
-| Windows SDK | `10.0.26100.0` | `C:\Program Files (x86)\Windows Kits\10` |
-| Windows App Runtime | `2.5.1` | （与 NuGet 上 `Microsoft.WindowsAppSDK` 最新稳定版一致） |
-| git / git-lfs | `2.55.0` / `3.7.1` | scoop |
-| PowerShell | 7.x | `C:\Program Files\PowerShell\7\pwsh.exe` |
-| pandoc | `3.11` | scoop（HTML→Markdown 转换用） |
-| gh | 已登录 `Kangmori`（keyring） | scoop；已执行 `gh auth setup-git` |
-| uv | `0.11.15` | winget |
-| scoop | `0.5.3` | `C:\Users\Steve\scoop` |
-| 7-Zip | `26.03` | `C:\Users\Steve\scoop\apps\7zip\26.03\` |
-| python / node | `3.14.7` / `26.8.2` | scoop |
+| OS | Windows 10 / 11，x64 | 目标平台；ConPTY 与 WinUI 3 都要求 Windows |
+| 账号 | **非管理员** | 需要提权的动作（`chkdsk /f`、`sfc /scannow`、`diskpart`）不能用管理员身份实测；宿主因此实现了 `requiresAdmin` 提示与「以管理员身份重新启动」 |
+| 开发者模式 | 建议开启 | 打包/调试 WinUI 应用时需要 |
+| 长路径 | 建议开启 | 恢复长路径支持，避免深层目录构建失败 |
+| C++ 工具链 | **不需要** | 路线是纯 C# + P/Invoke；不要引入需要 MSVC 的依赖 |
+| .NET SDK | 10.x | `TargetFramework` 是 `net10.0-windows10.0.26100.0` |
+| Visual Studio 工作负载 | 需装 WinUI（见 §4.3 的 id） | 提供 XAML 编译所需的 Windows SDK 与组件 |
+| Windows App SDK | 由 NuGet 决定（见 `AllTool.App.csproj`） | unpackaged 模式下运行时要与包版本匹配；发布用独立模式可免预装 |
+| 网络 | 可能有 fake-ip DNS 代理 | 会让部分抓取工具解析失败，见 §4.4 的对策 |
 
 ### 4.3 VS 工作负载（重要，容易误判）
 
@@ -223,7 +217,7 @@ uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py
 | P8 | `-v`（分卷）只能用于 `a` 命令 | 同上 | 同上 |
 | P9 | `x` / `e` 默认解压到**当前目录** | 7z 的行为 | 这两个动作用 `workingDirectory: outputDir` 覆盖 |
 | P10 | 目录里 clone 的 git 仓库被当成 gitlink 提交，别人克隆后拿不到内容 | git 把含 `.git` 的子目录视作内嵌仓库 | 提交前删掉内层 `.git`，或改用 submodule |
-| P11 | 沙箱无法给工作区授写权限，所有命令被拦 | `D:\AI\All Tool` 的 ACL 缺显式 WRITE_DAC | `icacls "D:\AI\All Tool" /grant "Steve:(OI)(CI)F"`（已修复） |
+| P11 | 沙箱无法给工作区授写权限，所有命令被拦 | `<仓库目录>` 的 ACL 缺显式 WRITE_DAC | `icacls "<仓库目录>" /grant "<用户名>:(OI)(CI)F"`（已修复） |
 | P12 | VS 工作负载 id 看起来像 UWP | 历史改名，id 未变 | 认 id `Microsoft.VisualStudio.Workload.Universal` |
 | P13 | 脚本拿到了"另一个同名文件"的内容，逻辑却看不出错 | **PowerShell 变量名大小写不敏感**：局部变量 `$stateFile` 会覆盖参数 `$StateFile` | 局部变量加前缀区分（`$vsStateFile`）；关键路径用 Write-Host 打印出来，出错时一眼可见 |
 | P14 | 错误被静默吞掉，只看到下游的空值判断走了 else 分支 | 脚本开头设了 `$ErrorActionPreference = 'SilentlyContinue'` | 探测脚本需要容错，但当"期望有值却为空"时要把实际路径/来源打印出来，否则排查成本极高 |
@@ -312,7 +306,7 @@ uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py
 Token 额度重置、会话中断、换机器之后，照这个顺序，15 分钟内可重建完整上下文：
 
 ```
-1. cd D:\AI\All Tool && git pull                    # 取最新状态
+1. cd <仓库目录> && git pull                    # 取最新状态
 2. 读 AGENTS.md                                  # 硬规则（1 分钟）
 3. pwsh -File scripts/check-env.ps1              # 环境漂移报告；有 DRIFT 就先处理
 4. 读 docs/ai/project-state.json                 # 已有产物、未决问题、下一步

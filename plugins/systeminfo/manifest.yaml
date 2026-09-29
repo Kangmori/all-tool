@@ -32,7 +32,7 @@ sources:
     appliesTo: Windows 10/11
     note: 离线快照 Microsoft Learn 官方文档（见各动作的 sources）/systeminfo.html。语法行：systeminfo [/s <computer> [/u …]] [/fo {TABLE | LIST | CSV}] [/nh]；参数只有 /s /u /p /fo /nh 五个。
   - title: 本机 `systeminfo /?` 的真实输出快照
-    url: file:///D:/AI/All Tool/本机帮助快照（**未入库**，可用下列命令重新抓取）/systeminfo.txt
+    url: file:///<仓库目录>/本机帮助快照（**未入库**，可用下列命令重新抓取）/systeminfo.txt
     retrieved: "2026-09-27"
     appliesTo: Windows 11 26200 / systeminfo.exe 文件版本 10.0.26100.4202
     note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。与官方页面内容一致（参数表 + 举例）。

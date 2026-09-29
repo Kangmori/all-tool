@@ -34,7 +34,7 @@ sources:
     appliesTo: Windows 10/11
     note: 离线快照 Microsoft Learn 官方文档（见各动作的 sources）/nslookup.html。页面用表格逐条列出子命令（nslookup exit / ls / server / set …）与 set 选项（set type / set debug / set timeout / set retry …）。
   - title: 本机 `nslookup /?` 的真实输出快照
-    url: file:///D:/AI/All Tool/本机帮助快照（**未入库**，可用下列命令重新抓取）/nslookup.txt
+    url: file:///<仓库目录>/本机帮助快照（**未入库**，可用下列命令重新抓取）/nslookup.txt
     retrieved: "2026-09-27"
     appliesTo: Windows 11 26200 / nslookup.exe 文件版本 10.0.26100.8521
     note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。这份快照揭示了两个关键行为：帮助走 stderr；以及 `-opt ...` 的用法行。

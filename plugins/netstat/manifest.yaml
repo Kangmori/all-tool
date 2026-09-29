@@ -36,7 +36,7 @@ sources:
     appliesTo: Windows 10/11
     note: 离线快照 Microsoft Learn 官方文档（见各动作的 sources）/netstat.html。语法行：netstat [-a] [-b] [-e] [-n] [-o] [-p <Protocol>] [-q] [-r] [-s] [<interval>]；#parameters 表逐条解释。
   - title: 本机 `netstat /?` 的真实输出快照
-    url: file:///D:/AI/All Tool/本机帮助快照（**未入库**，可用下列命令重新抓取）/netstat.txt
+    url: file:///<仓库目录>/本机帮助快照（**未入库**，可用下列命令重新抓取）/netstat.txt
     retrieved: "2026-09-27"
     appliesTo: Windows 11 26200 / NETSTAT.EXE 文件版本 10.0.26100.8521
     note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。注意这份帮助**写在 stderr**（stdout 0 字节，stderr 2074 字节），退出码 1。

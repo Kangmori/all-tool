@@ -46,7 +46,7 @@ sources:
     appliesTo: Windows 10/11
     note: 离线快照 Microsoft Learn 官方文档（见各动作的 sources）/cleanmgr-aux.html。这份文档解释 /sageset:n 与 /sagerun:n 的配合方式：先用 /sageset 在对话框里勾选并保存到编号 n，再用 /sagerun:n 按该编号执行。
   - title: 本机 `cleanmgr /?` 的实测结论
-    url: file:///D:/AI/All Tool/本机帮助快照（**未入库**，可用下列命令重新抓取）/cleanmgr.txt
+    url: file:///<仓库目录>/本机帮助快照（**未入库**，可用下列命令重新抓取）/cleanmgr.txt
     retrieved: "2026-09-27"
     appliesTo: Windows 11 26200 / cleanmgr.exe 文件版本 10.0.26100.8521
     note: '（没有可用的控制台帮助）快照文件里记录的实测结果是：stdout 0 字节、stderr 0 字节、8 秒超时、超时瞬间的窗口标题为 "USAGE"。这条事实意味着本工具包的开关只能靠官方文档核对，无法用 /? 交叉验证。'

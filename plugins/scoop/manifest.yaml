@@ -568,7 +568,7 @@ actions:
         url: https://github.com/ScoopInstaller/Scoop/wiki/Using-Scoop-behind-a-proxy
         retrieved: "2026-09-27"
         appliesTo: "wiki 快照 2026-09-27"
-        note: "示例：scoop config proxy currentuser@default、scoop config proxy 'username:p\\@ssword@proxy.example.org:8080'。"
+        note: "示例：scoop config proxy currentuser@default；值里含 @ 或 : 时按文档用反斜杠转义（具体示例见该 wiki 页，此处不转抄）。"
     fields:
       - id: name
         label: 配置项
@@ -615,7 +615,7 @@ actions:
         style: positional
         required: true
         placeholder: "$true / 64bit / currentuser@default"
-        help: "布尔项写 $true 或 $false（文档里的原始写法）。含 @ 或 : 的值文档给的做法是用反斜杠转义，例如 'username:p\\@ssword@proxy.example.org:8080' 去掉外层引号后写：username:p\\@ssword@proxy.example.org:8080。"
+        help: "布尔项写 $true 或 $false（文档里的原始写法）。值里含 @ 或 : 时按文档用反斜杠转义。"
         doc: scoop help config
     output:
       mode: stream

@@ -168,8 +168,8 @@
       "chkdsk *.*",
       "get-winevent -FilterHashTable @{logname=\"Application\"} | ?{$_.providername -match \"chkdsk\"} | fl timecreated, message",
       "get-winevent -FilterHashTable @{logname=\"Application\"} | ?{$_.providername -match \"wininit\"} | fl timecreated, message",
-      "get-winevent -FilterHashTable @{logname=\"Application\"} | ?{$_.providername -match \"chkdsk\"} | fl timecreated, message | out-file \"C:\\Users\\Administrator\\Desktop\\Chkdsk_Log.txt\"",
-      "get-winevent -FilterHashTable @{logname=\"Application\"} | ?{$_.providername -match \"wininit\"} | fl timecreated, message | out-file \"C:\\Users\\Administrator\\Desktop\\Wininit_Log.txt\""
+      "get-winevent -FilterHashTable @{logname=\"Application\"} | ?{$_.providername -match \"chkdsk\"} | fl timecreated, message | out-file \"%USERPROFILE%\\Desktop\\Chkdsk_Log.txt\"",
+      "get-winevent -FilterHashTable @{logname=\"Application\"} | ?{$_.providername -match \"wininit\"} | fl timecreated, message | out-file \"%USERPROFILE%\\Desktop\\Wininit_Log.txt\""
     ]
   },
   "cleanmgr-aux": {
@@ -1750,11 +1750,11 @@
     "syntax": [
       "robocopy <source> <destination> [<file>[ ...]] [<options>]",
       "robocopy c:\\reports \"\\\\marketing\\videos\" yearly-report.mov /mt /z",
-      "robocopy C:\\Users\\Admin\\Records D:\\Backup /E /ZB /LOG:C:\\Logs\\Backup.log",
-      "robocopy C:\\Users\\Admin\\Records D:\\Backup /MIR /R:2 /W:5 /LOG:C:\\Logs\\Backup.log",
-      "robocopy C:\\Users\\Admin\\Records D:\\Backup /S /E /COPY:DAT /MT:16 /LOG:C:\\Logs\\Backup.log",
-      "robocopy C:\\Users\\Admin\\Records D:\\Backup /S /MAXAGE:7 /MOV /LOG:C:\\Logs\\Backup.log",
-      "robocopy C:\\Users\\Admin\\Records D:\\Backup /ETA /PURGE /LOG:C:\\Logs\\Backup.log",
+      "robocopy %USERPROFILE%\\Records D:\\Backup /E /ZB /LOG:C:\\Logs\\Backup.log",
+      "robocopy %USERPROFILE%\\Records D:\\Backup /MIR /R:2 /W:5 /LOG:C:\\Logs\\Backup.log",
+      "robocopy %USERPROFILE%\\Records D:\\Backup /S /E /COPY:DAT /MT:16 /LOG:C:\\Logs\\Backup.log",
+      "robocopy %USERPROFILE%\\Records D:\\Backup /S /MAXAGE:7 /MOV /LOG:C:\\Logs\\Backup.log",
+      "robocopy %USERPROFILE%\\Records D:\\Backup /ETA /PURGE /LOG:C:\\Logs\\Backup.log",
       "robocopy C:\\Records D:\\Backup /iorate:1m",
       "robocopy C:\\Source C:\\Destination /XC /XN /XO"
     ]

@@ -42,7 +42,7 @@ sources:
     appliesTo: Windows 10/11
     note: 离线快照 Microsoft Learn 官方文档（见各动作的 sources）/powercfg.html。页面有 #command-line-options（命令总表）与 #command-line-option-descriptions（逐条语法、参数、示例）两个小节，每个子命令有独立锚点，例如 #-query-or-q-、#hibernate-or-h、#batteryreport。
   - title: 本机 `powercfg /?` 的真实输出快照
-    url: file:///D:/AI/All Tool/本机帮助快照（**未入库**，可用下列命令重新抓取）/powercfg.txt
+    url: file:///<仓库目录>/本机帮助快照（**未入库**，可用下列命令重新抓取）/powercfg.txt
     retrieved: "2026-09-27"
     appliesTo: Windows 11 26200 / powercfg.exe 文件版本 10.0.26100.8521
     note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。它只列命令名（中文说明 + 英文开关），没有逐条参数；`powercfg /?` 的退出码实测为 0（与本批多数命令的 /? 返回 1 不同）。

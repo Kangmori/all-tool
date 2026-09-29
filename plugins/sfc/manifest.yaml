@@ -41,7 +41,7 @@ sources:
     appliesTo: Windows 10/11
     note: 离线快照 Microsoft Learn 官方文档（见各动作的 sources）/sfc.html。语法行：sfc [/scannow] [/verifyonly] [/scanfile=<file>] [/verifyfile=<file>] [/offwindir=… /offbootdir=… /offlogfile=…]；#parameters 表逐条解释。
   - title: 本机 `sfc /?` 的真实输出快照
-    url: file:///D:/AI/All Tool/本机帮助快照（**未入库**，可用下列命令重新抓取）/sfc.txt
+    url: file:///<仓库目录>/本机帮助快照（**未入库**，可用下列命令重新抓取）/sfc.txt
     retrieved: "2026-09-27"
     appliesTo: Windows 11 26200 / sfc.exe 文件版本 10.0.26100.8521
     note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。注意这份快照的正文是 UTF-16LE 且内容只有一句权限提示 —— sfc 不支持 /?。

@@ -3,7 +3,7 @@
 > 目标程序：`C:\Windows\System32\Robocopy.exe`（文件版本 10.0.26100.8521）—— Windows 自带。
 > 清单：动作 4 个 / 字段 20 个 / 字段出处标注 **100%**
 > **公共事实见 [`docs/ai/windows-commands.md`](../../docs/ai/windows-commands.md)**。
-> 实测环境：Windows 11 `10.0.26200`，账号 `KANGMORI\Steve`（非管理员）。
+> 实测环境：Windows 11 `10.0.26200`，账号 `<机器名>\<用户名>`（非管理员）。
 
 ---
 
@@ -109,7 +109,7 @@ stdout 实测 **OEM 代码页 936**（8524 B 帮助与 1177/1394/1222/1259/706 B
 - 本机 `/?` 的六类开关（**这是本机帮助优于官方网页的地方**）：
   复制选项 / 复制文件限制选项 / 文件选择选项 / 重试选项 / 日志记录选项 / 作业选项。
 - 官方 `#parameters` 表有 **117 行**，`#exit-return-codes` 是独立的 `h3` 小节。
-- 官方示例 9 条（含 `robocopy C:\Users\Admin\Records D:\Backup /MIR /R:2 /W:5 /LOG:C:\Logs\Backup.log`）。
+- 官方示例 9 条（含 `robocopy %USERPROFILE%\Records D:\Backup /MIR /R:2 /W:5 /LOG:C:\Logs\Backup.log`）。
 
 ## 7. 故意没做的部分与原因
 

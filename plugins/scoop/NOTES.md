@@ -13,7 +13,7 @@
 
 wiki 里被本工具包引用的页面：`Buckets.md`、`Global-Installs.md`、`Persistent-data.md`、`Dependencies.md`、`FAQ.md`、`Quick-Start.md`、`Scoop-Folder-Layout.md`、`Uninstalling-Scoop.md`、`Using-Scoop-behind-a-proxy.md`、`Commands.md`、`App-Manifest-Autoupdate.md`、`Creating-an-app-manifest.md`、`The-'Current'-Version-Alias.md`、`SSH-on-Windows.md`。
 
-**只用于核对环境事实（不作为参数来源）** 的第三处：本机已安装的 scoop 源码 `C:\Users\Steve\scoop\apps\scoop\current\`。用途仅限于"实测/确认"——例如确认 `--version` 的输出形态、确认 `getopt` 接受哪种写法、确认某命令有没有副作用。文中每条此类引用都标了文件与行号。
+**只用于核对环境事实（不作为参数来源）** 的第三处：本机已安装的 scoop 源码 `%USERPROFILE%\scoop\apps\scoop\current\`。用途仅限于"实测/确认"——例如确认 `--version` 的输出形态、确认 `getopt` 接受哪种写法、确认某命令有没有副作用。文中每条此类引用都标了文件与行号。
 
 ## 2. 覆盖范围
 
@@ -233,7 +233,7 @@ CHANGELOG 形态:          success=True  group1=[0.5.3]
 | `export` | `scoop export --config` | 0 | `{`（含配置的 JSON） |
 | `info` | `scoop info 7zip` | 0 | `Name : 7zip` |
 | `list` | `scoop list` | 0 | `Installed apps:` |
-| `prefix` | `scoop prefix 7zip` | 0 | `C:\Users\Steve\scoop\apps\7zip\current` |
+| `prefix` | `scoop prefix 7zip` | 0 | `%USERPROFILE%\scoop\apps\7zip\current` |
 | `search` | `scoop search git` | 0 | `Results from local buckets...` |
 | `search` | `scoop search hg` | 0 | `Results from local buckets...` |
 | `shim-list` | `scoop shim list` | 0 | `Name  Source  Alternatives  IsGlobal  IsHidden` |
@@ -296,7 +296,7 @@ CHANGELOG 形态:          success=True  group1=[0.5.3]
 ### 9.4 冒烟中发现的三个问题
 
 1. **退出码不可靠**（§5）：失败路径实测也返回 0，宿主必须看输出。
-2. **`info --verbose` 会往 stderr 写 PowerShell 错误记录**：本机 7zip 的 `persist` 链接是坏的，所以 `Get-ChildItem` 报 `系统无法辨识文件名。: 'C:\Users\Steve\scoop\persist\7zip\Codecs'`。不是 scoop 的 bug，但说明 stderr 要一起展示，而且 stderr 是 GBK。
+2. **`info --verbose` 会往 stderr 写 PowerShell 错误记录**：本机 7zip 的 `persist` 链接是坏的，所以 `Get-ChildItem` 报 `系统无法辨识文件名。: '%USERPROFILE%\scoop\persist\7zip\Codecs'`。不是 scoop 的 bug，但说明 stderr 要一起展示，而且 stderr 是 GBK。
 3. **`scoop which 7z` 输出的是 `~\scoop\apps\7zip\current\7z.exe`**（带 `~` 未展开），与本机 `prefix 7zip` 输出完整路径不同。展示时不要自己拼路径。
 
 ## 10. 这个工具的坑（给后来者和宿主实现者）

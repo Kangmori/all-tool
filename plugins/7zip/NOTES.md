@@ -4,7 +4,7 @@
 
 全部来自官方帮助文件 `7-zip.chm`（7-Zip 26.03）中的 **Command Line Version** 章节：
 
-- 本机路径：`C:\Users\Steve\scoop\apps\7zip\26.03\7-zip.chm`
+- 本机路径：`%USERPROFILE%\scoop\apps\7zip\26.03\7-zip.chm`
 - 反编译 + 转 Markdown 的产物：`docs/reference/7zip-md/`（生成方法见 `docs/reference/README.md`）
 - 逐命令开关矩阵：`docs/reference/7zip-switch-matrix.json`
 
@@ -87,7 +87,7 @@
 (空行)
 (空行)
 Libs:
- 0 : 26.03 : C:\Users\Steve\scoop\apps\7zip\current\7z.dll
+ 0 : 26.03 : %USERPROFILE%\scoop\apps\7zip\current\7z.dll
 ```
 
 所以 `versionPattern` 写成 `^7-Zip\s+([0-9.]+)` 时匹配不到任何东西（`^` 只在整段文本开头生效），

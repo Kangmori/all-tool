@@ -78,7 +78,7 @@ git clone --depth 1 https://github.com/ScoopInstaller/Scoop.wiki.git docs\refere
 
 ```powershell
 # 1. 从 scoop 安装目录反编译 CHM（hh.exe 是 Windows 自带的）
-$chm = 'C:\Users\Steve\scoop\apps\7zip\26.03\7-zip.chm'
+$chm = '%USERPROFILE%\scoop\apps\7zip\26.03\7-zip.chm'
 hh.exe -decompile docs\reference\7zip-chm $chm
 
 # 2. 转成 Markdown（需要 pandoc）

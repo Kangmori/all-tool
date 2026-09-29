@@ -27,7 +27,7 @@ sources:
     appliesTo: Windows 10/11
     note: 离线快照 Microsoft Learn 官方文档（见各动作的 sources）/tracert.html。参数表在 #parameters，含 /d /h /j /w /R /S /4 /6。
   - title: 本机 `tracert /?` 的真实输出快照
-    url: file:///D:/AI/All Tool/本机帮助快照（**未入库**，可用下列命令重新抓取）/tracert.txt
+    url: file:///<仓库目录>/本机帮助快照（**未入库**，可用下列命令重新抓取）/tracert.txt
     retrieved: "2026-09-27"
     appliesTo: Windows 11 26200 / TRACERT.EXE 文件版本 10.0.26100.8115
     note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。本清单的每个开关都对着这份输出核对过。

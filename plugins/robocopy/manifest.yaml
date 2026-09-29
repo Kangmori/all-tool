@@ -41,7 +41,7 @@ sources:
     appliesTo: Windows 10/11
     note: 离线快照 Microsoft Learn 官方文档（见各动作的 sources）/robocopy.html。语法行：robocopy <source> <destination> [<file>[ ...]] [<options>]；#parameters 是 117 行的开关大表；#exit-return-codes 给出退出码语义。
   - title: 本机 `robocopy /?` 的真实输出快照
-    url: file:///D:/AI/All Tool/本机帮助快照（**未入库**，可用下列命令重新抓取）/robocopy.txt
+    url: file:///<仓库目录>/本机帮助快照（**未入库**，可用下列命令重新抓取）/robocopy.txt
     retrieved: "2026-09-27"
     appliesTo: Windows 11 26200 / Robocopy.exe 文件版本 10.0.26100.8521
     note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。注意：**`robocopy /?` 的退出码是 16**，因为它的 /? 实际是"参数不全时的用法输出"，走的是错误路径。
@@ -162,7 +162,7 @@ actions:
         url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/robocopy#parameters
         retrieved: "2026-09-27"
         appliesTo: Windows 10/11
-        note: 文档：/E copies subdirectories, including empty ones；/S copies subdirectories but not empty ones。官方示例行有 robocopy C:\Users\Admin\Records D:\Backup /E /ZB /LOG:C:\Logs\Backup.log
+        note: 文档：/E copies subdirectories, including empty ones；/S copies subdirectories but not empty ones。官方示例行有 robocopy %USERPROFILE%\Records D:\Backup /E /ZB /LOG:C:\Logs\Backup.log
     fields:
       - id: source
         label: 源目录
@@ -232,7 +232,7 @@ actions:
         url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/robocopy#parameters
         retrieved: "2026-09-27"
         appliesTo: Windows 10/11
-        note: 文档原文：/PURGE Deletes destination files and directories that no longer exist in the source. /MIR Mirrors a directory tree (equivalent to /E plus /PURGE). 官方示例行有 robocopy C:\Users\Admin\Records D:\Backup /MIR /R:2 /W:5 /LOG:C:\Logs\Backup.log
+        note: 文档原文：/PURGE Deletes destination files and directories that no longer exist in the source. /MIR Mirrors a directory tree (equivalent to /E plus /PURGE). 官方示例行有 robocopy %USERPROFILE%\Records D:\Backup /MIR /R:2 /W:5 /LOG:C:\Logs\Backup.log
     fields:
       - id: source
         label: 源目录
@@ -276,7 +276,7 @@ actions:
       resultNote: 未实跑（破坏性）。退出码 0–7 都表示"没有失败"，>= 8 才是真失败 —— 详见本包 NOTES.md §4。
     examples:
       - title: 镜像同步（危险，未实跑）
-        args: ["C:\\Users\\Admin\\Records", "D:\\Backup", "/MIR", "/R:2", "/W:5"]
+        args: ["%USERPROFILE%\\Records", "D:\\Backup", "/MIR", "/R:2", "/W:5"]
 
   # ================================================================= 复制
   - id: copy-with-log

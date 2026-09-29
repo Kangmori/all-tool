@@ -143,8 +143,8 @@ commandArgs: ["install"]
 winget 的安装目录里**两个 exe 都有**：
 
 ```
-uv.exe   C:\Users\Steve\AppData\Local\Microsoft\WinGet\Packages\astral-sh.uv_...\uv.exe
-uvx.exe  C:\Users\Steve\AppData\Local\Microsoft\WinGet\Packages\astral-sh.uv_...\uvx.exe
+uv.exe   %USERPROFILE%\AppData\Local\Microsoft\WinGet\Packages\astral-sh.uv_...\uv.exe
+uvx.exe  %USERPROFILE%\AppData\Local\Microsoft\WinGet\Packages\astral-sh.uv_...\uvx.exe
 ```
 
 而 **`uvx --version` 打印的是 `uvx 0.11.15 (…)`，不是 `uv 0.11.15 (…)`**。实测对比：
@@ -541,14 +541,14 @@ uv 这条事实**不存在**，只能实测。规范没有说明"文档没写时
 | 6 | `uv export --format requirements.txt` | 未跑 | 安全红线 | — |
 | 7 | `uv tree --depth 2` | 未跑 | 安全红线 | — |
 | 8 | `uv venv .venv` | 未跑 | 安全红线 | — |
-| 9 | `uv pip list` | **0** | 输出 `Using Python 3.14.7 environment at: C:\Users\Steve\scoop\apps\python\current` | 107 ms |
+| 9 | `uv pip list` | **0** | 输出 `Using Python 3.14.7 environment at: %USERPROFILE%\scoop\apps\python\current` | 107 ms |
 | 10 | `uv pip list --format json` | **0** | 同上（JSON 体） | 82 ms |
 | 11 | `uv pip freeze` | **0** | 同上 | 83 ms |
 | 12 | `uv pip install --requirements requirements.txt` | 未跑 | 安全红线 | — |
-| 13 | `uv python list --only-installed` | **0** | 输出 `cpython-3.14.7-windows-x86_64-none  C:\Users\Steve\scoop\shims\python3.exe` | 324 ms |
+| 13 | `uv python list --only-installed` | **0** | 输出 `cpython-3.14.7-windows-x86_64-none  %USERPROFILE%\scoop\shims\python3.exe` | 324 ms |
 | 14 | `uv tool list` | **0** | stderr 有 `astrbot` 警告（见 §9.3） | 80 ms |
 | 15 | `uv tool list --show-paths` | **0** | 同上 | 79 ms |
-| 16 | `uv cache dir` | **0** | 输出 `C:\Users\Steve\AppData\Local\uv\cache` | 54 ms |
+| 16 | `uv cache dir` | **0** | 输出 `%USERPROFILE%\AppData\Local\uv\cache` | 54 ms |
 | 17 | `uv self version --short` | **0** | 输出 `0.11.15` | 55 ms |
 | 18 | `uv self version` | **0** | 输出完整版本行 | 54 ms |
 | 19 | `uv help` | **0** | 输出总览 | 57 ms |

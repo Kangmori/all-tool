@@ -11,38 +11,29 @@
     "specVersion": 1
   },
   "environment": {
-    "_note": "这里是【期望值】，全部经实测确认。check-env.ps1 会用它和真实探测结果对比，只比对这里出现过的键。",
+    "_note": "这里只放**影响开发决策**的事实。具体版本、路径、机器信息一律现测：跑 scripts/check-env.ps1（机器可读结果就是它打印的内容），不要往这里抄本机快照。",
     "os": {
-      "build": "26200",
+      "family": "Windows 10/11",
       "arch": "x64"
     },
     "user": {
       "isAdmin": false
     },
     "workspace": {
-      "path": "D:\\AI\\All Tool",
-      "writable": true
+      "writable": true,
+      "note": "仓库目录本身；具体路径见 check-env.ps1"
     },
     "dotnet": {
-      "sdk": "10.0.401"
+      "requires": "10.x"
+    },
+    "windowsAppSdk": {
+      "source": "NuGet（见 src/AllTool.App/AllTool.App.csproj）"
     },
     "visualStudio": {
-      "product": "Visual Studio Community 2026",
-      "version": "18.10.12217.157",
-      "winuiWorkload": true,
-      "windowsSdk": "10.0.26100.0"
-    },
-    "tools": {
-      "git": "2.55.0",
-      "pandoc": "3.11",
-      "uv": "0.11.15",
-      "scoop": "0.5.3",
-      "7z": "26.03",
-      "python": "3.14.7",
-      "node": "26.8.2"
+      "winuiWorkloadRequired": true
     },
     "network": {
-      "fakeIpActive": true
+      "possiblyBehindFakeIpDnsProxy": true
     }
   },
   "environmentNotes": {
@@ -51,7 +42,8 @@
     "noCppToolchain": "未安装 C++ 工作负载与 MSVC。宿主走纯 C# + P/Invoke，不要引入需要编译原生代码的依赖。",
     "vsWorkloadId": "WinUI 开发工作负载的 id 是 Microsoft.VisualStudio.Workload.Universal（显示名 WinUI 应用程序开发）。这是历史改名遗留，不存在名为 WinUI 的 id。",
     "consoleEncoding": "pwsh 捕获含中文的输出前需设 $OutputEncoding = [Console]::OutputEncoding = [Text.Encoding]::UTF8，否则中文乱码。",
-    "workspaceAcl": "D:\\AI\\All Tool 曾因 DACL 缺显式 WRITE_DAC 导致沙箱无法写；已用 icacls 授予当前用户完全控制。若再现（所有命令被沙箱拦下），重跑该命令。"
+    "workspaceAclLesson": "工作区若缺显式 WRITE_DAC，沙箱类写入会被拒绝。遇到时用 icacls 给当前用户完全控制（具体命令见 development.md 的 P11）；**不要把本机的路径与账号写进文档**。",
+    "privacy": "本仓库是公开的：文档里不要写本机用户名、机器名、绝对路径、个人安装目录与邮箱。需要机器相关的事实时，写「用 scripts/check-env.ps1 现测」，而不是抄一份快照进来。"
   },
   "artifacts": [
     {
@@ -316,7 +308,7 @@
     {
       "id": "chm-decompile",
       "claim": "hh.exe -decompile 能反编译 CHM 帮助文件",
-      "command": "hh.exe -decompile <out> C:\\Users\\Steve\\scoop\\apps\\7zip\\26.03\\7-zip.chm",
+      "command": "hh.exe -decompile <out> %USERPROFILE%\\scoop\\apps\\7zip\\26.03\\7-zip.chm",
       "result": "80 个文件",
       "verifiedAt": "2026-09-27"
     },

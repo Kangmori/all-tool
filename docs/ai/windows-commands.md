@@ -9,7 +9,7 @@
 > 每个包自己的 `plugins/<id>/NOTES.md` 只写该包特有的内容，公共事实一律指回这里。
 >
 > 实测环境：Windows 11 `10.0.26200` x64（`systeminfo` 自报"Windows 11 专业工作站版"），
-> 账号 `KANGMORI\Steve`（**非管理员**）。实测日期 2026-09-27。
+> 账号 `<机器名>\<用户名>`（**非管理员**）。实测日期 2026-09-27。
 
 ---
 
@@ -267,7 +267,7 @@ Windows 自带命令**没有统一的版本开关**：没有 `--version`，`/?` 
 $ dotnet test src\AllTool.slnx
 失败 AllTool.Core.Tests.RealManifestTests.加载全部工具包都不应抛异常 [12 ms]
 错误消息:
- AllTool.Core.Manifest.ManifestException : 清单校验失败 D:\AI\All Tool\plugins\chkdsk\manifest.yaml：
+ AllTool.Core.Manifest.ManifestException : 清单校验失败 <仓库目录>\plugins\chkdsk\manifest.yaml：
 - 动作 check：缺少 command
 - 动作 fix：缺少 command
 - 动作 recover：缺少 command

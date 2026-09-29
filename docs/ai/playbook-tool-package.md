@@ -28,7 +28,7 @@
 
 | 优先级 | 类型 | 如何拿到 | 例子 |
 |---|---|---|---|
-| 1 | 随软件分发的帮助文件（CHM / man / 本地 HTML） | 在安装目录里找 `*.chm`、`man\`、`docs\` | `C:\Users\Steve\scoop\apps\7zip\26.03\7-zip.chm` |
+| 1 | 随软件分发的帮助文件（CHM / man / 本地 HTML） | 在安装目录里找 `*.chm`、`man\`、`docs\` | `%USERPROFILE%\scoop\apps\7zip\26.03\7-zip.chm` |
 | 2 | 官方文档站 / 官方仓库 wiki | **用 pwsh 抓**（`web_fetch` 在本机不可用，见 development.md §4.4） | `https://github.com/ScoopInstaller/Scoop/wiki` |
 | 3 | 程序自身输出的帮助 | `--help` / `help <cmd>`。**注意**：它可作为补充，但不能作为唯一来源，因为它随语言变化、且不能说明默认值与互斥关系 | `scoop help install` |
 

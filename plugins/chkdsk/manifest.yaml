@@ -37,7 +37,7 @@ sources:
     appliesTo: Windows 10/11
     note: 离线快照 Microsoft Learn 官方文档（见各动作的 sources）/chkdsk.html。语法行列出全部开关；#understanding-exit-codes 一节给出退出码表并说明"必须是管理员"。
   - title: 本机 `chkdsk /?` 的真实输出快照
-    url: file:///D:/AI/All Tool/本机帮助快照（**未入库**，可用下列命令重新抓取）/chkdsk.txt
+    url: file:///<仓库目录>/本机帮助快照（**未入库**，可用下列命令重新抓取）/chkdsk.txt
     retrieved: "2026-09-27"
     appliesTo: Windows 11 26200 / chkdsk.exe 文件版本 10.0.26100.1150
     note: 由 scripts/fetch-win-help.ps1 抓取，**不入库**（微软文本）。注意：**`chkdsk /?` 自身的退出码是 3**（不是 0/1），这是本机实测的事实。

@@ -26,7 +26,7 @@ quickActions:
 
 sources:
   - title: 7-Zip 帮助文件 —— Command Line Version 章节
-    url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
+    url: file:///%USERPROFILE%/scoop/apps/7zip/26.03/7-zip.chm
     retrieved: "2026-09-27"
     appliesTo: "26.03"
     note: 所有字段均以此文档为准；离线转换文本位于 7-Zip 自带 CHM 的离线转换文本（未入库）/。
@@ -77,7 +77,7 @@ actions:
     danger: overwrite
     sources:
       - title: a (Add) command
-        url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
+        url: file:///%USERPROFILE%/scoop/apps/7zip/26.03/7-zip.chm
         retrieved: "2026-09-27"
         appliesTo: "26.03"
         note: cmdline/commands/add.htm
@@ -256,7 +256,7 @@ actions:
     workingDirectory: outputDir
     sources:
       - title: x (eXtract with full paths) command
-        url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
+        url: file:///%USERPROFILE%/scoop/apps/7zip/26.03/7-zip.chm
         retrieved: "2026-09-27"
         appliesTo: "26.03"
         note: cmdline/commands/extract_full.htm
@@ -385,7 +385,7 @@ actions:
     workingDirectory: outputDir
     sources:
       - title: e (Extract) command
-        url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
+        url: file:///%USERPROFILE%/scoop/apps/7zip/26.03/7-zip.chm
         retrieved: "2026-09-27"
         appliesTo: "26.03"
         note: cmdline/commands/extract.htm
@@ -458,7 +458,7 @@ actions:
     command: l
     sources:
       - title: l (List contents of archive) command
-        url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
+        url: file:///%USERPROFILE%/scoop/apps/7zip/26.03/7-zip.chm
         retrieved: "2026-09-27"
         appliesTo: "26.03"
         note: cmdline/commands/list.htm
@@ -533,7 +533,7 @@ actions:
     command: t
     sources:
       - title: t (Test integrity of archive) command
-        url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
+        url: file:///%USERPROFILE%/scoop/apps/7zip/26.03/7-zip.chm
         retrieved: "2026-09-27"
         appliesTo: "26.03"
         note: cmdline/commands/test.htm
@@ -583,7 +583,7 @@ actions:
     command: h
     sources:
       - title: h (Hash) command
-        url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
+        url: file:///%USERPROFILE%/scoop/apps/7zip/26.03/7-zip.chm
         retrieved: "2026-09-27"
         appliesTo: "26.03"
         note: cmdline/commands/hash.htm
@@ -662,7 +662,7 @@ actions:
     confirmText: 将从压缩包中永久删除匹配的文件，且无法撤销。
     sources:
       - title: d (Delete) command
-        url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
+        url: file:///%USERPROFILE%/scoop/apps/7zip/26.03/7-zip.chm
         retrieved: "2026-09-27"
         appliesTo: "26.03"
         note: cmdline/commands/delete.htm
@@ -711,7 +711,7 @@ actions:
     command: rn
     sources:
       - title: rn (Rename) command
-        url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
+        url: file:///%USERPROFILE%/scoop/apps/7zip/26.03/7-zip.chm
         retrieved: "2026-09-27"
         appliesTo: "26.03"
         note: cmdline/commands/rename.htm
@@ -755,7 +755,7 @@ actions:
     danger: overwrite
     sources:
       - title: u (Update) command
-        url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
+        url: file:///%USERPROFILE%/scoop/apps/7zip/26.03/7-zip.chm
         retrieved: "2026-09-27"
         appliesTo: "26.03"
         note: cmdline/commands/update.htm
@@ -843,7 +843,7 @@ actions:
     command: b
     sources:
       - title: b (Benchmark) command
-        url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
+        url: file:///%USERPROFILE%/scoop/apps/7zip/26.03/7-zip.chm
         retrieved: "2026-09-27"
         appliesTo: "26.03"
         note: cmdline/commands/bench.htm
@@ -899,7 +899,7 @@ actions:
     command: i
     sources:
       - title: Command Line Commands（快速参考表）
-        url: file:///C:/Users/Steve/scoop/apps/7zip/26.03/7-zip.chm
+        url: file:///%USERPROFILE%/scoop/apps/7zip/26.03/7-zip.chm
         retrieved: "2026-09-27"
         appliesTo: "26.03"
         note: cmdline/commands/index.htm —— i 命令在 CHM 里没有独立页面
