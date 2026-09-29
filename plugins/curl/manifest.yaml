@@ -1,0 +1,639 @@
+spec: 1
+id: curl
+name: curl
+manifestVersion: 0.1.0
+kind: system
+summary: 命令行下载与 HTTP 请求
+appVersion: "8.19.0（本机实测，Schannel）"
+description: >-
+  命令行 HTTP 客户端。Windows 10 1803 起**系统自带**（\\Windows\\System32\\curl.exe），
+  很多人不知道可以不用装任何东西就直接用它下载文件、查看响应头、发 API 请求。
+  Windows 版使用 Schannel 作为 TLS 后端，证书走系统证书库。
+homepage: https://curl.se/docs/manpage.html
+license: curl（MIT 风格）
+
+locate:
+  executable: curl.exe
+  searchPaths:
+    - ${SystemRoot}\System32\curl.exe
+  notFoundHint: 找不到 curl.exe。Windows 10 1803 及以上自带（System32 下）；更早的系统需要自行安装 curl。
+
+runtime:
+  encoding: utf-8
+
+actions:
+  # ============================================================ 查看（只读）
+  - id: version
+    title: 查看 curl 版本与支持的特性
+    description: 显示 curl 与 libcurl 的版本，以及这台机器的 TLS 后端、压缩库、协议支持情况。
+    category: 查看
+    command: ""
+    fields: []
+    commandArgs: ["--version"]
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: curl 官方手册 —— --version
+        url: https://curl.se/docs/manpage.html
+        retrieved: "2026-09-29"
+        appliesTo: curl 8.19.0
+        note: "本机实测输出：curl 8.19.0 (Windows) libcurl/8.19.0 Schannel zlib/1.3.1 WinIDN WinLDAP。"
+
+  - id: head
+    title: 只看响应头
+    description: 只请求文档信息（HTTP HEAD），不下载正文。用来确认文件大小、重定向、服务器类型。
+    category: 查看
+    command: ""
+    fields:
+      - id: url
+        label: URL
+        type: text
+        style: positional
+        required: true
+        placeholder: "https://example.com"
+        doc: curl 手册的位置参数 <url>
+      - id: location
+        label: 跟随重定向
+        type: bool
+        style: flag
+        prefix: "--location"
+        required: false
+        doc: "curl 手册 -L, --location <url>：跟随 3xx 重定向"
+      - id: verbose
+        label: 显示详细信息
+        type: bool
+        style: flag
+        prefix: "--verbose"
+        required: false
+        doc: "curl 手册 -v, --verbose：把请求/响应过程打印出来"
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: curl 官方手册 —— -I, --head
+        url: https://curl.se/docs/manpage.html
+        retrieved: "2026-09-29"
+        appliesTo: curl 8.19.0
+        note: "本机 curl --help all 实测：-I, --head —— Show document info only。"
+
+  # ============================================================ 下载（写文件）
+  - id: download
+    title: 下载文件（保存到指定路径）
+    description: 把 URL 的内容下载到指定文件，可选断点续传、限速、失败重试。
+    category: 下载
+    command: ""
+    danger: overwrite
+    confirmText: 会把内容写入指定文件；文件已存在且不用续传时会被覆盖。
+    fields:
+      - id: url
+        label: URL
+        type: text
+        style: positional
+        required: true
+        placeholder: "https://example.com/file.zip"
+        doc: curl 手册的位置参数 <url>
+      - id: output
+        label: 保存为
+        type: file
+        style: separate
+        prefix: "--output"
+        required: true
+        placeholder: "D:\\downloads\\file.zip"
+        doc: "curl 手册 -o, --output <file>"
+      - id: location
+        label: 跟随重定向
+        type: bool
+        style: flag
+        prefix: "--location"
+        required: false
+        help: 很多下载地址会先 302 到镜像站，不跟随就下不到东西。
+        doc: "curl 手册 -L, --location"
+      - id: continueAt
+        label: 断点续传
+        type: text
+        style: separate
+        prefix: "--continue-at"
+        required: false
+        placeholder: "-"
+        help: 填 - 表示自动从已下载的字节数继续（适合大文件中途断掉）。
+        doc: "curl 手册 -C, --continue-at <offset>（- 表示自动）"
+      - id: retry
+        label: 失败重试次数
+        type: number
+        style: separate
+        prefix: "--retry"
+        required: false
+        placeholder: "3"
+        doc: "curl 手册 --retry <num>"
+      - id: limitRate
+        label: 限速
+        type: text
+        style: separate
+        prefix: "--limit-rate"
+        required: false
+        placeholder: "2M"
+        doc: "curl 手册 --limit-rate <speed>（例如 100K、2M）"
+      - id: createDirs
+        label: 自动创建目录
+        type: bool
+        style: flag
+        prefix: "--create-dirs"
+        required: false
+        doc: "curl 手册 --create-dirs"
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: curl 官方手册（下载相关选项）
+        url: https://curl.se/docs/manpage.html
+        retrieved: "2026-09-29"
+        appliesTo: curl 8.19.0
+        note: "本机 curl --help all 实测存在：-o/--output、-L/--location、-C/--continue-at、--retry、--limit-rate、--create-dirs。"
+
+  - id: download-remote-name
+    title: 按服务器文件名下载（-O）
+    description: 用 URL 里的文件名保存到当前目录，不自己指定名字。
+    category: 下载
+    command: ""
+    danger: overwrite
+    confirmText: 会以服务器上的文件名写入当前目录（同名文件会被覆盖）。
+    fields:
+      - id: url
+        label: URL
+        type: text
+        style: positional
+        required: true
+        placeholder: "https://example.com/file.zip"
+        doc: curl 手册的位置参数 <url>
+      - id: remoteName
+        label: 用服务器文件名保存
+        type: bool
+        style: flag
+        prefix: "--remote-name"
+        required: true
+        doc: "curl 手册 -O, --remote-name"
+      - id: outputDir
+        label: 保存目录
+        type: directory
+        style: separate
+        prefix: "--output-dir"
+        required: false
+        placeholder: "D:\\downloads"
+        doc: "curl 手册 --output-dir <dir>"
+      - id: location
+        label: 跟随重定向
+        type: bool
+        style: flag
+        prefix: "--location"
+        required: false
+        doc: "curl 手册 -L, --location"
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: curl 官方手册（-O 与 --output-dir）
+        url: https://curl.se/docs/manpage.html
+        retrieved: "2026-09-29"
+        appliesTo: curl 8.19.0
+        note: "本机 curl --help all 实测存在：-O/--remote-name、--output-dir。"
+
+  # ============================================================ 请求（可能发数据出去）
+  - id: get
+    title: 发起 GET 请求
+    description: 请求一个 URL 并把响应正文打到输出区。可跟随重定向、请求压缩传输。
+    category: 请求
+    command: ""
+    fields:
+      - id: url
+        label: URL
+        type: text
+        style: positional
+        required: true
+        placeholder: "https://example.com"
+        doc: curl 手册的位置参数 <url>
+      - id: location
+        label: 跟随重定向
+        type: bool
+        style: flag
+        prefix: "--location"
+        required: false
+        doc: "curl 手册 -L, --location"
+      - id: compressed
+        label: 请求压缩传输
+        type: bool
+        style: flag
+        prefix: "--compressed"
+        required: false
+        doc: "curl 手册 --compressed"
+      - id: maxTime
+        label: 最长耗时（秒）
+        type: number
+        style: separate
+        prefix: "--max-time"
+        required: false
+        placeholder: "30"
+        doc: "curl 手册 -m, --max-time <seconds>"
+      - id: fail
+        label: HTTP 错误码也当作失败
+        type: bool
+        style: flag
+        prefix: "--fail"
+        required: false
+        help: 勾上后，404/500 这类响应会让 curl 以非 0 退出码结束（脚本里好用）。
+        doc: "curl 手册 -f, --fail"
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: curl 官方手册（-L / --compressed / -m / -f）
+        url: https://curl.se/docs/manpage.html
+        retrieved: "2026-09-29"
+        appliesTo: curl 8.19.0
+        note: "本机 curl --help all 实测存在：-L/--location、--compressed、-m/--max-time、-f/--fail。"
+
+  - id: post-json
+    title: 发送 JSON（POST）
+    description: "用 --json 发一个 JSON 请求体（自动带上 Content-Type: application/json 并用 POST）。"
+    category: 请求
+    command: ""
+    danger: overwrite
+    confirmText: 会把这段 JSON 作为请求体发给目标服务器——确认 URL 与内容无误再执行。
+    fields:
+      - id: url
+        label: URL
+        type: text
+        style: positional
+        required: true
+        placeholder: "https://api.example.com/v1/items"
+        doc: curl 手册的位置参数 <url>
+      - id: json
+        label: JSON 内容
+        type: textarea
+        style: separate
+        prefix: "--json"
+        required: true
+        placeholder: '{"name":"test"}'
+        doc: "curl 手册 --json <data>"
+      - id: header
+        label: 附加请求头
+        type: text
+        style: repeated
+        prefix: "--header"
+        required: false
+        placeholder: "Authorization: Bearer xxx"
+        doc: "curl 手册 -H, --header <header/@file>"
+      - id: maxTime
+        label: 最长耗时（秒）
+        type: number
+        style: separate
+        prefix: "--max-time"
+        required: false
+        placeholder: "30"
+        doc: "curl 手册 -m, --max-time <seconds>"
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: curl 官方手册（--json 与 -H）
+        url: https://curl.se/docs/manpage.html
+        retrieved: "2026-09-29"
+        appliesTo: curl 8.19.0
+        note: "本机 curl --help all 实测存在：--json <data>、-H/--header <header/@file>。"
+
+  - id: post-form
+    title: 提交表单（multipart）
+    description: 用 -F 发送 multipart/form-data，适合上传字段或文件（name=@文件路径）。
+    category: 请求
+    command: ""
+    danger: overwrite
+    confirmText: 会把表单内容（可能含文件）发给目标服务器——确认 URL 与内容无误再执行。
+    fields:
+      - id: url
+        label: URL
+        type: text
+        style: positional
+        required: true
+        placeholder: "https://example.com/upload"
+        doc: curl 手册的位置参数 <url>
+      - id: form
+        label: 表单字段
+        type: text
+        style: repeated
+        prefix: "--form"
+        required: true
+        placeholder: "file=@D:\\path\\a.txt"
+        help: 每行一个字段；上传文件写成 name=@完整路径。
+        doc: "curl 手册 -F, --form <name=content>"
+      - id: location
+        label: 跟随重定向
+        type: bool
+        style: flag
+        prefix: "--location"
+        required: false
+        doc: "curl 手册 -L, --location"
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: curl 官方手册（-F, --form）
+        url: https://curl.se/docs/manpage.html
+        retrieved: "2026-09-29"
+        appliesTo: curl 8.19.0
+        note: "本机 curl --help all 实测：-F, --form <name=content> —— Specify multipart MIME data。"
+
+  - id: upload-file
+    title: 上传文件（PUT）
+    description: 用 -T 把本地文件传给服务器（默认 PUT）。
+    category: 请求
+    command: ""
+    danger: overwrite
+    confirmText: 会把本地文件内容上传到目标服务器——确认 URL 与文件无误再执行。
+    fields:
+      - id: url
+        label: 目标 URL
+        type: text
+        style: positional
+        required: true
+        placeholder: "https://example.com/upload/a.txt"
+        doc: curl 手册的位置参数 <url>
+      - id: uploadFile
+        label: 要上传的文件
+        type: file
+        style: separate
+        prefix: "--upload-file"
+        required: true
+        doc: "curl 手册 -T, --upload-file <file>"
+      - id: user
+        label: 用户名:密码
+        type: password
+        style: separate
+        prefix: "--user"
+        required: false
+        placeholder: "user:password"
+        doc: "curl 手册 -u, --user <user:password>"
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: curl 官方手册（-T, --upload-file）
+        url: https://curl.se/docs/manpage.html
+        retrieved: "2026-09-29"
+        appliesTo: curl 8.19.0
+        note: "本机 curl --help all 实测：-T, --upload-file <file> —— Transfer local FILE to destination。"
+
+  - id: basic-auth
+    title: 带用户名密码请求（Basic）
+    description: 用 -u 提供 HTTP 基本认证信息。
+    category: 请求
+    command: ""
+    danger: overwrite
+    confirmText: 认证信息会随请求发往目标服务器；请确认对方可信（HTTP 明文会暴露凭据，尽量用 HTTPS）。
+    fields:
+      - id: url
+        label: URL
+        type: text
+        style: positional
+        required: true
+        placeholder: "https://example.com/private"
+        doc: curl 手册的位置参数 <url>
+      - id: user
+        label: 用户名:密码
+        type: password
+        style: separate
+        prefix: "--user"
+        required: true
+        placeholder: "user:password"
+        help: 这个字段的内容不会写进"记住的上次输入"之外的任何地方；但仍建议只在 HTTPS 上使用。
+        doc: "curl 手册 -u, --user <user:password>"
+      - id: location
+        label: 跟随重定向
+        type: bool
+        style: flag
+        prefix: "--location"
+        required: false
+        doc: "curl 手册 -L, --location"
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: curl 官方手册（-u, --user）
+        url: https://curl.se/docs/manpage.html
+        retrieved: "2026-09-29"
+        appliesTo: curl 8.19.0
+        note: "本机 curl --help all 实测：-u, --user <user:password> —— Server user and password。"
+
+  - id: user-agent
+    title: 自定义请求头信息
+    description: 自定义 User-Agent、Referer 等常见请求头。
+    category: 请求
+    command: ""
+    fields:
+      - id: url
+        label: URL
+        type: text
+        style: positional
+        required: true
+        placeholder: "https://example.com"
+        doc: curl 手册的位置参数 <url>
+      - id: userAgent
+        label: User-Agent
+        type: text
+        style: separate
+        prefix: "--user-agent"
+        required: false
+        placeholder: "Mozilla/5.0"
+        doc: "curl 手册 -A, --user-agent <name>"
+      - id: referer
+        label: Referer
+        type: text
+        style: separate
+        prefix: "--referer"
+        required: false
+        doc: "curl 手册 -e, --referer <URL>"
+      - id: cookie
+        label: Cookie
+        type: text
+        style: separate
+        prefix: "--cookie"
+        required: false
+        doc: "curl 手册 -b, --cookie <data|filename>"
+      - id: location
+        label: 跟随重定向
+        type: bool
+        style: flag
+        prefix: "--location"
+        required: false
+        doc: "curl 手册 -L, --location"
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: curl 官方手册（-A / -e / -b）
+        url: https://curl.se/docs/manpage.html
+        retrieved: "2026-09-29"
+        appliesTo: curl 8.19.0
+        note: "本机 curl --help all 实测：-A/--user-agent <name>、-e/--referer <URL>、-b/--cookie <data|filename>。"
+
+  # ============================================================ 网络环境相关
+  - id: proxy
+    title: 通过代理请求
+    description: 指定代理服务器再发起请求（公司网络或需要科学上网的环境常用）。
+    category: 网络
+    command: ""
+    fields:
+      - id: url
+        label: URL
+        type: text
+        style: positional
+        required: true
+        placeholder: "https://example.com"
+        doc: curl 手册的位置参数 <url>
+      - id: proxy
+        label: 代理地址
+        type: text
+        style: separate
+        prefix: "--proxy"
+        required: true
+        placeholder: "http://127.0.0.1:7890"
+        doc: "curl 手册 -x, --proxy [protocol://]host[:port]"
+      - id: location
+        label: 跟随重定向
+        type: bool
+        style: flag
+        prefix: "--location"
+        required: false
+        doc: "curl 手册 -L, --location"
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: curl 官方手册（-x, --proxy）
+        url: https://curl.se/docs/manpage.html
+        retrieved: "2026-09-29"
+        appliesTo: curl 8.19.0
+        note: "本机 curl --help all 实测存在 --proxy。"
+
+  - id: insecure
+    title: 跳过证书校验（不安全）
+    description: >-
+      用 -k 跳过 TLS 证书校验。**会让你无法发现中间人攻击**，仅在自签名证书的测试环境里临时使用。
+    category: 网络
+    command: ""
+    danger: overwrite
+    confirmText: 跳过证书校验会让"服务器是谁"这件事失去保证——生产环境请改用 --cacert 指定正确的根证书。
+    fields:
+      - id: url
+        label: URL
+        type: text
+        style: positional
+        required: true
+        doc: curl 手册的位置参数 <url>
+      - id: insecure
+        label: 跳过证书校验
+        type: bool
+        style: flag
+        prefix: "--insecure"
+        required: true
+        doc: "curl 手册 -k, --insecure —— Allow insecure server connections"
+      - id: silent
+        label: 静默模式
+        type: bool
+        style: flag
+        prefix: "--silent"
+        required: false
+        doc: "curl 手册 -s, --silent"
+      - id: showError
+        label: 静默时仍显示错误
+        type: bool
+        style: flag
+        prefix: "--show-error"
+        required: false
+        doc: "curl 手册 -S, --show-error"
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: curl 官方手册（-k / -s / -S）
+        url: https://curl.se/docs/manpage.html
+        retrieved: "2026-09-29"
+        appliesTo: curl 8.19.0
+        note: "本机 curl --help all 实测：-k/--insecure、-s/--silent、-S/--show-error。"
+
+  - id: client-cert
+    title: 使用客户端证书
+    description: 用 --cert 指定客户端证书、--cacert 指定自定义根证书（内网双向 TLS 常用）。
+    category: 网络
+    command: ""
+    danger: overwrite
+    confirmText: 会把证书文件路径用于这次请求；请确认证书与私钥来自可信来源。
+    fields:
+      - id: url
+        label: URL
+        type: text
+        style: positional
+        required: true
+        doc: curl 手册的位置参数 <url>
+      - id: cert
+        label: 客户端证书
+        type: file
+        style: separate
+        prefix: "--cert"
+        required: false
+        placeholder: "D:\\certs\\client.pem"
+        help: 需要私钥时写成 证书:私钥 的组合（官方手册的 certificate[:password] 形式）。
+        doc: "curl 手册 -E, --cert <certificate[:password]>"
+      - id: cacert
+        label: 自定义根证书
+        type: file
+        style: separate
+        prefix: "--cacert"
+        required: false
+        placeholder: "D:\\certs\\ca.pem"
+        doc: "curl 手册 --cacert <file>"
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: curl 官方手册（--cert / --cacert）
+        url: https://curl.se/docs/manpage.html
+        retrieved: "2026-09-29"
+        appliesTo: curl 8.19.0
+        note: "本机 curl --help all 实测存在 --cert、--cacert。"
+
+  - id: verbose
+    title: 诊断请求过程（-v）
+    description: 打印完整的请求/响应过程（DNS 解析、TLS 握手、请求头、响应头），排查连接问题时用。
+    category: 网络
+    command: ""
+    fields:
+      - id: url
+        label: URL
+        type: text
+        style: positional
+        required: true
+        doc: curl 手册的位置参数 <url>
+      - id: verbose
+        label: 显示详细信息
+        type: bool
+        style: flag
+        prefix: "--verbose"
+        required: true
+        doc: "curl 手册 -v, --verbose —— Make the operation more talkative"
+      - id: maxTime
+        label: 最长耗时（秒）
+        type: number
+        style: separate
+        prefix: "--max-time"
+        required: false
+        placeholder: "15"
+        doc: "curl 手册 -m, --max-time <seconds>"
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: curl 官方手册（-v / -m）
+        url: https://curl.se/docs/manpage.html
+        retrieved: "2026-09-29"
+        appliesTo: curl 8.19.0
+        note: "本机 curl --help all 实测：-v/--verbose、-m/--max-time <seconds>。"

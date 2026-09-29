@@ -763,6 +763,12 @@
       "task": "winget 工具包（25 动作，随 Windows 提供的包管理器）",
       "doneAt": "2026-09-29",
       "evidence": "plugins/winget：只读（version/info/search/show/list/features/source list/source update/pin list/pin remove/hash/validate）直接执行；安装类（install/upgrade/upgrade-all/uninstall/repair/import/source add/source remove）走逐字确认短语，其中 uninstall 标 destructive；settings 与 configure 用 execution: info（会拉外部编辑器 / 批量改系统状态）。真机实测：宿主跑 winget list → 退出码 0、141 行、1.0 秒、无截断，中文输出正常（据此确认 runtime.encoding: utf-8 是对的）。winget v1.29.380；只读命令不需要管理员；实测耗时 --version 0.6s、list 1.3–1.7s、features 0.6s。发现并修掉一个真实缺陷：--scope 枚举默认 user 会静默生成 `list --scope user`，把整机范围安装的包过滤掉——现在三个 --scope 都默认「不指定」。校验 16/16 → 17/17；字段 431 → 504（+73，出处 100%）；测试 165/165。"
+    },
+    {
+      "id": "N26",
+      "task": "curl 工具包（14 动作，Windows 自带的新版命令）",
+      "doneAt": "2026-09-29",
+      "evidence": "plugins/curl：查看/下载/请求/网络四类共 14 个动作；下载与发送类标 overwrite + 明确 confirmText；basic-auth 用 password 字段类型。本机 curl 8.19.0（C:\\Windows\\System32\\curl.exe，Win10 1803+ 自带）。实测：`curl -I https://example.com` 退出码 0 / HTTP 200；宿主跑 `curl --version` 输出完整、退出码 0、中文与英文均正常（utf-8 正确）。踩坑：YAML 普通标量里出现 `: ` 会让校验器在 yaml.safe_load 阶段崩掉（不是可读错误）——含冒号空格的值必须加引号，已记进 curl NOTES。"
     }
   ],
   "plugins": [
@@ -1028,7 +1034,12 @@
       "why": "产品负责人指定：接着做 winget 与一些新版系统自带的命令。这类命令是新系统才带、用户普遍不知道其存在的，正好符合本项目「让用户知道有这个功能」的定位。",
       "how": "建议顺序（按价值/独立性）：① curl（Win10 1803+ 自带，官方手册 curl.se/docs/manpage.html，选项多，只收常用项）② tar（同版本自带，bsdtar 语义，压缩/解压/列表）③ ssh / scp（OpenSSH 客户端，Win10 1809+ 可选功能）④ schtasks（计划任务，只读的 /query 很实用）⑤ wevtutil（事件日志——chkdsk/sfc 的结果都在事件日志里）⑥ certutil / takeown / icacls（证书与权限，需要管理员的多）。注意：curl 的选项是 `-x` 风格且和 url 位置参数混排，写字段时要按官方手册逐个核对。",
       "doneWhen": "每个包：校验全绿 + 只读动作真机冒烟 + NOTES 记录；风险分级按规范 §2.9。",
-      "priority": 2
+      "priority": 2,
+      "status": "进行中（curl 已完成；tar / ssh / schtasks / wevtutil 待做）",
+      "progress": {
+        "curl": "完成：plugins/curl，14 个动作 / 50 字段 / 出处 100%。本机 curl 8.19.0（System32 自带）。实测：直接跑 curl -I https://example.com → 退出码 0、HTTP 200；宿主里跑 curl --version → 输出完整、退出码 0、编码正确。选项对着官方手册与本机 `curl --help all` 双向核对。",
+        "剩余": "tar（同版本自带，压缩/解压/列表）、ssh/scp（OpenSSH 客户端，Win10 1809+ 可选功能）、schtasks（计划的只读 /query 很实用）、wevtutil（事件日志——chkdsk/sfc 的结果都在里面）、certutil / takeown / icacls（权限类，多数需要管理员）。"
+      }
     }
   ],
   "readingOrderForNewAgent": [
