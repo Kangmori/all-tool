@@ -148,6 +148,65 @@ schema 仍然把 `command` 列为必需键，是为了强制作者**显式决定
 界面上鼠标悬停在工具包条目上时显示**最短**的说明（例如 `ping` → `测试网络连通`）。
 不写就退回用 `description`。`description` 则用于"选中工具包但还没选动作"时展示的详细介绍。
 
+### 2.8 会话型程序（例如 diskpart）：`session` + 状态门控
+
+有些程序是**交互式解释器**：`select disk 0` 改变的是**那个进程内部的状态**，
+后面的命令依赖它。要让界面做到"没选磁盘时 `clean` 是灰的"，就要有"会话"的概念。
+
+**这里的会话 = 脚本重放**，不是后台上挂一个进程：
+
+```yaml
+session:
+  scriptArgs: ["/s", "{script}"]        # 怎么把脚本交给它（{script} → 临时脚本路径）
+  exitCommand: exit
+  errorPattern: '(?im)^(Virtual Disk Service error|.*\bnot found\b)'
+  state:
+    - key: disk
+      title: 已选中磁盘
+      capture: disk                      # 捕获组存成变量，界面提示里会用到
+      successPattern: '(?im)^Disk (\d+) is now the selected disk'
+    - key: volume
+      title: 已选中卷
+      capture: volume
+      successPattern: '(?im)^Volume (\d+) is now the selected volume'
+
+actions:
+  - id: select-disk
+    sessionCommand: "select disk {index}"
+    establishes: disk                    # 成功后确立状态
+  - id: create-partition
+    sessionCommand: "create partition primary"
+    requires: [disk]                     # 不满足 → 灰显
+    requiresHint: "先执行「选择磁盘」"
+    danger: overwrite
+    confirmPhrase: "创建分区"              # 中风险：逐字确认
+  - id: clean
+    sessionCommand: "clean"
+    execution: info                      # 极高风险：只解释 + 复制 + 在终端中打开
+```
+
+**宿主的执行方式是重放**：跑 `create partition primary` 时，实际生成的脚本是
+`select disk 0` + `create partition primary` + `exit`（同一个状态键只重放最后一次选择）。
+所以每条命令的**完整脚本都会显示在命令行预览里**（R6），用户看得到"它到底跑了什么"。
+
+为什么不用长驻进程：效果等价（选择类命令只改状态）、**更安全**（不必在后台留一个已提权的解释器）、
+更好验收（每一步都能看到完整脚本），而且逻辑变成纯函数、可以单测。
+真正需要来回交互（带提示符、要回答问题）的程序仍走 `execution: terminal`。
+
+### 2.9 三级风险与"让用户知道有这个功能"
+
+本软件的目标是**让用户知道系统里、以及自己装的工具能做什么**——所以
+**再危险的操作也要在界面上留一条**，只是执行方式不同：
+
+| 级别 | 例子（diskpart） | 声明方式 | 用户体验 |
+|---|---|---|---|
+| 低 | `list disk` / `detail disk` / `select disk 0` | 什么都不用写 | 直接执行 |
+| 中 | `create partition` / `assign` / `format` | `danger` + `confirmPhrase` | 执行前要**逐字输入确认短语** |
+| **极高** | `clean` / `clean all` / `delete partition` | **`execution: info`** | **宿主不执行**：给解释、给完整命令、可复制、可在终端中打开（用户自己按下回车） |
+
+判断"极高"的口径：**不可逆地毁掉现有数据**（清盘、删分区、格式化）。
+"创建"类操作不动已有数据，属于中风险，正常加入。
+
 ## 3. 执行模型（宿主怎么用这份清单）
 
 1. **发现**：用 `locate.executable` 在 PATH 中查找，找不到再依次试 `alternativeNames` 与 `searchPaths`（支持 `%ENV%` 展开）。找到后按 `versionArgs` 取版本，用 `versionPattern` 提取版本号，与 `minVersion` 比较；不满足则禁用该工具包并提示。

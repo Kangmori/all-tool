@@ -34,6 +34,13 @@ public sealed class ToolManifest
     public List<ManifestSource>? Sources { get; init; }
 
     /// <summary>
+    /// 会话型程序（例如 diskpart）：一次动作 = 把"当前生效的选择类命令"和"这次要跑的命令"
+    /// 拼成一个脚本喂给它。见 <see cref="Execution.SessionScriptBuilder"/> 里为什么用脚本重放
+    /// 而不是长驻进程。
+    /// </summary>
+    public SessionSpec? Session { get; init; }
+
+    /// <summary>
     /// 右键工具包时额外显示的"与这个软件相关"的操作（例如"检查可用更新"）。
     /// 这些是**软件专有**的，所以由清单声明；而"打开所在目录""打开官网"这类通用项由宿主固定提供。
     /// </summary>
@@ -142,6 +149,24 @@ public sealed class ManifestAction
     /// 工具替用户按下回车并不比让他自己按更好。
     /// </summary>
     public string? Execution { get; init; }
+
+    /// <summary>会话型程序里这条动作要发的命令（字段值会代入，例如 "select disk {index}"）。</summary>
+    public string? SessionCommand { get; init; }
+
+    /// <summary>这条命令成功后确立的状态键（对应 <see cref="SessionSpec.State"/> 里的 key）。</summary>
+    public string? Establishes { get; init; }
+
+    /// <summary>需要哪些状态键才允许执行；不满足就灰显。</summary>
+    public List<string>? Requires { get; init; }
+
+    /// <summary>灰显时显示的原因，例如"先执行「选择磁盘」"。</summary>
+    public string? RequiresHint { get; init; }
+
+    /// <summary>
+    /// 极高风险动作的**逐字确认短语**（例如"清空磁盘 0"）。
+    /// 点一下"确定"和"意识到自己在擦哪块盘"之间没有认知负担，打字才有。
+    /// </summary>
+    public string? ConfirmPhrase { get; init; }
 
     /// <summary>规范化后的执行方式：没写就是 <c>run</c>。</summary>
     public string ExecutionOrDefault =>
@@ -286,4 +311,42 @@ public static class DangerLevel
     public const string None = "none";
     public const string Overwrite = "overwrite";
     public const string Destructive = "destructive";
+}
+
+/// <summary>会话型程序的声明（见 <see cref="Execution.SessionScriptBuilder"/> 的说明）。</summary>
+public sealed class SessionSpec
+{
+    /// <summary>覆盖工具包级 locate.executable（可选）。</summary>
+    public string? Executable { get; init; }
+
+    /// <summary>怎么把脚本交给它，例如 ["/s", "{script}"]；{script} 会替换成临时脚本路径。</summary>
+    public List<string>? ScriptArgs { get; init; }
+
+    /// <summary>临时脚本的扩展名（默认 .txt）。</summary>
+    public string? ScriptExtension { get; init; }
+
+    /// <summary>追加到脚本末尾的命令（例如 exit）。</summary>
+    public string? ExitCommand { get; init; }
+
+    /// <summary>命中它就认为这条命令失败了（不确立任何状态）。</summary>
+    public string? ErrorPattern { get; init; }
+
+    /// <summary>可以确立哪些状态。</summary>
+    public List<SessionStateSpec>? State { get; init; }
+}
+
+/// <summary>会话里的一个状态：怎么从输出看出它成立了、捕获什么值。</summary>
+public sealed class SessionStateSpec
+{
+    /// <summary>状态键，动作的 establishes / requires 引用它。</summary>
+    public string? Key { get; init; }
+
+    /// <summary>给用户看的名字，例如"已选中磁盘"。</summary>
+    public string? Title { get; init; }
+
+    /// <summary>命中它就认为这个状态成立（多行匹配）。</summary>
+    public string? SuccessPattern { get; init; }
+
+    /// <summary>把哪个捕获组存成变量（例如 disk），供后续命令与提示引用。</summary>
+    public string? Capture { get; init; }
 }

@@ -974,10 +974,17 @@
       "id": "N20",
       "task": "会话型工具包（DiskPart 那种「灰显 + 选中后才允许」）—— 设计已写好，待产品负责人确认后开工",
       "why": "产品负责人提出的交互式命令方案：动作要能有状态门控（select disk 之后才允许 clean），而且灰显要能说清原因。现有「一个动作一次进程」的模型做不到——diskpart 的选择状态在进程内部。",
-      "how": "设计见 docs/ai/proposal-session-mode.md。分期：S1 规范（session / state / sessionCommand / establishes / requires / requiresHint / confirmPhrase + schema）→ S2 Core 会话执行器（复用 ConPTY 已有的 stdin：保持进程存活 + SendLine + 正则推导状态）→ S3 宿主 UI（状态条、灰显 + 悬浮原因、开始/结束、确认短语输入）→ S4 diskpart 工具包（冒烟只跑只读与 select）。S1 之前不动任何清单，避免出现「规范里写了、宿主没实现」的空承诺。",
+      "how": "设计见 docs/ai/proposal-session-mode.md；注意提案里的会话最终定为**脚本重放**而不是长驻进程（理由写在 SessionScriptBuilder.cs 顶部注释：效果等价、不必后台留一个已提权的解释器、每一步都能看到完整脚本、逻辑可单测）。S1/S2 已完成，S3 从「RebuildActionList 灰显」接着做。",
       "doneWhen": "S1–S3 通过各自验收（含「确认短语打错就不执行」），S4 的破坏性动作逐条人工核对文案",
       "priority": 1,
-      "blockedOn": "设计第 7 节的三个问题要产品负责人确认：逐字确认短语、是否真做 diskpart、会话是否显式开始"
+      "blockedOn": "设计第 7 节的三个问题要产品负责人确认：逐字确认短语、是否真做 diskpart、会话是否显式开始",
+      "status": "进行中（S1、S2 已完成；S3 完成一小半）",
+      "progress": {
+        "S1 规范与 schema": "已完成 —— manifest-v1.md §2.8（会话与状态门控）、§2.9（三级风险与「让用户知道有这个功能」）；schema 新增 $defs/session（含 state 数组）与动作级 sessionCommand / establishes / requires / requiresHint / confirmPhrase。校验 15/15。",
+        "S2 Core": "已完成 —— Execution/SessionScriptBuilder.cs（脚本重放 + {字段} 替换 Substitute）与 Execution/SessionStateUpdater.cs（按 successPattern / errorPattern 从输出推导状态）；模型新增 SessionSpec / SessionStateSpec；11 个单测（含「同一个状态只重放最后一次」「正则写错当没命中而不是崩」）。测试总数 154 → 165。",
+        "S3 宿主": "一小半 —— 已落地：MainWindow.xaml 的会话状态条（x:Name=SessionBar，默认折叠，破坏性操作前能一眼看出作用目标）、_sessionState 字段、RefreshSessionBar()、OnClearSessionClicked()。**未落地（下一步从这里接）**：① RebuildActionList 里的灰显门控（GroupItem 加 Enabled + SessionHintFor 给悬浮原因）；② RunCoreAsync 的会话执行路径（写临时脚本 → argv 用 session.ScriptArgs 替换 {script} → 跑完调 SessionStateUpdater.Apply 更新状态并刷新列表）；③ UpdateCommandLine 改成显示完整脚本（R6：不能把真正跑的东西藏起来）；④ confirmPhrase 的逐字确认对话框；⑤ info 级别的会话动作 → 复制命令 + 打开一个空 cmd 让用户自己粘贴回车（不自动执行）。注意：本轮的 patch 脚本因锚点（button.Click 那行的缩进）不匹配而整体未写入，所以 MainWindow.xaml.cs 目前只有上述部分；继续时先重新确认锚点。",
+        "S4 diskpart 清单": "未开始 —— 按产品负责人确认的三级风险：低（list/detail/select）正常执行；中（create partition/assign）执行 + confirmPhrase；极高（clean/clean all/delete partition/format）用 execution: info，宿主不执行。冒烟只能跑只读与 select（select 只改会话状态、不动磁盘）；diskpart 需要管理员，本机是非管理员，正常路径要在提权后测。"
+      }
     },
     {
       "id": "N12",

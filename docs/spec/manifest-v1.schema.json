@@ -96,6 +96,9 @@
     "summary": {
       "type": "string",
       "description": "一句话说明这个软件是干什么的（鼠标悬停在工具包条目上时显示）。写不出十个字以内就别写，界面会退回用 description。"
+    },
+    "session": {
+      "$ref": "#/$defs/session"
     }
   },
   "$defs": {
@@ -351,6 +354,29 @@
             "terminal"
           ],
           "description": "这个动作怎么执行。run（默认）= 宿主直接跑并捕获输出；info = 宿主**不执行**，只显示命令行、提供复制与「在终端中打开」，用于风险明显大于收益的系统级命令（例如会切断网络的 ipconfig /release）；terminal = 需要交互或会弹窗，直接在真终端里打开（例如 cleanmgr）。"
+        },
+        "sessionCommand": {
+          "type": "string",
+          "description": "会话型程序里这条动作要发的命令（字段值会代入，例如 select disk {index}）。"
+        },
+        "establishes": {
+          "type": "string",
+          "description": "这条命令成功后确立的状态键（对应 session.state[].key）。"
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "需要哪些状态键才允许执行；不满足时界面灰显并显示 requiresHint。"
+        },
+        "requiresHint": {
+          "type": "string",
+          "description": "灰显时显示的原因，例如「先执行『选择磁盘』」。"
+        },
+        "confirmPhrase": {
+          "type": "string",
+          "description": "极高风险动作的逐字确认短语（例如「清空磁盘 0」）。点确认按钮的认知负担不够，打字才有。"
         }
       }
     },
@@ -665,6 +691,65 @@
         },
         "expectExitCode": {
           "type": "integer"
+        }
+      }
+    },
+    "session": {
+      "type": "object",
+      "description": "会话型程序（例如 diskpart）：一次动作 = 把当前生效的选择类命令和这次要跑的命令拼成脚本喂给它。",
+      "additionalProperties": false,
+      "required": [
+        "scriptArgs",
+        "state"
+      ],
+      "properties": {
+        "executable": {
+          "type": "string",
+          "description": "覆盖工具包级 locate.executable（可选）。"
+        },
+        "scriptArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "怎么把脚本交给它，例如 [\"/s\", \"{script}\"]；{script} 会替换成临时脚本路径。"
+        },
+        "scriptExtension": {
+          "type": "string",
+          "description": "临时脚本的扩展名（默认 .txt）。"
+        },
+        "exitCommand": {
+          "type": "string",
+          "description": "追加到脚本末尾的命令（例如 exit）。"
+        },
+        "errorPattern": {
+          "type": "string",
+          "description": "命中它就认为这条命令失败了，不确立任何状态。"
+        },
+        "state": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "key",
+              "successPattern"
+            ],
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "successPattern": {
+                "type": "string"
+              },
+              "capture": {
+                "type": "string"
+              }
+            }
+          }
         }
       }
     }

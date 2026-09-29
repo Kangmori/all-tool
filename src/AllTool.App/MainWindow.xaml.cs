@@ -56,6 +56,12 @@ public sealed partial class MainWindow : Window
 
     private readonly FileLogger _logger = FileLogger.OpenDefault();
 
+    /// <summary>
+    /// 会话型工具包（diskpart 等）的当前状态：哪些前置条件已满足、捕获到什么值。
+    /// 换工具包时清空——不同工具包的「选中磁盘」没有关系。
+    /// </summary>
+    private readonly SessionState _sessionState = new();
+
     /// <summary>字段 id → 生成的控件，用于必填校验时高亮与聚焦。</summary>
     private readonly Dictionary<string, FrameworkElement> _fieldControls = new(StringComparer.Ordinal);
 
@@ -663,6 +669,35 @@ public sealed partial class MainWindow : Window
         ActionDescription.Text += Environment.NewLine + Environment.NewLine
             + "⚠ " + why + Environment.NewLine
             + "命令已经拼好并且随时可复制；要执行就点「在终端中打开」，它会在真正的命令行窗口里跑同一条命令。";
+    }
+
+    /// <summary>
+    /// 刷新会话状态条（会话型工具包才显示）：当前作用于什么。
+    ///
+    /// 这一步是**安全设计**不是装饰：破坏性操作前必须能一眼看出目标是什么
+    /// （「已选中磁盘 0」）。没有它，用户点 clean 时根本不知道会擦哪块盘。
+    /// </summary>
+    private void RefreshSessionBar()
+    {
+        var session = _manifest?.Session;
+
+        if (session is null)
+        {
+            SessionBar.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        SessionBar.Visibility = Visibility.Visible;
+        SessionStateText.Text = "会话状态（后续命令的作用对象）：" + _sessionState.Describe(session.State);
+    }
+
+    /// <summary>清除会话状态：清掉「已选中磁盘 / 卷」，需要重新选择。</summary>
+    private void OnClearSessionClicked(object sender, RoutedEventArgs e)
+    {
+        _sessionState.Clear();
+        RefreshSessionBar();
+        RebuildActionList();
+        StatusText.Text = "已清除会话状态（重新选择磁盘 / 卷之后相关动作才会恢复可用）";
     }
 
     /// <summary>把当前这条命令放进真终端里执行（同一条命令，输出与交互由用户自己看）。</summary>
@@ -1713,6 +1748,7 @@ public sealed partial class MainWindow : Window
         _pendingPresets = null;   // 预填值已经进到控件里了，别留着影响下次重建
         UpdateCommandLine();
         ApplyExecutionMode();
+        RefreshSessionBar();
         StatusText.Text = "填好后点执行";
     }
 
