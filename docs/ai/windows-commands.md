@@ -451,6 +451,23 @@ Windows 自带命令的版本在 exe 的文件版本资源里（例如 `ping.exe
 
 ---
 
+## 10. 清单作者视角：做这一批工具包时的特殊性
+
+> 这一节原先是工具包开发手册的「附 C」，按"内容归位"的原则搬到这里——
+> 它讲的是**这批命令本身**的特殊性，与 `windows-commands.md` 其它章节是一家人。
+
+| 现象 | 怎么做 |
+|---|---|
+| **开关写成 `/xxx`**（官方文档用斜杠，程序也接受 `-xxx`） | 按官方文档写 `/xxx`；校验器的开关溯源已同时认 `-` 与 `/` |
+| **退出码几乎都不是"0 = 成功"** | 逐个实测并写进 `exitCodes`。`robocopy` 最要命：**0–7 全是"没有失败"**（1 = 全部复制成功），≥8 才算失败；`ping` 是 0 = 通了、1 = 全丢；各命令 `/?` 的退出码还互不相同（chkdsk 3、robocopy 16、ipconfig 1…） |
+| **帮助写到 stderr** | `nslookup` / `netstat` 的帮助在 stderr（stdout 0 字节）。抓快照时必须两个流都收，否则快照几乎是空的（实测 nslookup 快照只有 481 字节） |
+| **输出编码不统一** | 多数是 `oem`(936)，但 `sfc` 是 **UTF-16LE**。判 UTF-16LE 不能用"ASCII 后跟 00"（汉字第二字节不为 0 会误判），要用"字节长度偶数 + 高字节为 0 的比例 > 30%"；也不要指望 `UTF8Encoding(throwOnInvalidBytes)` 能识别 GBK（它对 `d3 c3` 静默替换而不是抛错） |
+| **有的会弹 GUI** | `cleanmgr`（`/?` 就弹）、`diskpart` 是交互式 → 不做，或只做"打开它"；抓帮助要带超时 |
+| **很多动作需要管理员** | 标 `requiresAdmin: true`（动作级）。当前账号不是管理员时，实测 `chkdsk` 全部、`sfc` 全部、`netstat -b`、`powercfg /waketimers` 都会失败——这些不要实跑 |
+| **没有版本命令** | 读 exe 的 `VersionInfo.FileVersion`（见 §5.2） |
+| **官方文档 URL 不能猜规律** | `powercfg` 在 `.../windows-server/administration/windows-commands/powercfg` 是 404，真实位置在 `.../windows-hardware/design/device-experiences/powercfg-command-line-options`。**每个 URL 都要实际请求确认** |
+| **cmd 内建命令不是 exe** | `dir` / `echo` / `copy` / `del` / `cls` / `type` 必须走 `locate.executable: cmd.exe` + `command: /c` + `commandArgs: [原命令]`（不要在清单里指望 `useShell`——宿主尚未实现它） |
+
 ## 相关文档
 
 | 文档 | 讲什么 |

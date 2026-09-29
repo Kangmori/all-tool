@@ -324,55 +324,6 @@ git push
 
 ---
 
-## 附 A：完整路径速览（照这个顺序做就不会漏）
-
-```
-0. 值得做吗 + 文档在哪            → 三类权威来源
-1. 落盘快照                       → docs/reference/，并补 README 的复现步骤
-2. 提取事实 F1..F5                → 命令清单 / 逐命令可用开关 / 全局语法 / 退出码 / 版本输出格式
-   （结构规整则生成矩阵 JSON）
-3. 写 manifest                    → 从模板复制，字段风格查决策表，每字段问三个问题
-4. 校验循环直到全绿               → 报错查速查表；不要放宽 schema
-5. 真机冒烟                       → examples 全跑 + versionPattern 实测 + 行为差异核对
-6. 写 NOTES.md                    → 来源 / 覆盖 / 没做的 / 坑 / 实测结果
-7. 更新 state + 提交推送           → project-state.json 的 plugins 段
-```
-
-## 附 B：工具包作者的自我检查清单
-
-提交前逐条确认：
-
-- [ ] `id` == 目录名
-- [ ] 每个动作都有 `sources`，每条 source 都有 `retrieved` 日期
-- [ ] 字段出处覆盖率报告的百分比已看过；没有 `doc` 的字段都是明显的直传位置参数
-- [ ] `versionPattern` 用清单里的正则实测匹配成功，并把捕获组值抄进 NOTES.md
-- [ ] `minVersion` 是真实存在且当前满足的版本
-- [ ] `exitCodes` 覆盖了文档里列出的所有码
-- [ ] 破坏性动作标了 `danger` 并写了 `confirmText`
-- [ ] 会写文件到当前目录的动作覆盖了 `workingDirectory`
-- [ ] `examples` 里的每条命令都真跑过且记录退出码
-- [ ] NOTES.md 写清了"故意没做什么"和"这个工具的坑"
-- [ ] `validate-plugins.py` 全绿
-- [ ] `project-state.json` 里的 `plugins` 段已更新
-- [ ] 无子命令的工具：动作写了 `command: ""`（**这是有意为之**，不是漏写——宿主校验层允许空串）
-- [ ] 需要管理员权限的动作标了 `requiresAdmin: true` 并写清了依据（官方文字 / 实测）
-
----
-
-## 附 C：做 Windows 自带命令集时的特殊性（12 个包的实测总结）
-
-| 现象 | 怎么做 |
-|---|---|
-| **开关写成 `/xxx`**（官方文档用斜杠，程序也接受 `-xxx`） | 按官方文档写 `/xxx`；校验器的开关溯源已同时认 `-` 与 `/` |
-| **退出码几乎都不是"0 = 成功"** | 逐个实测并写进 `exitCodes`。`robocopy` 最要命：**0–7 全是"没有失败"**（1 = 全部复制成功），≥8 才算失败；`ping` 是 0 = 通了、1 = 全丢；各命令 `/?` 的退出码还互不相同（chkdsk 3、robocopy 16、ipconfig 1…） |
-| **帮助写到 stderr** | `nslookup` / `netstat` 的帮助在 stderr（stdout 0 字节）。抓快照时必须两个流都收，否则快照几乎是空的（实测 nslookup 快照只有 481 字节） |
-| **输出编码不统一** | 多数是 `oem`(936)，但 `sfc` 是 **UTF-16LE**。判 UTF-16LE 不能用"ASCII 后跟 00"（汉字第二字节不为 0 会误判），要用"字节长度偶数 + 高字节为 0 的比例 > 30%"；也不要指望 `UTF8Encoding(throwOnInvalidBytes)` 能识别 GBK（它对 `d3 c3` 静默替换而不是抛错） |
-| **有的会弹 GUI** | `cleanmgr`（`/?` 就弹）、`diskpart` 是交互式 → 不做，或只做"打开它"；抓帮助要带超时 |
-| **很多动作需要管理员** | 标 `requiresAdmin: true`（动作级）。当前账号不是管理员时，实测 `chkdsk` 全部、`sfc` 全部、`netstat -b`、`powercfg /waketimers` 都会失败——这些不要实跑 |
-| **没有版本命令** | 读 exe 的 `VersionInfo.FileVersion`（见 §5.2） |
-| **官方文档 URL 不能猜规律** | `powercfg` 在 `.../windows-server/administration/windows-commands/powercfg` 是 404，真实位置在 `.../windows-hardware/design/device-experiences/powercfg-command-line-options`。**每个 URL 都要实际请求确认** |
-| **cmd 内建命令不是 exe** | `dir` / `echo` / `copy` / `del` / `cls` / `type` 必须走 `locate.executable: cmd.exe` + `command: /c` + `commandArgs: [原命令]`（不要在清单里指望 `useShell`——宿主尚未实现它） |
-
 ## 8. 把工具包开发委派给子智能体（并行提效）
 
 一个工具包是**完全独立**的工作（一个目录、一份清单、一份 NOTES），适合并行委派。
@@ -489,7 +440,26 @@ git push
     否则中文标签会乱码——**零残留自检因此误判过**（把 21 个证书数成 0 个）。
 27. 写中文文档时**别在字符串里混用 ASCII 引号**（写脚本时踩过多次，表现为语法错误或 shell 解析错）。
 
-## 11. 新增一个工具包的检查单
+## 11. 新增工具包的检查单
+
+### 11.1 一眼速览（顺序照这个走就不会漏）
+
+```
+```
+0. 值得做吗 + 文档在哪            → 三类权威来源
+1. 落盘快照                       → docs/reference/，并补 README 的复现步骤
+2. 提取事实 F1..F5                → 命令清单 / 逐命令可用开关 / 全局语法 / 退出码 / 版本输出格式
+   （结构规整则生成矩阵 JSON）
+3. 写 manifest                    → 从模板复制，字段风格查决策表，每字段问三个问题
+4. 校验循环直到全绿               → 报错查速查表；不要放宽 schema
+5. 真机冒烟                       → examples 全跑 + versionPattern 实测 + 行为差异核对
+6. 写 NOTES.md                    → 来源 / 覆盖 / 没做的 / 坑 / 实测结果
+7. 更新 state + 提交推送           → project-state.json 的 plugins 段
+```
+
+```
+
+### 11.2 逐项检查（提交前全部打勾）
 
 - [ ] 官方文档 + 本机 `--help` / `/?` 都读了；**两边对不上的只写都能对应的**，差异记进 NOTES
 - [ ] 每个动作有 `sources`（title / url / retrieved / note），每个字段有 `doc`
@@ -502,10 +472,24 @@ git push
 - [ ] `uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py` 全绿
 - [ ] NOTES 写全：验了什么 / 没验什么 / **为什么没验** / 与官方文档对不上的地方
 - [ ] 临时对象申报：建了什么、何时删的、**怎么复核**
+- [ ] `id` == 目录名
+- [ ] 每个动作都有 `sources`，每条 source 都有 `retrieved` 日期
+- [ ] 字段出处覆盖率报告的百分比已看过；没有 `doc` 的字段都是明显的直传位置参数
+- [ ] `versionPattern` 用清单里的正则实测匹配成功，并把捕获组值抄进 NOTES.md
+- [ ] `minVersion` 是真实存在且当前满足的版本
+- [ ] `exitCodes` 覆盖了文档里列出的所有码
+- [ ] 破坏性动作标了 `danger` 并写了 `confirmText`
+- [ ] 会写文件到当前目录的动作覆盖了 `workingDirectory`
+- [ ] `examples` 里的每条命令都真跑过且记录退出码
+- [ ] NOTES.md 写清了"故意没做什么"和"这个工具的坑"
+- [ ] `validate-plugins.py` 全绿
+- [ ] `project-state.json` 里的 `plugins` 段已更新
+- [ ] 无子命令的工具：动作写了 `command: ""`（**这是有意为之**，不是漏写——宿主校验层允许空串）
+- [ ] 需要管理员权限的动作标了 `requiresAdmin: true` 并写清了依据（官方文字 / 实测）
 
----
-
----
+> Windows 自带命令那一批还有额外的特殊性（开关写 `/xxx`、退出码几乎都不是「0 = 成功」、
+> 帮助写 stderr、编码不统一、有的会弹 GUI、不少动作要管理员…），见
+> [`windows-commands.md`](windows-commands.md) §10。
 
 ## 相关文档
 

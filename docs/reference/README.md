@@ -8,7 +8,7 @@
 （7-Zip CHM 的反编译文本、Scoop wiki 全站克隆、`scoop help` / `uv --help` 的输出、
 Microsoft Learn 的页面 HTML）。原因是版权：那些是别人的作品，公开仓库里不能整篇转载。
 
-保留规则（完整口径见 `本机专属库的 host-dev/development.md` §8.7、§8.8）：
+保留规则（完整口径见 `本机专属库的 host-dev/development.md` §9.2、§9.3）：
 
 | 内容 | 能不能入库 | 理由 |
 |---|---|---|
@@ -39,7 +39,7 @@ Microsoft Learn 的页面 HTML）。原因是版权：那些是别人的作品�
 ```
 
 指针文件是仓库根目录的 `.local-vault`（**不入库**），里面写着本机专属库的路径。
-详见 `本机专属库的 host-dev/development.md` §8.8。
+详见 `本机专属库的 host-dev/development.md` §9.3。
 
 ## 怎么重新生成（都是本机操作，产物默认落到本机专属库）
 
