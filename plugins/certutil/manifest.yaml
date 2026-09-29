@@ -90,35 +90,41 @@ runtime:
   encoding: oem
 
 exitCodes:
-  - code: "0"
+  - code: 0
     meaning: 成功（certutil 对成功路径统一返回 0）
     severity: ok
-  - code: "1"
+  - code: 1
     meaning: >-
       用法错误：未知参数、参数太多/太少、动词帮助页本身的退出码。
       实测 `certutil -hashfile`（缺 InFile）与 `certutil -hashfile:<文件>`（不存在的写法）都是 1。
     severity: error
-  - code: "-2147024894"
+  - code: -2147024894
     meaning: 0x80070002 ERROR_FILE_NOT_FOUND —— 文件或证书存储不存在
     severity: error
-  - code: "-2147024816"
+  - code: -2147024816
     meaning: >-
       0x80070050 ERROR_FILE_EXISTS —— 输出文件已存在。certutil 默认**拒绝覆盖**，
       要覆盖必须显式加 -f（实测 -encode / -decode 都是这个码）。
     severity: error
-  - code: "-2147024156"
+  - code: -2147024156
     meaning: 0x800702E4 —— 请求的操作需要提升（管理员）。实测非管理员跑 -addstore / -delstore / -TPMInfo 得到此码
     severity: error
-  - code: "-2146893807"
+  - code: -2146893807
     meaning: 0x80090011 NTE_NOT_FOUND —— 找不到匹配的证书对象（实测 `certutil -store My -user` 这种写法错位时出现）
     severity: error
-  - code: "-2147024883"
+  - code: -2147024883
     meaning: 0x8007000D ERROR_INVALID_DATA —— 文件内容不是 certutil 能解析的格式（实测 `-asn <cer> 1`）
     severity: error
-  - code: "-805305819"
+  - code: -2146881269
+    meaning: >-
+      0x8009310B CRYPT_E_ASN1_BADTAG —— ASN.1 标签不对。
+      实测 `-verify C:\Windows\System32\msvcrt.dll` 得到此码：那是个 PE 文件、不是证书文件，
+      验证证书请传 .cer/.crt/.der。
+    severity: error
+  - code: -805305819
     meaning: 0xD0000225 STATUS_NOT_FOUND —— 哈希算法名不认识（实测 `-hashfile <文件> BOGUS`）
     severity: error
-  - code: "-2147024809"
+  - code: -2147024809
     meaning: 0x80070057 ERROR_INVALID_PARAMETER —— 参数格式不对（实测 `-error zzz`）
     severity: error
 
@@ -146,6 +152,7 @@ actions:
         style: positional
         required: false
         default: SHA256
+        save: true
         help: >-
           默认 SHA256（下载站点最常提供的校验值）。本机 `certutil -hashfile -?` 列出 MD2 MD4 MD5
           SHA1 SHA256 SHA384 SHA512；MD2/MD4 已不安全，做兼容性校验用 MD5，安全性校验用 SHA256 以上。
@@ -164,16 +171,16 @@ actions:
         输出第二行就是哈希值（第一行形如「SHA256 的 <路径> 哈希:」）。
         本工具包的输出用 OEM 代码页解码，所以中文行显示正常。
     examples:
-      - title: 算一个文件的 SHA256
-        args: ["-hashfile", "%TEMP%\\__AllToolProbe_a.txt", "SHA256"]
+      - title: 算一个系统 DLL 的 SHA256（不需要准备任何文件）
+        args: ["-hashfile", "C:\\Windows\\System32\\msvcrt.dll", "SHA256"]
         expectExitCode: 0
       - title: 算 MD5（与老站点给的校验值对照）
-        args: ["-hashfile", "%TEMP%\\__AllToolProbe_a.txt", "MD5"]
+        args: ["-hashfile", "C:\\Windows\\System32\\msvcrt.dll", "MD5"]
         expectExitCode: 0
     nextSteps:
       - title: "校验这个文件的数字签名？先看它的证书"
         action: dump
-        when: '(?m)^(?:SHA(?:1|256|384|512)|MD5)\s+的\s+(?<path>.+?)\s+哈希:'
+        when: '(?m)^(?:SHA(?:1|256|384|512)|MD5)\s+的\s+(?<path>[^\r\n]+?)\s+哈希:'
         reason: 哈希只能说明文件没坏，要确认文件出自谁手还得看签名证书
         values: { inFile: "{path}" }
         maxOptions: 1
@@ -204,7 +211,9 @@ actions:
         style: positional
         required: true
         placeholder: "0x80070002"
-        help: 十六进制（0x80070002）或十进制（2）都可以；本工具包 exitCodes 里的负数要查的话，先转成十六进制。
+        help: >-
+          十六进制（0x80070002）或十进制（2）都可以；要查本工具包 exitCodes 里的负数，
+          先按补码换成十六进制（实测 -2147024894 = 0x80070002，`certutil -error` 会把两种写法都打出来）。
         doc: 官方 -error 语法行：certutil [options] -error ErrorCode
     output:
       mode: stream
@@ -272,8 +281,8 @@ actions:
       showCommandLine: true
       resultNote: 成功时打印「输入长度 = N / 输出长度 = M」，两行都是字节数，可以据此确认解出来的东西大小合理。
     examples:
-      - title: 解一个纯 Base64 文本文件
-        args: ["-decode", "%TEMP%\\__AllToolProbe_plain.b64", "%TEMP%\\__AllToolProbe_plainout.bin"]
+      - title: 解一个纯 Base64 文本文件（先用记事本把 Base64 存成 D:\a.b64）
+        args: ["-decode", "D:\\a.b64", "D:\\a.bin"]
         expectExitCode: 0
     sources:
       - title: Microsoft Learn —— certutil 的 -decode 一节
@@ -328,8 +337,8 @@ actions:
         输出的 Base64 会被 `-----BEGIN CERTIFICATE-----` / `-----END CERTIFICATE-----` 包起来
         （certutil 的固定格式，跟文件内容是不是证书无关），很多工具能直接吃这种格式。
     examples:
-      - title: 编码一个新文件
-        args: ["-encode", "%TEMP%\\__AllToolProbe_enc.bin", "%TEMP%\\__AllToolProbe_enc_new.b64"]
+      - title: 编码一个新文件到自己指定的位置
+        args: ["-encode", "D:\\a.bin", "D:\\a.b64"]
         expectExitCode: 0
     sources:
       - title: Microsoft Learn —— certutil 的 -encode 一节
@@ -352,19 +361,16 @@ actions:
     category: 证书查看
     command: "-store"
     fields:
-      - id: scope
-        label: 看哪个范围
-        type: enum
+      - id: userStore
+        label: 用当前用户的存储（-user）
+        type: bool
         style: flag
+        prefix: "-user"
+        default: false
         required: false
-        default: ""
         help: >-
-          「本机（LocalMachine）」是整台机器共享的存储，需要读权限也可能看到别的用户装的东西；
-          「当前用户（CurrentUser）」只看当前用户自己的存储，权限需求更低。
-          勾选后会在命令里加上 -user，实测 -user 必须排在其他参数之前。
-        values:
-          - { value: "", label: "本机（LocalMachine，certutil 默认）", isDefault: true, args: [] }
-          - { value: "-user", label: "当前用户（CurrentUser，等价于加 -user）", args: ["-user"] }
+          不勾 = 看本机（LocalMachine）存储，这是 certutil 的默认；勾上 = 只看当前用户（CurrentUser）自己的存储。
+          本机存储是整台机器共享的，权限需求更高。实测 -user 必须排在位置参数之前，所以本字段声明在存储名之前。
         doc: 官方 -store 的 Options 里 -user：The -user option accesses a user store instead of a machine store
       - id: storeName
         label: 存储名称（留空 = certutil 默认的 CA）
@@ -426,35 +432,36 @@ actions:
     category: 证书查看
     command: "-dump"
     fields:
-      - id: scope
-        label: 看哪个范围
-        type: enum
+      - id: userStore
+        label: 用当前用户的存储（-user）
+        type: bool
         style: flag
+        prefix: "-user"
+        default: false
         required: false
-        default: ""
         help: 只影响「不带文件、看本机配置」的用法；分析证书文件时这一项没有影响。
-        values:
-          - { value: "", label: "本机（LocalMachine，certutil 默认）", isDefault: true, args: [] }
-          - { value: "-user", label: "当前用户（CurrentUser，等价于加 -user）", args: ["-user"] }
         doc: 官方 -dump 的 Options 里 -user：The -user option accesses a user store instead of a machine store
       - id: inFile
         label: 证书文件
         type: file
         style: positional
         required: true
-        accept: [".cer", ".crt", ".der", ".p7b", ".p7c", ".sst"]
+        accept: [".cer", ".crt", ".der", ".p7b", ".p7c", ".sst", ".dll", ".exe"]
         placeholder: "D:\\下载\\证书.cer"
-        help: 官方说这个动词的文件类型包括 .CER、.DER 与 PKCS #7 格式的文件。
+        help: >-
+          除了 .cer/.crt/.der/PKCS#7 证书文件，**带 Authenticode 签名的 exe/dll 也能 dump**
+          —— 那会打印出嵌在文件里的 PKCS#7 签名信息与文件版本（实测 `-dump msvcrt.dll` → exit 0）。
         doc: 官方 -dump 语法行：certutil [options] [-dump] File
     output:
       mode: stream
       showCommandLine: true
       resultNote: >-
-        输出首行是「X509 证书:」，随后是「版本 / 序列号 / 签名算法 / 颁发者 / 有效期 / 使用者 / 公钥 /
-        证书扩展项」等分段——**全中文标签**。
+        证书文件的首行是「X509 证书:」，随后是「版本 / 序列号 / 签名算法 / 颁发者 / 有效期 / 使用者 /
+        公钥 / 证书扩展项」等分段；带签名的 PE 文件首行则是「<路径>: 版本 … 文件 … 产品 …」+「PKCS7 信息:」。
+        两种都是**中文标签**。
     examples:
-      - title: 分析一个从证书存储里导出来的证书文件
-        args: ["-dump", "%TEMP%\\__AllToolProbe_cert.cer"]
+      - title: 看一个系统 DLL 里的签名信息（不需要准备任何文件）
+        args: ["-dump", "C:\\Windows\\System32\\msvcrt.dll"]
         expectExitCode: 0
     sources:
       - title: Microsoft Learn —— certutil 的 -dump 一节
@@ -476,16 +483,14 @@ actions:
     category: 证书查看
     command: "-verify"
     fields:
-      - id: scope
-        label: 用当前用户的信任设置
-        type: enum
+      - id: userStore
+        label: 用当前用户的信任设置（-user）
+        type: bool
         style: flag
+        prefix: "-user"
+        default: false
         required: false
-        default: ""
-        help: 根证书是否受信任，是按本机存储还是按当前用户存储来判断，可用这个切换。
-        values:
-          - { value: "", label: "本机（LocalMachine，certutil 默认）", isDefault: true, args: [] }
-          - { value: "-user", label: "当前用户（CurrentUser，等价于加 -user）", args: ["-user"] }
+        help: 根证书是否受信任，是按本机存储还是按当前用户存储来判断；勾上就按当前用户存储判断。
         doc: 官方 -verify 的 Options 里 -user（官方 -store 一节：accesses a user store instead of a machine store）
       - id: certFile
         label: 要验证的证书文件
@@ -500,11 +505,12 @@ actions:
       showCommandLine: true
       resultNote: >-
         输出会逐段打印「颁发者」与链上每个元素的字段，最后给出一行结论。
-        链建不起来的常见原因是根证书不在受信任的根存储里——那种情况下退出码仍然可能是 0，
-        要读结论那一行，不能只看退出码。
+        注意：**传进去的不是证书文件时它会以错误码退出**（实测 `-verify msvcrt.dll` → 0x8009310B），
+        所以这个动作的退出码是可信的；但反过来「链没能建到受信任的根」属于内容层面的结论，
+        仍要读输出末尾那几行，不能只看退出码。
     examples:
-      - title: 验证一个证书文件
-        args: ["-verify", "%TEMP%\\__AllToolProbe_cert.cer"]
+      - title: 验证一个证书文件（先从存储里导一个出来：certutil -store Root 0 D:\root0.cer）
+        args: ["-verify", "D:\\root0.cer"]
         expectExitCode: 0
     sources:
       - title: Microsoft Learn —— certutil 的 -verify 一节
@@ -540,8 +546,8 @@ actions:
         输出形如「0000: 30 82 05 38 ; SEQUENCE (538 字节)」，带缩进层级；
         后面那个 [type] 数值参数官方只写「numeric CRYPT_STRING_* decoding type」、没给取值表，所以本包不暴露它。
     examples:
-      - title: 解析一个证书文件的 ASN.1 结构
-        args: ["-asn", "%TEMP%\\__AllToolProbe_cert.cer"]
+      - title: 解析一个证书文件（先从存储里导一个出来：certutil -store Root 0 D:\root0.cer）
+        args: ["-asn", "D:\\root0.cer"]
         expectExitCode: 0
     sources:
       - title: Microsoft Learn —— certutil 的 -asn 一节
@@ -572,19 +578,16 @@ actions:
       移除要另用「从证书存储删除证书」，且删错对象同样会影响信任链。
       实测：非管理员运行 -addstore 直接以 0x800702E4（请求的操作需要提升）失败。
     fields:
-      - id: scope
-        label: 加到哪个范围
-        type: enum
+      - id: userStore
+        label: 加到当前用户的存储（-user）
+        type: bool
         style: flag
+        prefix: "-user"
+        default: false
         required: false
-        default: ""
         help: >-
-          「本机」改的是整机共享的存储（实测需要管理员）；
-          「当前用户」只改当前用户的存储，理论上不需要提权，但**本轮没有实测**
-          （红线要求不动任何真实证书存储），所以本动作整体仍标了「需要管理员」。
-        values:
-          - { value: "", label: "本机（LocalMachine，certutil 默认）", isDefault: true, args: [] }
-          - { value: "-user", label: "当前用户（CurrentUser，等价于加 -user）", args: ["-user"] }
+          不勾 = 加到本机（LocalMachine）存储（实测需要管理员）；勾上 = 加到当前用户（CurrentUser）存储。
+          当前用户存储理论上不需要提权，但**本轮没有实测**（红线要求不动任何真实证书存储）。
         doc: 官方 -addstore 的 Options 里 -user（官方 -store 一节：accesses a user store instead of a machine store）
       - id: storeName
         label: 目标存储名称
@@ -607,7 +610,10 @@ actions:
     output:
       mode: stream
       showCommandLine: true
-      resultNote: 成功时输出「证书 "…" 已添加到存储」之类的行并给出哈希；失败请用「查错误码的含义」翻译退出码。
+      resultNote: >-
+        成功时会按 certutil 一贯的格式打印「证书 "…" 已添加到存储」+「CertUtil: -addstore 命令成功完成。」。
+        **本动作本轮没有实跑**（红线：不动系统证书存储），所以这两行的确切措辞没有实测证据。
+        失败请用「查错误码的含义」翻译退出码。
     sources:
       - title: Microsoft Learn —— certutil 的 -addstore 一节
         url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/certutil
@@ -638,18 +644,16 @@ actions:
       删除前请先用「查看证书存储」确认那一项确实是你要删的（用 CertId 精确匹配）。
       实测：非管理员运行 -delstore 直接以 0x800702E4（请求的操作需要提升）失败。
     fields:
-      - id: scope
-        label: 从哪个范围删
-        type: enum
+      - id: userStore
+        label: 从当前用户的存储删（-user）
+        type: bool
         style: flag
+        prefix: "-user"
+        default: false
         required: false
-        default: ""
         help: >-
-          「本机」改的是整机共享的存储（实测需要管理员）；
-          「当前用户」只改当前用户的存储，理论上不需要提权，但**本轮没有实测**，所以本动作整体仍标了「需要管理员」。
-        values:
-          - { value: "", label: "本机（LocalMachine，certutil 默认）", isDefault: true, args: [] }
-          - { value: "-user", label: "当前用户（CurrentUser，等价于加 -user）", args: ["-user"] }
+          不勾 = 从本机（LocalMachine）存储删（实测需要管理员）；勾上 = 从当前用户（CurrentUser）存储删。
+          当前用户存储理论上不需要提权，但**本轮没有实测**（红线要求不动任何真实证书存储）。
         doc: 官方 -delstore 的 Options 里 -user（官方 -store 一节：accesses a user store instead of a machine store）
       - id: storeName
         label: 存储名称
@@ -657,7 +661,7 @@ actions:
         style: positional
         required: true
         placeholder: "Root"
-        help: 与「查看证书存储」里看到的名字一致；不写则 certutil 默认用 CA。名称大小写不敏感。
+        help: 与「查看证书存储」里看到的名字一致（Root / CA / My / TrustedPublisher…）；名称大小写不敏感。
         doc: 官方 -delstore 语法行：certutil [options] -delstore CertificateStoreName certID
       - id: certId
         label: 要删除的证书（CertId）
@@ -673,7 +677,10 @@ actions:
     output:
       mode: stream
       showCommandLine: true
-      resultNote: 成功时会打印「证书 "…" 已从存储中删除」之类的行；失败请用「查错误码的含义」翻译退出码。
+      resultNote: >-
+        成功时会按 certutil 一贯的格式打印「证书 "…" 已从存储中删除」+「CertUtil: -delstore 命令成功完成。」。
+        **本动作本轮没有实跑**（红线：不动系统证书存储），所以这两行的确切措辞没有实测证据。
+        失败请用「查错误码的含义」翻译退出码。
     sources:
       - title: Microsoft Learn —— certutil 的 -delstore 一节
         url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/certutil
