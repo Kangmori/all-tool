@@ -218,7 +218,7 @@ actions:
     output:
       mode: stream
       showCommandLine: true
-      resultNote: '实测 `gl System` 输出 410 字节、`gl System /f:xml` 635 字节，都退出码 0。Text 输出形如 name: System / enabled: true / type: Admin / logging: { logFileName: %SystemRoot%\System32\Winevt\Logs\System.evtx, retention: false, maxSize: 20971520 }。**大小写注意**：官方写作 `/f:xml`，本机对 `/f:XML` 与 `/f:xml` 都接受（选项与其取值都不区分大小写，见 `/r` 帮助页开头的 "Options and their values are not case-sensitive."）。**刻意不写 `nextSteps`**：这条动作的输出是 `name: ...` / `logging:` 这类字段行，从里面判断不出用户的下一步意图，硬写一个正则就是 0 命中的假推荐。'
+      resultNote: '实测 gl System 输出 410 字节、gl System /f:xml 635 字节，都退出码 0。Text 输出形如 name: System / enabled: true / type: Admin / logging: { logFileName: %SystemRoot%\System32\Winevt\Logs\System.evtx, retention: false, maxSize: 20971520 }。**大小写注意**：官方写作 /f:xml，本机对 /f:XML 与 /f:xml 都接受（选项与其取值都不区分大小写，见 /r 帮助页开头的 "Options and their values are not case-sensitive."）。**刻意不写 nextSteps**：这条动作的输出是 name: ... / logging: 这类字段行，从里面判断不出用户的下一步意图，硬写一个正则就是 0 命中的假推荐。'
     examples:
       - title: 查看 System 日志的配置（官方示例形态）
         args: ["gl", "System"]
@@ -247,12 +247,12 @@ actions:
         required: true
         save: true
         placeholder: 例 Application
-        help: '日志名来自 `wevtutil el`。名字不对会以退出码 15007 失败（stderr: Failed to read log status information for log ...）。'
+        help: '日志名来自 wevtutil el。名字不对会以退出码 15007 失败（stderr: Failed to read log status information for log ...）。'
         doc: official #parameters 的 {gli | get-loginfo} <Logname>（"You can run wevtutil el to obtain a list of log names."）
     output:
       mode: stream
       showCommandLine: true
-      resultNote: '实测 `gli Application` 输出 227 字节、退出码 0，形如 creationTime: 2025-11-18T08:43:10.4329642Z / lastWriteTime: ... / fileSize: 20975616 / numberOfLogRecords: 27219。**未做 `/lf`**——实测它需要管理员（见 NOTES.md §7.3），所以没做成字段。'
+      resultNote: '实测 gli Application 输出 227 字节、退出码 0，形如 creationTime: 2025-11-18T08:43:10.4329642Z / lastWriteTime: ... / fileSize: 20975616 / numberOfLogRecords: 27219。**未做 /lf**——实测它需要管理员（见 NOTES.md §7.3），所以没做成字段。'
     examples:
       - title: 查看 Application 日志的状态（官方示例原文）
         args: ["gli", "Application"]
@@ -307,7 +307,7 @@ actions:
         required: true
         save: true
         placeholder: 例 Microsoft-Windows-Eventlog
-        help: '名字来自 `wevtutil ep`（或事件 XPath 里的 Provider @Name）。名字不对会以退出码 2 失败（stderr: Failed to open metadata for publisher ...）。'
+        help: '名字来自 wevtutil ep（或事件 XPath 里的 Provider @Name）。名字不对会以退出码 2 失败（stderr: Failed to open metadata for publisher ...）。'
         doc: official #parameters 的 {gp | get-publisher} <Publishername>（"You can obtain a list of publisher names by typing wevtutil ep."）
       - id: getEvents
         label: 取事件元数据（/ge）
@@ -326,7 +326,7 @@ actions:
         group: 详细程度
         advanced: true
         default: false
-        help: '官方原文：/gm "Displays the actual message instead of the numeric message ID."。默认输出里消息是数字（例如 message: 2415919105），加上它才显示成文字。可单独使用（实测 `gp Microsoft-Windows-Eventlog /gm:true` 退出码 0）。'
+        help: '官方原文：/gm "Displays the actual message instead of the numeric message ID."。默认输出里消息是数字（例如 message: 2415919105），加上它才显示成文字。可单独使用（实测 gp Microsoft-Windows-Eventlog /gm:true 退出码 0）。'
         doc: official #options 的 /gm:<Message>（true | false）
       - id: format
         label: 输出格式（/f）
@@ -400,7 +400,7 @@ actions:
         prefix: "/c:"
         group: 数量与方向
         placeholder: 例 20
-        help: '官方原文：/c "Sets the maximum number of events to read."。**实测必须 ≥ 1**：`/c:0` 与 `/c:-5` 都以退出码 87 失败（stderr: Invalid value for property count.）。留空 = 不限制（可能输出几十兆，见 NOTES.md §7.1）。**刻意不给默认值**——"返回全量还是取最近 N 条"是用户该自己决定的事。'
+        help: '官方原文：/c "Sets the maximum number of events to read."。**实测必须 ≥ 1**：/c:0 与 /c:-5 都以退出码 87 失败（stderr: Invalid value for property count.）。留空 = 不限制（可能输出几十兆，见 NOTES.md §7.1）。**刻意不给默认值**——"返回全量还是取最近 N 条"是用户该自己决定的事。'
         doc: official #options 的 /c:<Count>（"Sets the maximum number of events to read."）
       - id: reverseDirection
         label: 从最新往旧读（/rd）
@@ -475,7 +475,7 @@ actions:
         url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/wevtutil
         retrieved: "2026-09-29"
         appliesTo: Windows 10/11
-        note: '查询串形态依据官方 /q 一节（"VALUE is an XPath query to filter events read"）；**等级取值的含义来自实测**：本机 `/q:"*[System[(Level=1 or Level=2)]]"` 在 System 日志命中 8 050 条、输出里 `Level: Error`，加 `(Level=3)` 后命中 15 775 条（多出来的是 Warning），据此确认 1/2/3 分别是 Critical/Error/Warning。用法形态与官方示例 wevtutil qe Application /c:3 /rd:true /f:text 相同。'
+        note: '查询串形态依据官方 /q 一节（"VALUE is an XPath query to filter events read"）；**等级取值的含义来自实测**：本机 /q:"*[System[(Level=1 or Level=2)]]" 在 System 日志命中 8 050 条、输出里 Level: Error，加 (Level=3) 后命中 15 775 条（多出来的是 Warning），据此确认 1/2/3 分别是 Critical/Error/Warning。用法形态与官方示例 wevtutil qe Application /c:3 /rd:true /f:text 相同。'
     fields:
       - id: channel
         label: 从哪个日志查
@@ -508,7 +508,7 @@ actions:
         save: true
         default: "*[System[(Level=1 or Level=2)]]"
         placeholder: 例 *[System[(Level=1 or Level=2)]]
-        help: '官方原文：/q "Defines the XPath query to filter events read."。默认值就是"等级为 Critical(1) 或 Error(2)"（实测：本机 System 日志命中 8 050 条；1/2/3 = Critical/Error/Warning 是用"加 (Level=3) 后命中数从 8 050 涨到 15 775"对照出来的）。**格式注意**：`/q:` 后面直接跟查询串、中间**不能有空格**（实测写成 `/q` 与查询串两个参数会以退出码 87 失败：Too many arguments are specified.）；查询串里有 `:` 与 `'` 都不用你手动转义，宿主按 argv 数组传参、自动加引号（本机实测 `Provider[@Name=''Chkdsk'']` 这种带单引号的串也能跑通）。常用片段：按等级 `*[System[(Level=1 or Level=2)]]`；按编号 `*[System[(EventID=1000)]]`；按提供程序 `*[System[Provider[@Name=''Chkdsk'']]]`；按时间（**毫秒**）`*[System[TimeCreated[timediff(@SystemTime) <= 604800000]]]`。**属性名写错不会报错，只会返回 0 条**（实测 `*[System[(Bogus=1)]]` 退出码 0、无输出），所以"查不到"时先怀疑查询串。'
+        help: '官方原文：/q "Defines the XPath query to filter events read."。默认值就是"等级为 Critical(1) 或 Error(2)"（实测：本机 System 日志命中 8 050 条；1/2/3 = Critical/Error/Warning 是用"加 (Level=3) 后命中数从 8 050 涨到 15 775"对照出来的）。**格式注意**：/q: 后面直接跟查询串、中间**不能有空格**（实测写成 /q 与查询串两个参数会以退出码 87 失败：Too many arguments are specified.）；查询串里的冒号与单引号都不用你手动转义，宿主按 argv 数组传参、自动加引号（本机实测 Provider[@Name=''Chkdsk''] 这种带单引号的串也能跑通）。常用片段：按等级 *[System[(Level=1 or Level=2)]]；按编号 *[System[(EventID=1000)]]；按提供程序 *[System[Provider[@Name=''Chkdsk'']]]；按时间（**毫秒**）*[System[TimeCreated[timediff(@SystemTime) <= 604800000]]]。**属性名写错不会报错，只会返回 0 条**（实测 *[System[(Bogus=1)]] 退出码 0、无输出），所以"查不到"时先怀疑查询串。'
         doc: official #options 的 /q:<Query>（"Defines the XPath query to filter the events that are read or exported."）
     output:
       mode: stream
@@ -531,7 +531,7 @@ actions:
         url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/wevtutil
         retrieved: "2026-09-29"
         appliesTo: Windows 10/11
-        note: '查询串形态依据官方 /q 一节；**Provider 名 Chkdsk 与事件编号来自本机实测**：`*[System[Provider[@Name=''Chkdsk'']]]` 在 Application 日志命中 4 条（Event ID 26212 与 26226），正文里就是 chkdsk 的完整报告（含「检查 C: 上的文件系统」「坏扇区 0 KB」这些行）。这是"用工具把系统埋起来的结果翻出来"的典型，也是本工具包存在的主要理由（NOTES.md §1）。'
+        note: '查询串形态依据官方 /q 一节；**Provider 名 Chkdsk 与事件编号来自本机实测**：*[System[Provider[@Name=''Chkdsk'']]] 在 Application 日志命中 4 条（Event ID 26212 与 26226），正文里就是 chkdsk 的完整报告（含「检查 C: 上的文件系统」「坏扇区 0 KB」这些行）。这是"用工具把系统埋起来的结果翻出来"的典型，也是本工具包存在的主要理由（NOTES.md §1）。'
     fields:
       - id: count
         label: 最多读几条（/c）
@@ -551,7 +551,7 @@ actions:
         save: true
         default: "*[System[Provider[@Name='Chkdsk']]]"
         placeholder: 例 *[System[Provider[@Name='Chkdsk']]]
-        help: '默认值就是"来源是 Chkdsk"（实测：本机 Application 日志命中 4 条，Event ID 26212 与 26226，正文里就是完整的 chkdsk 报告）。chkdsk 会写两类事件：**26212** = 只读/扫描模式跑完、**26226** = 扫描并修复；想只看后者就把查询串改成 `*[System[(EventID=26226)]]`（实测命中 3 条）。`/q:` 与查询串中间**不能有空格**（实测两个参数会退出码 87 失败）。'
+        help: '默认值就是"来源是 Chkdsk"（实测：本机 Application 日志命中 4 条，Event ID 26212 与 26226，正文里就是完整的 chkdsk 报告）。chkdsk 会写两类事件：**26212** = 只读/扫描模式跑完、**26226** = 扫描并修复；想只看后者就把查询串改成 *[System[(EventID=26226)]]（实测命中 3 条）。/q: 与查询串中间**不能有空格**（实测两个参数会退出码 87 失败）。'
         doc: official #options 的 /q:<Query>（"Defines the XPath query to filter the events that are read or exported."）
     output:
       mode: stream
@@ -597,7 +597,7 @@ actions:
         save: true
         default: "*[System[(Level=1 or Level=2)]]"
         placeholder: 例 *[System[(Level=1 or Level=2)]]
-        help: '默认值 = 等级为 Critical 或 Error（实测：本机 Application 日志命中 1 046 条，Source 是 Application Error / .NET Runtime / Microsoft-Windows-AppModel-State，Event ID 1000/1002/13）。**只想看程序崩溃**就把查询串改成 `*[System[(EventID=1000)]]`（实测命中 2 条，Source 为 Application Error 与 .NET Runtime）。`/q:` 与查询串中间**不能有空格**（两个参数会退出码 87 失败）。'
+        help: '默认值 = 等级为 Critical 或 Error（实测：本机 Application 日志命中 1 046 条，Source 是 Application Error / .NET Runtime / Microsoft-Windows-AppModel-State，Event ID 1000/1002/13）。**只想看程序崩溃**就把查询串改成 *[System[(EventID=1000)]]（实测命中 2 条，Source 为 Application Error 与 .NET Runtime）。/q: 与查询串中间**不能有空格**（两个参数会退出码 87 失败）。'
         doc: official #options 的 /q:<Query>（"Defines the XPath query to filter the events that are read or exported."）
     output:
       mode: stream
@@ -640,7 +640,7 @@ actions:
         save: true
         default: "*[System[(Level=3)]]"
         placeholder: 例 *[System[(Level=3)]]
-        help: '默认值 = 等级为 Warning(3)。**Level=3 就是 Warning 是实测出来的**：本机 System 日志里 `*[System[(Level=1 or Level=2) or (Level=3)]]` 命中 15 775 条，不含 `(Level=3)` 的同查询命中 8 050 条，差值 7 725 = Warning 档。想只看最近一段时间就自己加时间条件，例如 `*[System[(Level=3) and TimeCreated[timediff(@SystemTime) <= 259200000]]]`（3 天 = 259200000 毫秒，官方 Remarks 没有给 timediff 的取值表，这个毫秒写法是实测确认可用的）。`/q:` 与查询串中间**不能有空格**。'
+        help: '默认值 = 等级为 Warning(3)。**Level=3 就是 Warning 是实测出来的**：本机 System 日志里 *[System[(Level=1 or Level=2) or (Level=3)]] 命中 15 775 条，不含 (Level=3) 的同查询命中 8 050 条，差值 7 725 = Warning 档。想只看最近一段时间就自己加时间条件，例如 *[System[(Level=3) and TimeCreated[timediff(@SystemTime) <= 259200000]]]（3 天 = 259200000 毫秒，官方 Remarks 没有给 timediff 的取值表，这个毫秒写法是实测确认可用的）。/q: 与查询串中间**不能有空格**。'
         doc: official #options 的 /q:<Query>（"Defines the XPath query to filter the events that are read or exported."）
     output:
       mode: stream
@@ -683,7 +683,7 @@ actions:
         save: true
         default: "*[System[Provider[@Name='Microsoft-Windows-WindowsUpdateClient']]]"
         placeholder: 例 *[System[Provider[@Name='Microsoft-Windows-WindowsUpdateClient']]]
-        help: '默认值 = 来源为 Windows 更新客户端（实测：本机 System 日志命中 479 条，Event ID 19/43/44）。**只想看装不上的那些**就把查询串改成 `*[System[Provider[@Name=''Microsoft-Windows-WindowsUpdateClient''] and (Level=1 or Level=2)]]`（实测退出码 0、命中 3 条）。`/q:` 与查询串中间**不能有空格**。'
+        help: '默认值 = 来源为 Windows 更新客户端（实测：本机 System 日志命中 479 条，Event ID 19/43/44）。**只想看装不上的那些**就把查询串改成 *[System[Provider[@Name=''Microsoft-Windows-WindowsUpdateClient''] and (Level=1 or Level=2)]]（实测退出码 0、命中 3 条）。/q: 与查询串中间**不能有空格**。'
         doc: official #options 的 /q:<Query>（"Defines the XPath query to filter the events that are read or exported."）
     output:
       mode: stream
@@ -726,7 +726,7 @@ actions:
         save: true
         default: "*[System[(EventID=41) or (EventID=1001)]]"
         placeholder: 例 *[System[(EventID=41) or (EventID=1001)]]
-        help: '默认值同时查两类（**41** = 内核在没有先干净关机的情况下重启，蓝屏/断电/死机重启的典型标志；**1001** = BugCheck，蓝屏记录，正文里带停止代码与内存转储信息）。想只查其中一个就把查询串改成 `*[System[(EventID=1001)]]`（只要蓝屏）或 `*[System[(EventID=6008)]]`（**6008** = 上一次关机是意外的）。`/q:` 与查询串中间**不能有空格**。'
+        help: '默认值同时查两类（**41** = 内核在没有先干净关机的情况下重启，蓝屏/断电/死机重启的典型标志；**1001** = BugCheck，蓝屏记录，正文里带停止代码与内存转储信息）。想只查其中一个就把查询串改成 *[System[(EventID=1001)]]（只要蓝屏）或 *[System[(EventID=6008)]]（**6008** = 上一次关机是意外的）。/q: 与查询串中间**不能有空格**。'
         doc: official #options 的 /q:<Query>（"VALUE is an XPath query to filter events"）
     output:
       mode: stream
@@ -1000,7 +1000,7 @@ actions:
     output:
       mode: stream
       showCommandLine: true
-      resultNote: '**未实跑**——它会真的改写本机日志配置。清单只做声明：**没填的项不会出现在命令行里**，所以不会"顺手"把没想改的设置改掉。官方示例 `wevtutil sl /c:config.xml` 见 #examples。见 NOTES.md §8.2。'
+      resultNote: '**未实跑**——它会真的改写本机日志配置。清单只做声明：**没填的项不会出现在命令行里**，所以不会"顺手"把没想改的设置改掉。官方示例 wevtutil sl /c:config.xml 见 #examples。见 NOTES.md §8.2。'
     nextSteps:
       - title: 查看改完之后的配置
         action: query-log-config

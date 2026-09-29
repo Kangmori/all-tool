@@ -543,6 +543,9 @@ public sealed partial class MainWindow : Window
             }
 
             content.Children.Add(name);
+            // 内容换成 StackPanel 之后，按钮的可访问名称不再自动等于文字——
+            // 显式设一下，读屏软件与界面验收脚本才能按名字找到它。
+            AutomationProperties.SetName(button, info.Text);
 
             var button = new Button
             {
