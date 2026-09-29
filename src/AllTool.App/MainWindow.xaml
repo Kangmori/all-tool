@@ -31,7 +31,8 @@
                 <MenuFlyoutItem Text="退出" Click="OnExitClicked" />
             </MenuBarItem>
             <MenuBarItem Title="帮助">
-                <MenuFlyoutItem Text="关于 All Tool" Click="OnAboutClicked" />
+                <MenuFlyoutItem Text="首页" Click="OnHomeClicked" />
+                    <MenuFlyoutItem Text="关于 All Tool" Click="OnAboutClicked" />
                 <MenuFlyoutItem Text="打开项目说明（AGENTS.md）" Click="OnOpenDocsClicked" />
             </MenuBarItem>
         </MenuBar>

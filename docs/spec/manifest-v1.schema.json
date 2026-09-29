@@ -447,7 +447,7 @@
         },
         "switchBase": {
           "type": "string",
-          "description": "该字段对应文档中的哪个开关（用于 CI 白名单校验）。literal/带后缀的字段必须显式声明，例如 -r 的 -r- / -r0 变体写 switchBase: \"-r\"。"
+          "description": "该字段对应**文档里的哪个开关**，**只用于 CI 白名单校验，不会产生任何 argv**。literal/带后缀的字段必须显式声明（不只是为了校验，也是给人看这个字段对应哪个开关），例如 -r 的 -r- / -r0 变体写 switchBase: \"-r\"。⚠ 别把它当成「用来生成开关的字段」——要生成 /deny 这种固定 token 请用 style: literal 的字段。"
         },
         "separator": {
           "enum": [

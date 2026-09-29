@@ -162,9 +162,6 @@ public sealed partial class MainWindow : Window
 
     // ------------------------------------------------------------------ 左栏：工具包与动作（按分组呈现）
 
-    /// <summary>记住上次选中的工具包/动作，下次打开直接回到那里。</summary>
-    private const string UiStateScope = "__ui__";
-
     /// <summary>实际使用的工具包目录（安装/卸载都作用在这里）。</summary>
     private string _pluginsRoot = string.Empty;
 
@@ -231,14 +228,11 @@ public sealed partial class MainWindow : Window
         LoadPackages();
     }
 
-    /// <summary>欢迎面板要恢复的目标（工具包 + 上次的动作 id）。启动不自动选中，点按钮才恢复。</summary>
-    private (PackageEntry Package, string? ActionId)? _resumeTarget;
-
     /// <summary>
-    /// 未选中任何工具包时，中栏显示的内容：一句话说明 + 「继续上次」+ 按类型列出的全部工具包。
+    /// **首页**：未选中任何工具包时中栏显示的内容 —— 一句话说明 + 按类型列出的全部工具包。
     ///
-    /// 产品负责人的要求：欢迎界面**不是弹出窗口**，而是「启动时没选工具包」的那一屏。
-    /// 顺带解决「一打开就选中 DiskPart」的困惑——启动不再自动选中，要不要回到上次由用户点。
+    /// 产品负责人的要求：它是**首页**，不是弹出窗口；启动时就停在这一屏，点工具包才进入。
+    /// **不记住上次选了什么**——启动永远从首页开始，也就不会出现「一打开就选中 DiskPart」。
     /// </summary>
     private void ShowWelcomePanel()
     {
@@ -253,32 +247,6 @@ public sealed partial class MainWindow : Window
         SessionBar.Visibility = Visibility.Collapsed;
         RunButton.IsEnabled = false;
         CancelButton.IsEnabled = false;
-
-        if (_resumeTarget is { } resume)
-        {
-            var text = resume.Package.Manifest.Name ?? resume.Package.Manifest.Id ?? string.Empty;
-
-            if (!string.IsNullOrWhiteSpace(resume.ActionId))
-            {
-                var action = resume.Package.Manifest.Actions?.FirstOrDefault(
-                    a => string.Equals(a.Id, resume.ActionId, StringComparison.Ordinal));
-
-                if (action is not null)
-                {
-                    text += " · " + (action.Title ?? action.Id ?? string.Empty);
-                }
-            }
-
-            var resumeButton = new Button
-            {
-                Content = $"继续上次：{text}",
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                Margin = new Thickness(0, 4, 0, 8),
-            };
-
-            resumeButton.Click += (_, _) => SelectPackage(resume.Package, restoreAction: true);
-            FormPanel.Children.Add(resumeButton);
-        }
 
         var kinds = new (string Kind, string Title)[]
         {
@@ -362,20 +330,8 @@ public sealed partial class MainWindow : Window
                 }
             }
 
-            // 启动**不自动选中**工具包：让中栏显示欢迎界面（所有工具包的选择列表）。
-            // 上次用的是哪个记下来，作为欢迎面板里的「继续上次」按钮。
-            var lastPackage = _lastValues.Get(UiStateScope, "state", "lastPackage");
-
-            if (!string.IsNullOrWhiteSpace(lastPackage))
-            {
-                var resume = _packages.FirstOrDefault(p => string.Equals(p.Manifest.Id, lastPackage, StringComparison.Ordinal));
-
-                if (resume is not null)
-                {
-                    _resumeTarget = (resume, _lastValues.Get(UiStateScope, "state", $"lastAction:{lastPackage}"));
-                }
-            }
-
+            // 启动停在**首页**（不选中任何工具包，也不恢复上次的选择）：
+            // 产品负责人明确要求不记住上次操作——首页就是入口。
             ShowWelcomePanel();
         }
         catch (Exception ex)
@@ -818,7 +774,6 @@ public sealed partial class MainWindow : Window
         RebuildActionList();
 
         StatusText.Text = $"{_manifest.Name} {_manifest.AppVersion} —— {_actions.Count} 个动作";
-        _lastValues.Set(UiStateScope, "state", "lastPackage", _manifest.Id);
 
         // 自动化冒烟用的钩子：设了 ALLTOOL_SELECT_ACTION=<序号> 就自动选中该动作并生成表单。
         // 存在的理由：动态表单是最容易在运行时出错的地方，需要一个不靠人点鼠标的验证入口。
@@ -829,15 +784,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (restoreAction)
-        {
-            var lastAction = _lastValues.Get(UiStateScope, "state", $"lastAction:{_manifest.Id}");
-            var previous = _actions.FirstOrDefault(a => a.Action.Id == lastAction);
-            if (previous is not null)
-            {
-                SelectAction(previous);
-            }
-        }
+        // 不再恢复上次的动作（首页即入口）；自动化仍走上面的 ALLTOOL_SELECT_ACTION 钩子。
     }
 
     /// <summary>
@@ -1172,7 +1119,6 @@ public sealed partial class MainWindow : Window
     {
         _action = entry.Action;
         _pendingPresets = presets;
-        _lastValues.Set(UiStateScope, "state", $"lastAction:{_manifest?.Id}", entry.Action.Id);
 
         BuildForm();
 
@@ -1762,6 +1708,24 @@ public sealed partial class MainWindow : Window
         {
             ReloadPackages();
         }
+    }
+
+    /// <summary>
+    /// 回到**首页**（未选中工具包的那一屏）。清掉当前选择，让左栏不再高亮任何工具包。
+    /// </summary>
+    private void OnHomeClicked(object sender, RoutedEventArgs e) => GoHome();
+
+    private void GoHome()
+    {
+        _manifest = null;
+        _action = null;
+        _executablePath = null;
+
+        RebuildPackageList();
+        RebuildActionList();
+        ShowWelcomePanel();
+
+        StatusText.Text = "首页：从下面选一个工具包开始";
     }
 
     private void OnReloadPackagesClicked(object sender, RoutedEventArgs e) => ReloadPackages();

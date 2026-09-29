@@ -267,7 +267,8 @@ kind: system        # user（默认）/ system / interactive / dangerous
 
 补充规则：
 
-- `switchBase`：声明"这个字段对应文档中的哪个开关"，用于 CI 白名单校验。`literal` 风格与带后缀修饰的写法**必须**显式声明，例如 `-r-`/`-r0` 要写 `switchBase: "-r"`。
+- `switchBase`：声明"这个字段对应**文档里**的哪个开关"，**只用于 CI 白名单校验，不产生 argv**。
+  ⚠ 它不是「生成开关的字段」：要生成 `/deny` 这种固定 token，用 `style: literal` 的字段（每个取值带 `args`）。`literal` 风格与带后缀修饰的写法**必须**显式声明，例如 `-r-`/`-r0` 要写 `switchBase: "-r"`。
 - `group`：界面分组标题。宿主在分组名变化时插入一个小标题（普通区与"高级"区各自按顺序分组）。
 - `advanced`：默认折叠进"高级选项"。
 - `save`：记住上次输入（输出目录、压缩包路径这类反复用到的值）。宿主**只在真正执行时**记录
