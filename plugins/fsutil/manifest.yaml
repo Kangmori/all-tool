@@ -1,0 +1,1998 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# fsutil —— Windows 自带的文件系统工具集（C:\Windows\System32\fsutil.exe）。
+#
+# 参数知识来源（**只有这两类**，R1）：
+#   1) Microsoft Learn 官方页面（1 张主页 + 18 张子页，见各动作 sources 指哪一节）；
+#   2) 本机 `fsutil <子命令> /?` 与逐子命令帮助的真实输出（**未入库**，可随时重取）。
+#   两边对不上的，只写两边都能对应的部分，差异逐条记进 NOTES.md §8。
+#
+# 编码：**OEM 代码页（本机 936）**。fsutil 本身写的是英文、系统错误消息与卷标是中文，
+#   判据是原始字节（NOTES.md §4）：`dirty query Z:` 的 stdout 首字节 b4 ed = cp936 的「错」，
+#   严格 UTF-8 解码在这一字节抛异常。所以 `runtime.encoding: oem`。
+#
+# 管理员权限（**实测，不是照文档抄**）：官方主页写着 "You must log on as an administrator"，
+#   本机实测**绝大多数只读查询也真的需要提权**（非管理员 `dirty query C:` / `fsutil fsinfo
+#   volumeInfo C:` 等一律 exit 1 + 「Error 5: Access is denied」），
+#   只有一部分子命令普通用户可用（`volume list` / `fsinfo drives` / `file queryFileID` …）。
+#   本清单一律按**实测**标 `requiresAdmin`，逐条依据见 NOTES.md §5。
+#   ⚠️ 规范 §2.4 说宿主尚未实现 requiresAdmin，但 docs/ai/windows-commands.md §7.5 记录它**已经实现**
+#      （`ManifestAction.RequiresAdmin` + MainWindow 提示），所以这些标注是有效的。
+#
+# 危险动作（规范 §2.9）：会改文件系统/卷状态的动作**一律不实跑**。
+#   其中不可逆毁数据的（删 USN 日志、把文件区间清零、改有效数据长度）用 `execution: info`——
+#   宿主只展示命令行与解释、不替用户按下回车。
+
+spec: 1
+id: fsutil
+name: fsutil
+manifestVersion: 0.1.0
+appVersion: 10.0.26100.8875（Windows 11 26200 自带，实测文件版本）
+kind: system
+summary: 查卷、查 NTFS、查文件底层信息
+description: >-
+  Windows 自带的文件系统工具集（\Windows\System32\fsutil.exe），管的是 FAT/NTFS/ReFS 的底层状态：
+  卷还剩多少空间、卷脏不脏、文件占用了哪些簇、这个文件是不是稀疏文件、有没有硬链接、
+  USN 变更日志在哪、NTFS 自愈状态是什么、8.3 短名开没开。它一共 23 个子命令、上百条子操作，
+  多数面向服务器与存储排障；本工具包只挑**普通用户真的会问的那些问题**做成按钮，
+  并且把「会改文件系统」的操作只做成可复制的命令行（宿主不执行）。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 文件系统, NTFS, 卷, 磁盘]
+
+sources:
+  - title: Microsoft Learn —— fsutil（Windows Server 命令行参考，主页）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil
+    retrieved: "2026-09-30"
+    appliesTo: Windows 10 / Windows 11 / Server 2016–2025 / Azure Local 2311.2+
+    note: >-
+      主页是一张索引表：18 个子命令各指向一张子页，每张子页给出「语法行 + 参数表 + 示例」。
+      主页原文两条要点原样抄进本清单：Performs tasks related to FAT and NTFS file systems…；
+      You must log on as an administrator or a member of the Administrators group to use fsutil。
+      实测该页 Last updated 2025-03-05（页面自己标注）。
+      主页索引表**遗漏**了本机实际存在的 behavior / bypassIo / dax / storageReserve / trace 五个子命令
+      （本清单没有收录它们，见 NOTES.md §9）。
+  - title: 本机 `fsutil` / `fsutil <子命令>` / `fsutil <子命令> <操作> /?` 的真实输出（**未入库**）
+    url: file:///%SystemRoot%/System32/fsutil.exe
+    retrieved: "2026-09-30"
+    appliesTo: fsutil.exe 10.0.26100.8875（Windows 11 26200）
+    note: >-
+      实测：无参数 `fsutil` 打印 23 个子命令总表、**退出码 0**；
+      而 `fsutil <子命令>` 与 `fsutil <子命令> /?` 都打印同一张子命令表、**退出码都是 1**
+      （`/?` 先打一行「/? is an invalid parameter.」再打表）。
+      **第三层（子命令下的操作）多数根本不接受 `/?`**：`fsutil volume diskfree /?` 会真的去查一个叫
+      "/?" 的卷（Error 2）、`fsutil file queryFileID /?` 报 Error 123、少数几个（queryAllocRanges /
+      queryEA / setZeroData / behavior query / trace query / clfs authenticate）确实打帮助。
+      所以本清单的参数依据以**官方页面**为主、本机帮助只作交叉验证（差异见 NOTES.md §8）。
+  - title: 本包真机冒烟（只读 40+ 条 argv + 提权对照 + 失败路径，各带退出码）
+    url: file:///%TEMP%/fsutil-probe/
+    retrieved: "2026-09-30"
+    appliesTo: 同上
+    note: >-
+      只读动作逐条实跑并记录退出码；「非管理员失败 / 提权成功」做了**同一条 argv 的对照矩阵**
+      （matrix-nonadmin.txt 与 matrix-elevated.txt），requiresAdmin 就是照这张表标的。
+      写操作只在 NOTES.md 里逐条写明"未跑"，一个字节都没有改动文件系统。
+
+locate:
+  executable: fsutil.exe
+  searchPaths:
+    - "%SystemRoot%\\System32"
+  notFoundHint: >-
+    fsutil.exe 是 Windows 自带组件，正常位于 C:\Windows\System32\fsutil.exe；
+    若真的缺失，说明系统组件被裁剪或 System32 被改动过，可用
+    DISM /Online /Cleanup-Image /RestoreHealth 与 sfc /scannow 修复。
+
+runtime:
+  # 判据见文件头与 NOTES.md §4：非 ASCII 输出是 cp936 字节，严格 UTF-8 解码抛异常。
+  encoding: oem
+  # 官方主页明确要求管理员；实测只读查询也大量因权限失败（NOTES.md §5）。
+  requiresAdmin: true
+
+# 退出码：官方页面**没有**退出码章节（已逐页核对）。
+# 下面 6 条全部来自本机实测，raw 证据见 NOTES.md §3。
+exitCodes:
+  - code: 0
+    meaning: 成功（无参数运行 fsutil 的总表、以及大部分只读查询的成功路径都是 0）
+    severity: ok
+  - code: 1
+    meaning: >-
+      通用失败。实测三种来源：① 参数无效（`fsutil bogusSubcommand`、`fsutil volume bogusCmd C:`）；
+      ② 子命令自带的帮助/用法输出也返回 1（`fsutil volume /?`、`fsutil behavior query bogusOption`）；
+      ③ **权限不足**（提权检查失败时打印 "Error 5: Access is denied." 并返回 1，见 NOTES.md §5）。
+    severity: error
+  - code: 2
+    meaning: >-
+      找不到指定的文件或卷。实测 `dirty query Z:`、`usn queryJournal Z:`、`quota query Z:`、
+      `fsutil file queryFileID <不存在的文件>` 都返回 2（同时会有 "Error 2: The system cannot find
+      the file specified." 一行，本机是中文）。
+    severity: error
+  - code: 3
+    meaning: 找不到指定的路径。实测 `dirty query C:\`（多写了尾反斜杠）与 `fsInfo volumeInfo Z:` 返回 3
+    severity: error
+  - code: 5
+    meaning: 拒绝访问（ERROR_ACCESS_DENIED）。**当前账号不是管理员时，绝大多数只读查询都是这个码**
+    severity: error
+  - code: 87
+    meaning: >-
+      参数错误。实测 `file queryFileNameById C: 0x00040000000001bf` 与 `dax queryFileAlignment C:`
+      返回 87（该子命令另有要求，不是权限问题）
+    severity: error
+
+actions:
+
+  # ============================================================ 卷：空间与列表
+  - id: volume-diskfree
+    category: 卷信息
+    title: 查看卷的剩余空间
+    description: >-
+      查询某个卷的可用空间：总可用字节、总字节、配额可用字节与不可用池字节。
+      想知道「C 盘还剩多少」时，它给出的数字比资源管理器更细（含配额与预留池）。
+    command: volume
+    commandArgs: [diskFree]
+    requiresAdmin: true
+    sources:
+      - title: Microsoft Learn —— fsutil volume 的 diskfree 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-volume
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil volume [diskfree] <volumepath>；参数说明 Queries the hard disk drive to
+          determine the amount of free space on it；示例 fsutil volume diskfree c:。
+          实测：非管理员 exit=1「Error 5: Access is denied.」；提权后 exit=0 并打印
+          总可用字节数/总字节数/总配额可用字节数/不可用池字节数（本机中文标签）。
+    fields:
+      - id: volumePath
+        label: 卷
+        type: text
+        style: positional
+        required: true
+        placeholder: "C:"
+        help: >-
+          盘符加冒号的写法（C:）。实测两种都能用：`C:` 与 `\\?\Volume{GUID}\`（卷 GUID 形态，
+          可用「列出所有卷」拿到）；但多写尾反斜杠（C:\）会被当成路径而不是卷。
+        doc: 'official #parameters 的 <volumepath>；本机帮助的 Usage: fsutil volume diskFree <volume pathname>'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        成功时打印四行（总可用字节数 / 总字节数 / 总配额可用字节数 / 不可用池字节数），
+        每行同时给出人类可读的 GB。输出标签是**中文**，所以本包声明 oem 编码。
+    examples:
+      - title: 看 C 盘剩余空间（需要管理员）
+        args: ["volume", "diskFree", "C:"]
+        expectExitCode: 0
+
+  - id: volume-list
+    category: 卷信息
+    title: 列出所有卷与装入点
+    description: >-
+      列出系统里所有卷的 \\?\Volume{GUID}\ 路径，以及目前挂在哪个盘符上。
+      这是拿「卷 GUID 写法」的地方——很多 fsutil 子命令要求卷 GUID 而不是盘符。
+    command: volume
+    commandArgs: [list]
+    sources:
+      - title: Microsoft Learn —— fsutil volume 的 list 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-volume
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil volume [list]；参数说明 Lists all of the volumes on the system；
+          示例 fsutil volume list。实测：**普通用户就能跑**（非管理员 exit=0，本机列出 3 个卷 +
+          C:\ / D:\ / E:\ 三个装入点），不需要提权。
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 每行一个 \\?\Volume{GUID}\ 路径，紧接着的缩进行是该卷当前的装入点（如 C:\）。
+    examples:
+      - title: 列出所有卷（普通用户即可）
+        args: ["volume", "list"]
+        expectExitCode: 0
+
+  - id: volume-query-label
+    category: 卷信息
+    title: 查看卷标
+    description: 查询某个卷的卷标（就是资源管理器里显示的那个名字）。空卷标会如实回一个空字符串。
+    command: volume
+    commandArgs: [queryLabel]
+    requiresAdmin: true
+    sources:
+      - title: Microsoft Learn —— fsutil volume 的参数表（queryLabel 未单列语法行）
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-volume
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方 #parameters 只列了 allocationreport / diskfree / dismount / filelayout / list /
+          querycluster，**没有 queryLabel 的语法行**；但本机帮助（fsutil volume 子命令表）有
+          "queryLabel  Query the label for a volume"。按「两边都能对应才写」的口径，本动作的
+          语法取自本机帮助，字段依据注明是 v1 帮助输出。实测：非管理员 exit=1「Error 5:
+          Access is denied.」；提权后 exit=0，D: 打印「"D:"的卷标是"NGNL"」。
+    fields:
+      - id: volumePath
+        label: 卷
+        type: text
+        style: positional
+        required: true
+        placeholder: "D:"
+        help: "盘符加冒号。实测写法 D: 与 D:\\ 都能用（都能查到 NGNL）。"
+        doc: '本机 v1 帮助的 Usage/示例；官方 #parameters 里没有 queryLabel 一节（见 NOTES.md §8.3）'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 输出形如「"D:"的卷标是"NGNL"」（中文标签）。卷标为空时引号里就是空的。
+    examples:
+      - title: 看 D 盘卷标（需要管理员）
+        args: ["volume", "queryLabel", "D:"]
+        expectExitCode: 0
+
+  - id: volume-query-cluster
+    category: 卷信息
+    title: 查某个簇被哪个文件占用
+    description: >-
+      给定逻辑簇号（LCN），查出是哪个文件在用它，并给出一串属性字符
+      （D=数据属性、I=索引属性、S=系统属性、P=页文件、T=TxF 系统文件）。
+      想确认「磁盘空间到底被谁占了」时用得上。
+    command: volume
+    commandArgs: [queryCluster]
+    requiresAdmin: true
+    sources:
+      - title: Microsoft Learn —— fsutil volume 的 querycluster 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-volume
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil volume [querycluster] <volumepath> <cluster> [<cluster>] …；
+          说明 Finds which file is using a specified cluster，且可一次给多个簇（示例
+          fsutil volume querycluster C: 50 0x2000）；<cluster> 是逻辑簇号 LCN。
+          实测：非管理员 exit=1「Error 5: Access is denied.」；提权后 exit=0，
+          `C: 50` 打印「群集 0x0000000000000032 被 -S--D \$LogFile::$DATA 使用」。
+          本清单**只暴露一个簇**（多簇靠 repeatable 会做成多行输入，收益不大）。
+    fields:
+      - id: volumePath
+        label: 卷
+        type: text
+        style: positional
+        required: true
+        placeholder: "C:"
+        doc: 'official #parameters 的 <volumepath>；本机帮助的 Usage: fsutil volume queryCluster <volume pathname> <cluster> [<cluster> ...]'
+      - id: cluster
+        label: 逻辑簇号（LCN）
+        type: text
+        style: positional
+        required: true
+        placeholder: "50 或 0x2000"
+        help: >-
+          十进制或 0x 十六进制都可以（官方示例同时给了 50 与 0x2000）。
+          簇大小可以用「查看文件系统统计/卷信息」得到的每簇字节数换算。
+        doc: 'official #parameters 的 <cluster>（Specifies the logical cluster number (LCN)）；官方示例 fsutil volume querycluster C: 50 0x2000'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        输出形如「群集 0x0000000000000032 被 -S--D \$LogFile::$DATA 使用」，
+        开头的 5 个字符位依次是 D/I/S/?、A、T、S、P（本机帮助里有图例）。
+    examples:
+      - title: 查 C 盘第 50 个簇（需要管理员）
+        args: ["volume", "queryCluster", "C:", "50"]
+        expectExitCode: 0
+
+  - id: volume-allocation-report
+    category: 卷信息
+    title: 卷空间分配报告
+    description: >-
+      汇总一个卷上的簇是怎么分布的：总簇数、可用簇数、保留簇数，以及被各类系统文件
+      （$MFT、$LogFile、$Bitmap…）占掉多少。比「剩余空间」更能回答「空间去哪了」。
+    command: volume
+    commandArgs: [allocationReport]
+    requiresAdmin: true
+    sources:
+      - title: Microsoft Learn —— fsutil volume 的 allocationreport 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-volume
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil volume [allocationreport] <volumepath>；参数说明 Displays information
+          about how storage is used on a given volume；示例 fsutil volume allocationreport C:。
+          本机 v1 帮助另给出两个开关：/tier <tier type>（capacity|performance，只显示所选存储层）
+          与 /v（Verbose，列出系统文件目录下的每个文件）。实测：非管理员 exit=1「Error 5:
+          Access is denied.」；提权后 C: exit=0（本机是 NTFS 非分层卷，
+          `fsutil volume allocationReport /tier capacity C:` → exit=1「C: 不是分层卷。」）。
+    fields:
+      - id: tier
+        label: 只统计某个存储层（/tier）
+        type: enum
+        style: literal
+        switchBase: "/tier"
+        required: false
+        advanced: true
+        help: >-
+          只有分层卷（storage tier）才有意义，本机 C: 不是分层卷，实测加了它会以
+          「C: 不是分层卷。」exit=1 失败。取值 capacity / performance 来自本机 v1 帮助。
+        values:
+          - value: ""
+            label: 不指定（全部层）
+            isDefault: true
+            args: []
+          - value: capacity
+            label: capacity（容量层）
+            args: ["/tier", "capacity"]
+          - value: performance
+            label: performance（性能层）
+            args: ["/tier", "performance"]
+        doc: '本机 v1 帮助的 Options: /tier <tier type>（官方 #parameters 未列该开关，见 NOTES.md §8.3）'
+      - id: volumePath
+        label: 卷
+        type: text
+        style: positional
+        required: true
+        placeholder: "C:"
+        doc: 'official #parameters 的 <volumepath>；本机帮助的 Usage : fsutil volume allocationReport [options] <volume pathname>'
+      - id: verbose
+        label: 详细模式（/v）
+        type: bool
+        style: flag
+        prefix: "/v"
+        default: false
+        advanced: true
+        help: 列出系统文件目录下的每个文件。输出会明显变长，且本机实测在 25 秒内没有跑完（见 NOTES.md §7.4）。
+        doc: '本机 v1 帮助的 Options: /v（Verbose mode, displays each files under system file folders）'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        输出是一张「群集总数 / 可用簇数 / 保留的簇数 …」的中文表格，簇数后面同时给出字节数与 GB。
+        注意 /v 会让它逐文件扫描，本机实测 25 秒仍未结束。
+    examples:
+      - title: C 盘分配报告（需要管理员）
+        args: ["volume", "allocationReport", "C:"]
+        expectExitCode: 0
+
+  - id: volume-numa-info
+    category: 卷信息
+    title: 查看卷所在 NUMA 节点
+    description: 查询某个卷位于哪个 NUMA 节点。多路 CPU 的机器上判断「磁盘 IO 是不是跨节点」时用。
+    command: volume
+    commandArgs: [queryNumaInfo]
+    sources:
+      - title: Microsoft Learn —— fsutil volume 的参数表（queryNumaInfo 未单列）
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-volume
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方 #parameters 没有 queryNumaInfo；本机 v1 帮助的子命令表有
+          "queryNumaInfo  Queries the NUMA node for the given volume"，
+          且 `fsutil volume queryNumaInfo` 无参时会打印
+          "Usage: fsutil volume queryNumaInfo <volume path> | Eg: fsutil volume queryNumaInfo c:"。
+          实测：**普通用户就能跑**（非管理员 C: → exit=0，「The given volume is in Numa node: 0」）。
+    fields:
+      - id: volumePath
+        label: 卷
+        type: text
+        style: positional
+        required: true
+        placeholder: "C:"
+        doc: '本机 v1 帮助的 Usage: fsutil volume queryNumaInfo <volume path>（官方 #parameters 未列该操作）'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: "成功时一行「The given volume is in Numa node: N」。参数漏填时打印用法并以 0 退出（不是失败）。"
+    examples:
+      - title: 查 C 盘的 NUMA 节点（普通用户即可）
+        args: ["volume", "queryNumaInfo", "C:"]
+        expectExitCode: 0
+
+  - id: volume-tp-info
+    category: 卷信息
+    title: 查看精简预配（thin provisioning）信息
+    description: >-
+      查询卷的精简预配状态：info 看基本信息、storageMap 看存储层映射、full 两者都看。
+      存储阵列做了 thin provisioning 时才知道实际占用与承诺容量的差别。
+    command: volume
+    commandArgs: [tpInfo]
+    requiresAdmin: true
+    sources:
+      - title: Microsoft Learn —— fsutil volume 的参数表（tpInfo 未单列）
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-volume
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方 #parameters 没有 tpInfo；本机 v1 帮助给出
+          "Usage: fsutil tpInfo <option> <volume pathname>" 与三个选项
+          info / storageMap / full。实测：非管理员 exit=1「Error 5: Access is denied.」；
+          提权后 exit=0，本机 C: 打印「C: 不是精简预配的卷。」（info 与 storageMap 都是）。
+    fields:
+      - id: option
+        label: 查询内容
+        type: enum
+        style: positional
+        required: true
+        default: info
+        help: >-
+          info = 基本精简预配信息；storageMap = 存储层映射；full = 两者都查（本机 v1 帮助的措辞是
+          Query all of the above）。本机 C: 不是精简预配卷，三种都会打印同一句话。
+        values:
+          - { value: info, label: "info —— 基本精简预配信息", isDefault: true }
+          - { value: storageMap, label: "storageMap —— 存储层映射" }
+          - { value: full, label: "full —— 全部" }
+        doc: '本机 v1 帮助的 Usage/Options（info / storageMap / full）；官方 #parameters 未列该操作，见 NOTES.md §8.3'
+      - id: volumePath
+        label: 卷
+        type: text
+        style: positional
+        required: true
+        placeholder: "C:"
+        doc: '本机 v1 帮助的 Usage: fsutil tpInfo <option> <volume pathname>'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: "非精简预配卷会直接打印「C: 不是精简预配的卷。」并以 0 退出（这是成功回答，不是失败）。"
+    examples:
+      - title: 查 C 盘精简预配信息（需要管理员）
+        args: ["volume", "tpInfo", "info", "C:"]
+        expectExitCode: 0
+
+  # ============================================================ 文件系统信息
+  - id: fsinfo-drives
+    category: 文件系统信息
+    title: 列出所有驱动器
+    description: 列出这台机器上的所有驱动器盘符。输出只有一行，是脚本里拿盘符列表最省事的来源。
+    command: fsInfo
+    commandArgs: [drives]
+    sources:
+      - title: Microsoft Learn —— fsutil fsinfo 的 drives 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-fsinfo
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil fsinfo [drives]；说明 Lists all drives in the computer；示例
+          fsutil fsinfo drives，官方给出的输出样例是 `Drives: A:\ C:\ D:\ E:\`。
+          实测：**普通用户就能跑**（非管理员 exit=0，本机输出「驱动器: C:\ D:\ E:\」）。
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: "一行、以盘符加反斜杠列出（本机是「驱动器: C:\\ D:\\ E:\\」）。注意官方样例里盘符带的是反斜杠。"
+    examples:
+      - title: 列出所有驱动器（普通用户即可）
+        args: ["fsInfo", "drives"]
+        expectExitCode: 0
+
+  - id: fsinfo-drive-type
+    category: 文件系统信息
+    title: 查询驱动器类型
+    description: >-
+      查询某个盘符属于哪一类：固定驱动器 / 可移动驱动器 / 网络驱动器 / CD-ROM / RAM 盘 /
+      未知驱动器 / 无此根目录。想判断「这个盘是不是 U 盘/网络盘」时用它。
+    command: fsInfo
+    commandArgs: [driveType]
+    sources:
+      - title: Microsoft Learn —— fsutil fsinfo 的 drivetype 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-fsinfo
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil fsinfo [drivetype] <volumepath>；说明 Queries a drive and lists its type,
+          for example CD-ROM drive；官方列出七种可能结果。示例 fsutil fsinfo drivetype c:。
+          实测：**普通用户就能跑**（C: → exit=0「C: - 固定驱动器」；不存在的 Z: → exit=0
+          「Z: - No such Root Directory」，**注意 exit 仍是 0**）；卷 GUID 形态也能用。
+    fields:
+      - id: volumePath
+        label: 驱动器
+        type: text
+        style: positional
+        required: true
+        placeholder: "C:"
+        help: >-
+          盘符加冒号（C:）。实测卷 GUID 形态（\\?\Volume{GUID}\）也接受，并原样回显。
+        doc: 'official #parameters 的 <volumepath>:（Specifies the drive letter followed by a colon）；本机帮助的 Usage: fsutil fsInfo driveType <drive letter>'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        一行「<你填的值> - <类型>」。**盘不存在也算成功**（exit 0，类型写作「No such Root Directory」），
+        所以不要用退出码判断盘是否存在，要看这行文字。
+    examples:
+      - title: 查 C 盘类型（普通用户即可）
+        args: ["fsInfo", "driveType", "C:"]
+        expectExitCode: 0
+
+  - id: fsinfo-volume-info
+    category: 文件系统信息
+    title: 查看卷信息
+    description: >-
+      打印一个卷的卷名、卷序列号、组件长度上限、文件系统名，以及一大串能力位：
+      是否可读写、是否支持区分大小写文件名、是否支持配额/稀疏文件/重分析点/压缩等。
+      判断「这个卷到底支持什么」的第一站。
+    command: fsInfo
+    commandArgs: [volumeInfo]
+    requiresAdmin: true
+    sources:
+      - title: Microsoft Learn —— fsutil fsinfo 的 volumeinfo 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-fsinfo
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil fsinfo [volumeinfo] <rootpath>；说明 Lists information for the specified
+          volume, such as the file system, and whether the volume supports case-sensitive file names,
+          unicode in file names, disk quotas, or is a DirectAccess (DAX) volume；<rootpath> 是根驱动器。
+          实测：非管理员 exit=1「Error 5: Access is denied.」；提权后 C: exit=0，
+          输出「卷名 / 卷序列号 / 组件长度最大值 / 文件系统名 / 为读写 / 支持区分大小写的文件名 …」。
+    fields:
+      - id: volumePath
+        label: 卷（根驱动器）
+        type: text
+        style: positional
+        required: true
+        placeholder: "C:"
+        doc: 'official #parameters 的 <rootpath>:（Specifies the drive letter followed by a colon of the root drive）'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        本机输出是**中文标签**的一列「卷名 : …」加一串能力位（「支持文件名中的 Unicode」「保留并加强 ACL」
+        「支持磁盘配额」「支持稀疏文件」「支持重分析点」…），所以本包声明 oem 编码。
+    examples:
+      - title: 看 C 盘卷信息（需要管理员）
+        args: ["fsInfo", "volumeInfo", "C:"]
+        expectExitCode: 0
+
+  - id: fsinfo-ntfs-info
+    category: 文件系统信息
+    title: 查看 NTFS 卷信息
+    description: >-
+      NTFS 专属的卷信息：NTFS 版本、LFS 版本、总扇区数与字节数、总簇数与每簇字节数、
+      MFT 起始位置与 MFT 区域范围、MFT 记录大小、序列号等。看「这个卷的元数据布局」就看它。
+    command: fsInfo
+    commandArgs: [ntfsInfo]
+    requiresAdmin: true
+    sources:
+      - title: Microsoft Learn —— fsutil fsinfo 的 ntfsinfo 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-fsinfo
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil fsinfo [ntfsinfo] <rootpath>；说明 Lists NTFS specific volume information
+          for the specified volume, such as the number of sectors, total clusters, free clusters, and
+          the start and end of the MFT Zone；示例 fsutil fsinfo ntfsinfo f:。
+          实测：非管理员 exit=1「Error 5: Access is denied.」；提权后 C: exit=0，
+          打印「NTFS 卷序列号 / NTFS 版本 / LFS 版本 / 总扇区 / 总群集 / 可用群集 / MFT 区域起始 …」。
+    fields:
+      - id: rootPath
+        label: 根驱动器
+        type: text
+        style: positional
+        required: true
+        placeholder: "C:"
+        help: 盘符加冒号。实测卷 GUID 形态也会被接受（官方参数名是 <rootpath>）。
+        doc: 'official #parameters 的 <rootpath>:（Specifies the drive letter followed by a colon of the root drive）'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        中文标签的键值列表（本机实测含「总扇区」「总群集」「可用群集」「MFT 区域起始」「MFT 区域结束」等），
+        字节数后附人类可读单位。卷不是 NTFS 时它会报「本地 REFS 卷需要此操作」这类错误。
+    examples:
+      - title: 看 C 盘 NTFS 信息（需要管理员）
+        args: ["fsInfo", "ntfsInfo", "C:"]
+        expectExitCode: 0
+
+  - id: fsinfo-sector-info
+    category: 文件系统信息
+    title: 查看扇区大小与对齐
+    description: >-
+      打印逻辑/物理扇区大小、原子性扇区大小、性能扇区大小、文件系统实际生效的物理扇区大小，
+      以及是否支持 TRIM、是否对齐、是否 DAX 能力等。4Kn 硬盘与分区对齐问题都看这一张表。
+    command: fsInfo
+    commandArgs: [sectorInfo]
+    requiresAdmin: true
+    sources:
+      - title: Microsoft Learn —— fsutil fsinfo 的 sectorinfo 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-fsinfo
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方**语法块里没有 sectorinfo**（只有 drives / drivetype / ntfsinfo / statistics /
+          volumeinfo），但 #parameters 表里有 sectorinfo 一行（Lists information about the
+          hardware's sector size and alignment），示例也给了
+          fsutil fsinfo sectorinfo d: 与一段输出。本动作按 #parameters 与示例收录，差异记 NOTES.md §8.2。
+          实测：非管理员 exit=1「Error 5: Access is denied.」；提权后 C: exit=0，
+          打印 LogicalBytesPerSector / PhysicalBytesPerSectorForAtomicity /
+          PhysicalBytesPerSectorForPerformance / FileSystemEffectivePhysicalBytesPerSectorForAtomicity /
+          Trim Not Supported / DAX capable 等**英文**键名。
+    fields:
+      - id: volumePath
+        label: 卷
+        type: text
+        style: positional
+        required: true
+        placeholder: "C:"
+        doc: 'official #parameters 的 <volumepath>:；官方示例 fsutil fsinfo sectorinfo d:'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        这一节的键名是**英文**（LogicalBytesPerSector 等）——与 fsutil 其它子命令的中文标签不同，
+        不要据此以为编码变了；中文只出现在错误消息与路径里。
+    examples:
+      - title: 看 C 盘扇区信息（需要管理员）
+        args: ["fsInfo", "sectorInfo", "C:"]
+        expectExitCode: 0
+
+  - id: fsinfo-statistics
+    category: 文件系统信息
+    title: 查看文件系统统计
+    description: >-
+      打印这个卷的文件系统读写统计：用户文件读次数/字节数、磁盘读次数、日志文件写入字节数等。
+      想知道「这块盘到底有多忙」时可以看它。
+    command: fsInfo
+    commandArgs: [statistics]
+    requiresAdmin: true
+    sources:
+      - title: Microsoft Learn —— fsutil fsinfo 的 statistics 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-fsinfo
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil fsinfo [statistics] <volumepath>；说明 Lists file system statistics for the
+          specified volume, such as metadata, log file, and MFT reads and writes；示例
+          fsutil fsinfo statistics e:。实测：非管理员 exit=1「Error 5: Access is denied.」；
+          提权后 C: exit=0，打印「文件系统类型 / UserFileReads / UserFileReadBytes / UserDiskReads /
+          UserFileWrites / UserFileWriteBytes / UserDiskWrites / MetadataReads …」。
+    fields:
+      - id: volumePath
+        label: 卷
+        type: text
+        style: positional
+        required: true
+        placeholder: "C:"
+        doc: 'official #parameters 的 <volumepath>:；官方示例 fsutil fsinfo statistics e:'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: "第一行「文件系统类型 : NTFS」是中文标签，其余计数器是英文键名；计数是累计值，不随命令清零。"
+    examples:
+      - title: 看 C 盘文件系统统计（需要管理员）
+        args: ["fsInfo", "statistics", "C:"]
+        expectExitCode: 0
+
+  # ============================================================ 卷脏位
+  - id: dirty-query
+    category: 卷状态
+    title: 查询卷的脏位
+    description: >-
+      查询卷是否被标记为「脏」。脏位被置上意味着文件系统可能处于不一致状态，
+      下次开机时 autochk 会自动检查这个卷。想确认「上次是不是非正常关机」时看它。
+    command: dirty
+    commandArgs: [query]
+    requiresAdmin: true
+    sources:
+      - title: Microsoft Learn —— fsutil dirty 的 query 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-dirty
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil dirty {query | set} <volumepath>；<volumepath> 是盘符加冒号或
+          volume{GUID} 格式；官方示例 fsutil dirty query c:，并给出两种输出
+          「Volume C: is dirty」/「Volume C: is not dirty」。Remarks 解释了脏位的三种来源与
+          「重启时 chkdsk 会去查」。**官方通篇没有提权限**；本机实测：非管理员
+          `dirty query C:` → exit=1「Error 5: Access is denied.」（C:/D:/卷 GUID 都一样），
+          提权后 exit=0「卷 - C: 没有损坏」。requiresAdmin 按实测标（NOTES.md §5）。
+    fields:
+      - id: volumePath
+        label: 卷
+        type: text
+        style: positional
+        required: true
+        placeholder: "C:"
+        help: >-
+          盘符加冒号（C:）。实测**多写尾反斜杠会失败**：`dirty query C:\` → exit=3
+          「错误 3: 系统找不到指定的路径。」；不存在的卷 → exit=2 且提示需要本地卷。
+        doc: 'official #parameters 的 <volumepath>（drive name followed by a colon or GUID in the format volume{GUID}）；官方示例 fsutil dirty query c:'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        成功时一行「卷 - C: 没有损坏」（英文环境下是「Volume C: is not dirty」）。
+        脏位被置上时文案不同——**判脏不要只看退出码**，两种情况的退出码都是 0。
+    examples:
+      - title: 查 C 盘脏位（需要管理员）
+        args: ["dirty", "query", "C:"]
+        expectExitCode: 0
+
+  # ============================================================ 文件：查询
+  - id: file-query-fileid
+    category: 文件查询
+    title: 查文件的文件 ID
+    description: >-
+      查询一个文件或目录在 NTFS 卷上的文件 ID（文件引用号，含 MFT 段号）。
+      fsutil 的其它子命令（如按 ID 找名字、按 ID 看布局）都要用到它。
+    command: file
+    commandArgs: [queryFileID]
+    sources:
+      - title: Microsoft Learn —— fsutil file 的 queryfileid 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-file
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil file [queryfileid] <filename>；说明 Queries the file ID of a file on an
+          NTFS volume。实测：**普通用户就能跑**（非管理员 exit=0，「File ID is 0x…」；
+          目录也可用）；文件不存在 → exit=1 + 「Error 2: The system cannot find the file specified.」。
+    fields:
+      - id: fileName
+        label: 文件或目录
+        type: file
+        style: positional
+        required: true
+        save: true
+        placeholder: "C:\\Windows\\System32\\notepad.exe"
+        doc: 'official 语法行的 queryfileid <filename>；本机帮助的 Usage: fsutil file queryFileID <filename>'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        一行「文件 ID 为 0x…」（英文环境下是「File ID is 0x…」）。
+        实测一个 28 字节的普通文件得到 0x0000000000000000001900000007af6e——
+        前 16 位十六进制是 MFT 段号，后面是序列号。
+    examples:
+      - title: 查 notepad.exe 的文件 ID（普通用户即可）
+        args: ["file", "queryFileID", "C:\\Windows\\System32\\notepad.exe"]
+        expectExitCode: 0
+
+  - id: file-query-alloc-ranges
+    category: 文件查询
+    title: 查询文件的已分配区间
+    description: >-
+      查询一个文件里某个区间的分配情况：返回被实际占用了磁盘的那些范围（偏移 + 长度）。
+      判断「这个文件是不是有稀疏空洞」就用它。
+    command: file
+    commandArgs: [queryAllocRanges]
+    sources:
+      - title: Microsoft Learn —— fsutil file 的 queryallocranges 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-file
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil file [queryallocranges] offset=<offset> length=<length> <filename>；
+          说明 Useful for determining whether a file has sparse regions；官方示例
+          fsutil file queryallocranges offset=1024 length=64 c:\temp\sample.txt。
+          实测：**普通用户就能跑**；`offset=0 length=16` 单 token 形态 → exit=0
+          「分配的范围[0]: 偏移: 0x0  长度: 0x10」，而**两 token 形态（offset 0 length 16）→ exit=1 用法帮助**。
+          `offset=99 length=16`（超出文件尾）→ exit=0 且**无输出**——"没有分配区间"是成功答案。
+    fields:
+      - id: offset
+        label: 起始偏移（字节）
+        type: number
+        style: attached
+        prefix: "offset="
+        required: true
+        default: 0
+        placeholder: "0"
+        help: >-
+          **必须写成 offset=<值> 一个 token**（本机实测两 token 写法会被当成参数格式错误）。
+          官方示例用的是 offset=1024。
+        doc: 'official 语法行的 offset=<offset>（Specifies the start of the range that should be set to zeroes）；官方示例 offset=1024'
+      - id: length
+        label: 查询长度（字节）
+        type: number
+        style: attached
+        prefix: "length="
+        required: true
+        placeholder: "64"
+        help: 同样必须写成 length=<值> 一个 token。官方示例用的是 length=64。
+        doc: 'official 语法行的 length=<length>（Specifies the length of the range in bytes）；官方示例 length=64'
+      - id: fileName
+        label: 文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        placeholder: "C:\\Temp\\sample.txt"
+        doc: 'official 语法行末尾的 <filename>；本机帮助的 Usage: fsutil file queryAllocRanges offset=<val> length=<val> <filename>'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        每个被分配的范围一行「分配的范围[N]: 偏移: 0x…  长度: 0x…」。
+        **区间内没有任何已分配数据时它什么也不打印并以 0 退出**（实测 offset=99），
+        不要把这当成命令没跑。
+    examples:
+      - title: 查一个文件前 16 字节的分配情况（普通用户即可）
+        args: ["file", "queryAllocRanges", "offset=0", "length=16", "C:\\Windows\\win.ini"]
+        expectExitCode: 0
+
+  - id: file-query-extents
+    category: 文件查询
+    title: 查询文件的扩展（extents）
+    description: >-
+      查询文件占用的区段（VCN 范围）。稀疏文件与碎片化严重的文件会返回多段；
+      普通小文件往往只有一段、甚至没有段可报。
+    command: file
+    commandArgs: [queryExtents]
+    sources:
+      - title: Microsoft Learn —— fsutil file 的 queryextents 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-file
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil file [queryextents] [/R] <filename> [<startingvcn> [<numvcns>]]；
+          /R = If <filename> is a reparse point, open it rather than its target；
+          startingvcn 省略从 VCN 0 开始，numvcns 省略或 0 表示查到文件尾；
+          官方示例 fsutil file queryextents C:\Temp\sample.txt。
+          实测：**普通用户就能跑**（exit=0，本机 28 字节文件回「没有与指定范围匹配的扩展。」）；
+          **/R 必须写在文件名之前**：`queryExtents <文件> /R` → exit=1 用法帮助。
+    fields:
+      - id: reparse
+        label: 打开重分析点本身（/R）
+        type: bool
+        style: flag
+        prefix: "/R"
+        default: false
+        advanced: true
+        help: 勾上时，如果目标本身是重分析点，就查它自己而不是它指向的目标。实测须排在文件名之前。
+        doc: 'official #parameters 的 /r（If <filename> is a reparse point, open it rather than its target）'
+      - id: fileName
+        label: 文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        placeholder: "C:\\Temp\\sample.txt"
+        doc: 'official 语法行的 <filename>；官方示例 fsutil file queryextents C:\Temp\sample.txt'
+      - id: startingVcn
+        label: 起始 VCN（可留空）
+        type: number
+        style: positional
+        required: false
+        advanced: true
+        placeholder: "0"
+        help: 省略时从 VCN 0 开始（官方原话：If omitted, start at VCN 0）。
+        doc: 'official #parameters 的 <startingvcn>（Specifies first VCN to query. If omitted, start at VCN 0）'
+      - id: numVcns
+        label: 查询多少个 VCN（可留空）
+        type: number
+        style: positional
+        required: false
+        advanced: true
+        placeholder: "0"
+        help: 省略或填 0 表示一直查到文件尾。**只在填了起始 VCN 之后才有意义**（它是第二个位置参数）。
+        doc: 'official #parameters 的 <numvcns>（Number of VCNs to query. If omitted or 0, query until EOF）'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        没有匹配的区段时打印「没有与指定范围匹配的扩展。」（英文环境下是
+        「No extents matching specified range.」）并以 0 退出——**这也是成功**。
+    examples:
+      - title: 查一个系统文件的扩展（普通用户即可）
+        args: ["file", "queryExtents", "C:\\Windows\\win.ini"]
+        expectExitCode: 0
+
+  - id: file-query-valid-data
+    category: 文件查询
+    title: 查询有效数据长度（VDL）
+    description: >-
+      查询文件的有效数据长度。NTFS 里「文件长度（EOF）」与「有效数据长度（VDL）」是两个概念：
+      VDL 到 EOF 之间的读取会由系统返回 0，以保证 C2 对象复用要求。
+    command: file
+    commandArgs: [queryValidData]
+    sources:
+      - title: Microsoft Learn —— fsutil file 的 queryvaliddata 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-file
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil file [queryvaliddata] [/R] [/D] <filename>；/d = Display detailed valid
+          data information；Remarks 解释了 EOF 与 VDL 的区别。实测：**普通用户就能跑**
+          （exit=0「有效数据长度为 0x1c (28)」；加 `/R /D` → exit=0
+          「偏移: 0x0  长度: 0x1c  用法: 有效数据」）；**开关写在文件名之后 → exit=1 用法帮助**。
+    fields:
+      - id: reparse
+        label: 打开重分析点本身（/R）
+        type: bool
+        style: flag
+        prefix: "/R"
+        default: false
+        advanced: true
+        doc: 'official 语法行的 [/R]（与 queryextents 的 /R 同义：If <filename> is a reparse point, open it rather than its target）'
+      - id: detailed
+        label: 显示详细的有效数据信息（/D）
+        type: bool
+        style: flag
+        prefix: "/D"
+        default: false
+        advanced: true
+        help: 勾上后按「偏移 / 长度 / 用法」逐段列出有效数据，而不是只给一个总长度。
+        doc: 'official #parameters 的 /d（Display detailed valid data information）'
+      - id: fileName
+        label: 文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        placeholder: "C:\\Temp\\sample.txt"
+        doc: 'official 语法行的 <filename>；本机帮助的 Usage: fsutil file queryValidData [/R] [/D] <filename>'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        不带 /D 时一行「有效数据长度为 0x1c (28)」（十六进制 + 十进制字节数）；
+        带 /D 时逐段列出「偏移 / 长度 / 用法」。
+    examples:
+      - title: 查一个系统文件的有效数据长度（普通用户即可）
+        args: ["file", "queryValidData", "C:\\Windows\\win.ini"]
+        expectExitCode: 0
+
+  - id: file-query-ea
+    category: 文件查询
+    title: 查看扩展属性（EA）
+    description: >-
+      查看文件的扩展属性（Extended Attributes）。NTFS 的 EA 常被子系统（如 WSL、POSIX 子系统）
+      用来存额外元数据；普通文件通常一个都没有。
+    command: file
+    commandArgs: [queryEA]
+    sources:
+      - title: Microsoft Learn —— fsutil file 的参数表（queryEA 未单列语法行）
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-file
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方 #parameters **没有 queryEA**；本机 v1 帮助有
+          "queryEA  Query the extended attributes (EA) information for a file"，
+          且 `fsutil file queryEA /?` 会打印
+          "Usage: fsutil file queryEA <file path> | Eg: fsutil file queryEA C:\TempFile"。
+          实测：**普通用户就能跑**（exit=0「文件 … 没有扩展属性(EA)。」）。
+    fields:
+      - id: fileName
+        label: 文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        help: 实测目录路径也能传（本机没试出区别，帮助里写的是 <file path>）。
+        doc: '本机 v1 帮助的 Usage: fsutil file queryEA <file path>（官方 #parameters 未列该操作，见 NOTES.md §8.3）'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        没有 EA 时打印「文件 <路径> 没有扩展属性(EA)。」并以 0 退出；有 EA 时会逐条列出名字与数据长度。
+        这一行里含**你传入的路径**，中文路径会原样出现在输出里（本包 oem 编码的依据之一）。
+    examples:
+      - title: 查一个系统文件的扩展属性（普通用户即可）
+        args: ["file", "queryEA", "C:\\Windows\\win.ini"]
+        expectExitCode: 0
+
+  - id: file-query-optimize-metadata
+    category: 文件查询
+    title: 查看文件元数据优化状态
+    description: >-
+      查看某个文件的元数据（属性列表）占用情况：优化状态、属性列表大小、
+      已用与已分配的文件元数据空间等。文件碎片化到极限时 NTFS 会压缩它的元数据，这就是看它的地方。
+    command: file
+    commandArgs: [queryOptimizeMetadata]
+    sources:
+      - title: Microsoft Learn —— fsutil file 的 queryoptimizemetadata 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-file
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil file [queryoptimizemetadata] <filename>；参数表说明 Queries the metadata
+          state of a file；配对的 optimizemetadata 说明 This performs an immediate compaction of the
+          metadata for a given file（本包**不收录** optimizeMetadata，理由见 NOTES.md §9）。
+          实测：**普通用户就能跑**（exit=0，打印
+          「文件元数据优化 : 无 / 属性列表大小 / 所用的文件元数据空间 : 440 (0x1b8) …」）。
+    fields:
+      - id: fileName
+        label: 文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        placeholder: "C:\\Temp\\sample.txt"
+        doc: 'official 语法行的 queryoptimizemetadata <filename>；官方示例 fsutil file optimizemetadata C:\largefragmentedfile.txt'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 中文标签的键值列表；文件元数据优化状态常见值是「无」（None）。
+    examples:
+      - title: 查一个系统文件的元数据状态（普通用户即可）
+        args: ["file", "queryOptimizeMetadata", "C:\\Windows\\win.ini"]
+        expectExitCode: 0
+
+  - id: file-query-case-sensitive
+    category: 文件查询
+    title: 查询目录是否区分大小写
+    description: >-
+      查询一个目录的「区分大小写」属性——这是 WSL / 开发者场景按目录开启的
+      case sensitivity 标志（NTFS 默认不区分）。
+    command: file
+    commandArgs: [queryCaseSensitiveInfo]
+    sources:
+      - title: Microsoft Learn —— fsutil file 的参数表（queryCaseSensitiveInfo 未单列）
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-file
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方 #parameters **没有 queryCaseSensitiveInfo**；本机 v1 帮助有
+          "queryCaseSensitiveInfo  Query the case sensitive information for a directory"。
+          实测：**普通用户就能跑**（目录 → exit=0「已禁用目录 … 的区分大小写属性。」）；
+          传普通文件时它把文件也当目录处理并返回 0（文案仍是「目录 …」），
+          传明显非法的路径会返回 0 但打印 "Failed to query case sensitive attribute information … error: 0x0000007b"。
+    fields:
+      - id: directoryPath
+        label: 目录
+        type: directory
+        style: positional
+        required: true
+        save: true
+        placeholder: "D:\\项目"
+        help: 官方/本机帮助都把它说成目录属性；实测传文件也能返回结果（文案仍写「目录」）。
+        doc: '本机 v1 帮助的子命令描述（Query the case sensitive information for a directory）；官方 #parameters 未列该操作，见 NOTES.md §8.3'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 一行「已禁用/已启用目录 <路径> 的区分大小写属性。」。失败时文案里带 `0x…` 错误码但**退出码仍是 0**。
+    examples:
+      - title: 查一个目录是否区分大小写（普通用户即可）
+        args: ["file", "queryCaseSensitiveInfo", "C:\\Windows"]
+        expectExitCode: 0
+
+  # ============================================================ 链接、对象 ID、重分析点、稀疏
+  - id: hardlink-list
+    category: 文件查询
+    title: 列出文件的硬链接
+    description: >-
+      列出一个文件的所有硬链接（同一个文件在不同目录下的另一个名字）。
+      Windows 自带文件里也有多链接的（例如 notepad.exe 在 WinSxS 与 System32 下同时存在），
+      误删其中一个名字不会丢数据，看这个列表就能确认。
+    command: hardlink
+    commandArgs: [list]
+    sources:
+      - title: Microsoft Learn —— fsutil hardlink 的 list 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-hardlink
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil hardlink list <filename>；说明 Lists the hard links to filename。
+          实测：**普通用户就能跑**（exit=0）；本机 notepad.exe 实测有 3 个链接
+          （WinSxS 下的备份路径、System32\notepad.exe、Windows\notepad.exe），
+          输出的路径**省略盘符**（以 \ 开头）。
+    fields:
+      - id: fileName
+        label: 文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        placeholder: "C:\\Windows\\System32\\notepad.exe"
+        doc: 'official 语法行的 list <filename>（Lists the hard links to filename）；本机帮助的 Usage: fsutil hardlink list <filename>'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        每行一个链接路径、**不带盘符**（本机实测形如
+        \Users\Steve\AppData\Local\Temp\… 与 \Windows\WinSxS\…\notepad.exe）；
+        单链接文件只打印一行。
+    examples:
+      - title: 看 notepad.exe 有几个硬链接（普通用户即可）
+        args: ["hardlink", "list", "C:\\Windows\\System32\\notepad.exe"]
+        expectExitCode: 0
+
+  - id: objectid-query
+    category: 文件查询
+    title: 查询对象 ID
+    description: >-
+      查询文件的对象标识符（OID，供分布式链接跟踪 DLT 与 FRS 使用）。
+      绝大多数文件**没有**对象 ID，这时它会如实告诉你「指定的文件没有对象 id」。
+    command: objectID
+    commandArgs: [query]
+    sources:
+      - title: Microsoft Learn —— fsutil objectid 的 query 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-objectid
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法有 fsutil objectid [query] <filename> 与 create/delete/set；
+          官方在页首给了一条 Warning：Don't delete, set, or otherwise modify an object identifier…
+          can result in the loss of data…——所以本包**只收 query**，create/delete/set 全部不收录
+          （NOTES.md §9）。实测：**普通用户就能跑**（本机普通文件与目录 → exit=0，
+          「指定的文件没有对象 id」，英文环境下是 "The specified file has no object id"）。
+    fields:
+      - id: fileName
+        label: 文件或目录
+        type: file
+        style: positional
+        required: true
+        save: true
+        placeholder: "C:\\Temp\\sample.txt"
+        doc: 'official 语法行的 objectid [query] <filename>；官方示例 fsutil objectid query c:\temp\sample.txt'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        没有对象 ID 时打印「指定的文件没有对象 id」并以 0 退出（**这是最常见的结果，不是失败**）；
+        有 OID 时会打印 objectID / birthVolumeID / birthObjectID / domainID 四个十六进制值。
+    examples:
+      - title: 查一个系统文件有没有对象 ID（普通用户即可）
+        args: ["objectID", "query", "C:\\Windows\\win.ini"]
+        expectExitCode: 0
+
+  - id: reparsepoint-query
+    category: 文件查询
+    title: 查看重分析点
+    description: >-
+      查看一个目录联接（junction）、符号链接或卷装入点的重分析点数据：重分析标记值与原始数据。
+      想知道「这个链接指向哪里、是什么类型的链接」时看它。
+    command: reparsePoint
+    commandArgs: [query]
+    sources:
+      - title: Microsoft Learn —— fsutil reparsepoint 的 query 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-reparsepoint
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil reparsepoint [query] <filename>（另有 delete，本包不收录）；
+          说明 Retrieves the reparse point data that is associated with the file or directory；
+          官方示例 fsutil reparsepoint query c:\server。官方还注明该命令 typically used by support
+          professionals。实测：**普通用户就能跑**（`C:\Users\All Users` 这个符号链接 →
+          exit=0，打印 Reparse Tag Value / Tag value: Symbolic Link / Reparse Data 十六进制转储）；
+          **不是重分析点的普通文件 → exit=1**「Error 4390: The file or directory is not a reparse point.」。
+    fields:
+      - id: fileName
+        label: 文件或目录（须是链接/联接/装入点）
+        type: file
+        style: positional
+        required: true
+        save: true
+        placeholder: "C:\\Users\\All Users"
+        help: 传普通文件会以 Error 4390 失败（那不是错误参数，是它确实没有重分析点）。
+        doc: 'official 语法行的 reparsepoint [query] <filename>；官方示例 fsutil reparsepoint query c:\server'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        输出含「Reparse Tag Value : 0xa000000c」「Tag value: Microsoft / Name Surrogate / Symbolic Link」
+        以及一段 **Reparse Data 十六进制转储**（每行 16 字节）。这些标签是英文的。
+    examples:
+      - title: 看 C:\Users\All Users 这个符号链接（普通用户即可）
+        args: ["reparsePoint", "query", "C:\\Users\\All Users"]
+        expectExitCode: 0
+
+  - id: sparse-query-flag
+    category: 文件查询
+    title: 查询文件是否被设为稀疏
+    description: >-
+      查询文件有没有被标记为稀疏文件。稀疏文件里大段全零数据不占磁盘，
+      「文件看着 10 GB、磁盘只占 1 MB」就是它。
+    command: sparse
+    commandArgs: [queryFlag]
+    sources:
+      - title: Microsoft Learn —— fsutil sparse 的 queryflag 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-sparse
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil sparse [queryflag] <filename>；参数表 queryflag = Queries sparse；
+          Remarks 解释了稀疏文件的分配语义。实测：**普通用户就能跑**
+          （exit=0「该文件没有设为稀疏」，英文环境下是 "This file is NOT set as sparse"）。
+    fields:
+      - id: fileName
+        label: 文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        placeholder: "C:\\Temp\\big.vhdx"
+        doc: 'official 语法行的 queryflag <filename>；本机帮助的子命令表 queryFlag  Query sparse'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 两种情况都以 0 退出，只有一行文字不同（中文环境下「该文件没有设为稀疏」/「该文件已设为稀疏」）。
+    examples:
+      - title: 查一个系统文件是不是稀疏文件（普通用户即可）
+        args: ["sparse", "queryFlag", "C:\\Windows\\win.ini"]
+        expectExitCode: 0
+
+  - id: sparse-query-range
+    category: 文件查询
+    title: 扫描稀疏文件里的非零区间
+    description: >-
+      扫描文件，找出可能含有非零数据的区间（稀疏文件里真正占盘的那些段）。
+      想确认「这个稀疏文件到底存了多少真数据」时用它。
+    command: sparse
+    commandArgs: [queryRange]
+    sources:
+      - title: Microsoft Learn —— fsutil sparse 的 queryrange 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-sparse
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil sparse [queryrange] <filename>；参数表 queryrange = Scans a file and
+          searches for ranges that may contain nonzero data。实测：**普通用户就能跑**，
+          但**对非稀疏文件它会 exit=1** 并打印「指定的文件不是稀疏文件」
+          （英文环境下 "The specified file is NOT sparse"）——这是"这个文件不适用"，不是参数错。
+    fields:
+      - id: fileName
+        label: 文件（稀疏文件才有意义）
+        type: file
+        style: positional
+        required: true
+        save: true
+        placeholder: "C:\\Temp\\big.vhdx"
+        doc: 'official 语法行的 queryrange <filename>；官方参数表 queryrange（Scans a file and searches for ranges that may contain nonzero data）'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        非稀疏文件 → 一行「指定的文件不是稀疏文件」+ exit 1；
+        真是稀疏文件时逐段列出非零区间（本机没有现成的稀疏文件可实测这一路径，见 NOTES.md §6）。
+    examples:
+      - title: 对一个普通文件跑一下（会得到 exit 1，可用来确认"这不是稀疏文件"）
+        args: ["sparse", "queryRange", "C:\\Windows\\win.ini"]
+        expectExitCode: 1
+
+  # ============================================================ 配额、自愈、参数、短名
+  - id: quota-query
+    category: 卷状态
+    title: 查询磁盘配额
+    description: >-
+      列出某个卷上已有的磁盘配额（每个用户的阈值与上限）。
+      当前这台机器的 C: **没有启用配额**，所以它只会告诉你「未在卷"C:"上启用配额」。
+    command: quota
+    commandArgs: [query]
+    requiresAdmin: true
+    sources:
+      - title: Microsoft Learn —— fsutil quota 的 query 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-quota
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil quota [query] <volumepath>（<volumepath> 是 Required，盘符或 volume{GUID}）；
+          参数表 query = Lists existing disk quotas；官方示例 fsutil quota query C:。
+          实测：非管理员 exit=1「Error 5: Access is denied.」；提权后 exit=0 但打印
+          「未在卷"C:"上启用配额」（本机没有启用配额）；卷不存在 → exit=2 且提示需要本地 NTFS 卷。
+    fields:
+      - id: volumePath
+        label: 卷
+        type: text
+        style: positional
+        required: true
+        placeholder: "C:"
+        doc: 'official #parameters 的 <volumepath>（Required. Specifies the drive name followed by a colon or the GUID in the format volume{GUID}）；官方示例 fsutil quota query C:'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        没启用配额时一行「未在卷"C:"上启用配额」（英文环境下 "Quotas are not enabled on volume \"C:\""），
+        且**退出码是 1**（连续实跑三次都是 1；提权与否都一样）——把它当成"查询到了结果但卷上没开配额"，
+        不要当成功。启用了配额时会按用户列出阈值与上限。
+    examples:
+      - title: 查 C 盘配额（需要管理员；本机没启用配额，会以 exit 1 结束）
+        args: ["quota", "query", "C:"]
+        expectExitCode: 1
+
+  - id: quota-violations
+    category: 卷状态
+    title: 检查配额违规
+    description: >-
+      在系统日志与应用程序日志里搜索配额违规记录。启用配额的环境中，
+      这是「谁把配额用爆了」最快的入口；本机没有启用配额，结果是「未检测到配额违规」。
+    command: quota
+    commandArgs: [violations]
+    sources:
+      - title: Microsoft Learn —— fsutil quota 的 violations 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-quota
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil quota [violations]；说明 Searches the system and application logs and
+          displays a message to indicate that quota violations have been detected or that a user has
+          reached a quota threshold or quota limit。实测：**普通用户就能跑**
+          （exit=0，打印「正在 System 事件日志中搜索... / 正在 Application 事件日志中搜索... /
+          未检测到配额违规」）。
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        固定三行（搜索 System 日志 → 搜索 Application 日志 → 结论）。
+        结论是「未检测到配额违规」时退出码为 0；**检测到违规时的退出码没有实测**（本机没有违规可造）。
+    examples:
+      - title: 检查配额违规（普通用户即可）
+        args: ["quota", "violations"]
+        expectExitCode: 0
+
+  - id: repair-query
+    category: 卷状态
+    title: 查询 NTFS 自愈状态
+    description: >-
+      查询某个卷的 NTFS 自愈（self-healing）设置：常规修复是关、开、还是
+      「开了并在可能丢数据时告警」。这个设置决定了 NTFS 发现问题时是直接在线修还是先告警。
+    command: repair
+    commandArgs: [query]
+    requiresAdmin: true
+    sources:
+      - title: Microsoft Learn —— fsutil repair 的 query 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-repair
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil repair [query] <volumepath>；说明 Queries the self-healing state of the
+          NTFS volume。官方 ## In this article 说 Self-healing NTFS attempts to correct corruptions
+          online without requiring Chkdsk.exe to be run。实测：非管理员 exit=1「Error 5:
+          Access is denied.」；提权后 exit=0，本机 C: 是 0x9
+          （General repair enabled with warnings about potential data loss）。
+    fields:
+      - id: volumePath
+        label: 卷
+        type: text
+        style: positional
+        required: true
+        placeholder: "C:"
+        doc: 'official 语法行的 repair [query] <volumepath>；官方示例 fsutil repair set c: 1（本包只收 query）'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        输出形如「卷"C:"上的自愈状态为: 0x9」+ 一段取值表
+        （0 = 常规修复已禁用 / 1 = 常规修复已启用 / 9 = 启用并警告潜在的数据丢失 /
+        0x10 = 禁用，第一次损坏时检查错误）。
+    examples:
+      - title: 查 C 盘自愈状态（需要管理员）
+        args: ["repair", "query", "C:"]
+        expectExitCode: 0
+
+  - id: repair-state
+    category: 卷状态
+    title: 查询卷损坏状态
+    description: >-
+      查询系统整体、或某个卷的损坏状态。想快速确认「这台机器的卷是不是干净的」时用它：
+      干净卷会直接打印「损坏状态: 0x00 - 清理」。
+    command: repair
+    commandArgs: [state]
+    requiresAdmin: true
+    sources:
+      - title: Microsoft Learn —— fsutil repair 的 state 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-repair
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil repair [state]（#parameters 的 state 一行写 Queries the corruption state of
+          the system or for a given volume，**语法块里没有给 state 的独立语法行**）。
+          本机 v1 帮助给出 "Usage: fsutil repair state [<volume pathname>]"，
+          即卷路径是可选的。实测：非管理员 exit=1「Error 5: Access is denied.」（带卷与不带卷都是）；
+          提权后 exit=0（带 C: 时打印该卷，不带时列出所有卷 + 全局损坏状态）。
+    fields:
+      - id: volumePath
+        label: 卷（可留空 = 所有卷）
+        type: text
+        style: positional
+        required: false
+        placeholder: "C:"
+        help: "留空时列出所有卷并先给一行全局损坏状态（实测 C: 与 D: 以及一个没有装入点的卷都会列出）。"
+        doc: '官方 #parameters 的 state（Queries the corruption state of the system or for a given volume）；本机 v1 帮助的 Usage: fsutil repair state [<volume pathname>]'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        每个卷一段「卷名: C: (\Device\HarddiskVolume3) / 损坏状态: 0x00 - 清理」。
+        不带卷参数时开头多一行「全局损坏状态」。
+    examples:
+      - title: 查 C 盘损坏状态（需要管理员）
+        args: ["repair", "state", "C:"]
+        expectExitCode: 0
+
+  - id: repair-enumerate
+    category: 卷状态
+    title: 列出卷的损坏日志
+    description: >-
+      枚举一个卷的损坏日志：$Corrupt 是已确认的损坏，$Verify 是「可能损坏但还没核实」的条目。
+      干净卷会回「找不到损坏记录。」。
+    command: repair
+    commandArgs: [enumerate]
+    requiresAdmin: true
+    sources:
+      - title: Microsoft Learn —— fsutil repair 的 enumerate 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-repair
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil repair [enumerate] <volumepath> [<logname>]；
+          <logname> 可以是 $corrupt（已确认的损坏）或 $verify（潜在、未核实的损坏）；
+          官方示例 fsutil repair enumerate C: $Corrupt。实测：非管理员 exit=1「Error 5:
+          Access is denied.」；提权后 C: 加 $Corrupt / $Verify 都是 exit=0
+          「找不到损坏记录。」；填错日志名 → exit=1 并打印用法。
+    fields:
+      - id: volumePath
+        label: 卷
+        type: text
+        style: positional
+        required: true
+        placeholder: "C:"
+        doc: 'official 语法行的 repair [enumerate] <volumepath>；官方示例 fsutil repair enumerate C: $Corrupt'
+      - id: logName
+        label: 日志（留空 = 全部）
+        type: enum
+        style: positional
+        required: false
+        help: >-
+          $Corrupt = 该卷里已确认的损坏；$Verify = 可能存在但未核实的损坏。
+          **`$` 在 PowerShell 里是变量前缀**，如果在终端里手敲这条命令，要用单引号包住（'$Corrupt'）；
+          本界面直接传参，不受影响。
+        values:
+          - value: ""
+            label: 不指定（默认列出全部）
+            isDefault: true
+          - value: "$Corrupt"
+            label: "$Corrupt —— 已确认的损坏"
+          - value: "$Verify"
+            label: "$Verify —— 潜在、未核实的损坏"
+        doc: 'official #parameters 的 <logname>（Can be $corrupt, the set of confirmed corruptions in the volume or $verify, a set of potential, unverified corruptions in the volume）'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        干净的卷打印「找不到损坏记录。」（英文环境下 "No corruption records were found."）+ exit 0；
+        有记录时会逐条列出文件引用号与损坏类型。
+    examples:
+      - title: 看 C 盘已确认的损坏记录（需要管理员）
+        args: ["repair", "enumerate", "C:", "$Corrupt"]
+        expectExitCode: 0
+
+  - id: behavior-query
+    category: 文件系统参数
+    title: 查询文件系统行为参数
+    description: >-
+      查询 NTFS 的行为参数（注册表里的 Ntfs* 值）：是否禁用 8.3 短名、是否更新最后访问时间、
+      MFT 区域大小、删通知（TRIM）是否开启、符号链接评估策略等。**只查不改**。
+    command: behavior
+    commandArgs: [query]
+    sources:
+      - title: Microsoft Learn —— fsutil behavior 的 query 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-behavior
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil behavior query {allowextchar | bugcheckoncorrupt | disable8dot3
+          [<volumepath>] | disablecompression | disablecompressionlimit | disableencryption |
+          disablefilemetadataoptimization | disablelastaccess | disablespotcorruptionhandling |
+          disabletxf | disablewriteautotiering | encryptpagingfile | mftzone | memoryusage |
+          quotanotify | symlinkevaluation | disabledeletenotify}。
+          实测：**普通用户就能跑**（`query disable8dot3` → exit=0
+          「注册表状态为: 2 (按卷设置 - 默认值)」；`query mftZone` → exit=0
+          「MftZone = 0 (转换为 200.0 MB 的区大小)」；**非法选项名 → exit=1 并打印整个选项表**，
+          所以本字段只能从官方列表里选）。
+          本机 v1 帮助的选项表比官方语法行**多出 5 个**（defaultNtfsTier / disableDeleteNotify
+          带 NTFS|ReFS 参数 / enableMaximumHardLinks / enableNonpagedNtfs /
+          enableReallocateAllDataWrites / parallelFlushOpenThreshold / parallelFlushThreads）——
+          那些**不收**，见 NOTES.md §8.4。
+    fields:
+      - id: option
+        label: 参数
+        type: enum
+        style: positional
+        required: true
+        default: disable8dot3
+        help: >-
+          取值全部来自官方语法行。`disableDeleteNotify` 在本机帮助里还能带 NTFS|ReFS 参数
+          （不写就两个都显示），本清单**只暴露不带参数的形式**（多值参数会破坏位置参数的 argv 顺序）。
+          `disable8dot3` 官方可带 <volumepath>，本清单也不带（要按卷查请用「查询 8.3 短名设置」）。
+        values:
+          - { value: disable8dot3, label: "disable8dot3 —— 8.3 短名创建", isDefault: true }
+          - { value: disablelastaccess, label: "disablelastaccess —— 最后访问时间更新" }
+          - { value: mftzone, label: "mftzone —— MFT 区域大小" }
+          - { value: memoryusage, label: "memoryusage —— NTFS 内存缓存级别" }
+          - { value: quotanotify, label: "quotanotify —— 配额违规上报频率" }
+          - { value: disabledeletenotify, label: "disabledeletenotify —— 删通知（TRIM/unmap）" }
+          - { value: allowextchar, label: "allowextchar —— 8.3 短名里允许扩展字符" }
+          - { value: bugcheckoncorrupt, label: "bugcheckoncorrupt —— 损坏时是否蓝屏而不是静默删数据" }
+          - { value: disablecompression, label: "disablecompression —— 是否禁用 NTFS 压缩" }
+          - { value: disablecompressionlimit, label: "disablecompressionlimit —— 压缩文件大小上限" }
+          - { value: disableencryption, label: "disableencryption —— 是否禁用加密" }
+          - { value: disablefilemetadataoptimization, label: "disablefilemetadataoptimization —— 文件元数据优化" }
+          - { value: disablespotcorruptionhandling, label: "disablespotcorruptionhandling —— 点损坏处理" }
+          - { value: disabletxf, label: "disabletxf —— 是否禁用 TxF" }
+          - { value: disablewriteautotiering, label: "disablewriteautotiering —— ReFS v2 自动分层" }
+          - { value: encryptpagingfile, label: "encryptpagingfile —— 是否加密页面文件" }
+          - { value: symlinkevaluation, label: "symlinkevaluation —— 符号链接评估策略" }
+        doc: 'official 语法行 fsutil behavior query {…} 的选项列表（本机 v1 帮助多出的选项不收，见 NOTES.md §8.4）'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        每个参数一行（中文环境下形如「注册表状态为: 2 (按卷设置 - 默认值)」/
+        「MftZone = 0 (转换为 200.0 MB 的区大小)」/「DisableLastAccess = 2 (托管的系统，…已启用)」）。
+        选项名写错会打印整张选项表 —— 那时退出码是 1。
+    examples:
+      - title: 查 8.3 短名设置（普通用户即可）
+        args: ["behavior", "query", "disable8dot3"]
+        expectExitCode: 0
+      - title: 查 MFT 区域大小
+        args: ["behavior", "query", "mftZone"]
+        expectExitCode: 0
+
+  - id: shortname-query
+    category: 文件系统参数
+    title: 查询 8.3 短名设置
+    description: >-
+      查询 8.3 短名（DOS 风格短文件名）的创建行为：不带卷参数看全局的注册表默认值，
+      带卷参数则同时给出该卷自己的设置与最终结论。
+    command: 8dot3name
+    commandArgs: [query]
+    sources:
+      - title: Microsoft Learn —— fsutil 8dot3name 的 query 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-8dot3name
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil 8dot3name [query] [<volumepath>]；说明 Queries the file system for the state
+          of the 8dot3 short name creation behavior，且 If a volumepath isn't specified … the default
+          8dot3name creation behavior setting for all volumes is displayed；<volumepath> 是盘符或
+          volume{GUID} 格式。实测：**不带卷参数普通用户就能跑**（exit=0
+          「注册表状态为: 2 (按卷设置 - 默认值)」）；**带卷参数需要管理员**
+          （非管理员 `query C:` → exit=1「Failed to open the volume. / Error 5: Access is denied.」，
+          提权后 exit=0 并给出「卷状态为: 0 (8dot3 名称创建已启用)」+ 结论行）。
+    fields:
+      - id: volumePath
+        label: 卷（留空 = 全局默认值）
+        type: text
+        style: positional
+        required: false
+        placeholder: "C:"
+        help: >-
+          留空只看注册表默认值（普通用户可用）；填了就要求管理员。
+          实测填一个不存在的卷名（bogus）会被当成卷处理并打印「已在"bogus"上禁用」，
+          **不报错、退出码 0** —— 所以填错卷名不会失败，只会给出无意义的结论。
+        doc: 'official 语法行的 [<volumepath>]（Specifies the drive name followed by a colon or the GUID in the format volume{GUID}）；官方示例 fsutil 8dot3name query volume{928842df-…}'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        不带卷参数只有一行「注册表状态为: …」；带卷参数有三行
+        （卷状态 → 注册表状态 → 「基于上述设置，8dot3 名称创建已在"C:"上启用/禁用」）。
+        注册表状态的 0/1/2/3 语义见官方 8dot3name 的 set 一节。
+    examples:
+      - title: 查全局 8.3 短名设置（普通用户即可）
+        args: ["8dot3name", "query"]
+        expectExitCode: 0
+
+  # ============================================================ USN 变更日志
+  - id: usn-query-journal
+    category: USN 变更日志
+    title: 查询 USN 变更日志
+    description: >-
+      查询一个卷的 USN 变更日志（Update Sequence Number Journal）：
+      日志 ID、当前最大 USN、日志大小上限与分配增量等。备份/索引/去重类程序都依赖它。
+    command: usn
+    commandArgs: [queryJournal]
+    sources:
+      - title: Microsoft Learn —— fsutil usn 的 queryjournal 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-usn
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil usn [queryjournal] <volumepath>；说明 Queries a volume's USN data to gather
+          information about the current change journal, its records, and its capacity；示例
+          fsutil usn queryjournal c:。实测：**普通用户就能跑**（C: → exit=0，打印
+          Usn 日志 ID / 第一个 Usn / 下一个 Usn / 最低的有效 Usn / 最大 Usn / 最大大小 /
+          分配增量；键名是英文 + 中文混排）；卷不存在 → exit=1「Error 2 … 此操作需要本地 NTFS 或 ReFS 卷。」。
+    fields:
+      - id: volumePath
+        label: 卷
+        type: text
+        style: positional
+        required: true
+        placeholder: "C:"
+        doc: 'official 语法行的 [queryjournal] <volumepath>；官方示例 fsutil usn queryjournal c:'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        六行计数器（Usn 日志 ID / 第一个 Usn / 下一个 Usn / 最低的有效 Usn / 最大 Usn /
+        最大大小 / 分配增量）。**这个命令不改任何东西**，可以放心多次跑。
+    examples:
+      - title: 查 C 盘 USN 日志（普通用户即可）
+        args: ["usn", "queryJournal", "C:"]
+        expectExitCode: 0
+
+  - id: usn-read-data
+    category: USN 变更日志
+    title: 读取单个文件的 USN 记录
+    description: >-
+      读取一个文件的 USN 记录：主/次版本、文件引用号、父目录引用号、USN、时间戳、
+      原因标志（Reason）等。想确认「这个文件最近被谁改过、为什么改」时看它。
+    command: usn
+    commandArgs: [readdata]
+    sources:
+      - title: Microsoft Learn —— fsutil usn 的 readdata 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-usn
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil usn [readdata] <filename>；<filename> 是含扩展名的完整路径；
+          示例 fsutil usn readdata c:\temp\sample.txt。实测：**普通用户就能跑**
+          （exit=0，打印 Major Version / Minor Version / FileRef# / Parent FileRef# / Usn /
+          Time Stamp / Reason / Source Info / Security Id / File Attributes / File Name 等**英文**键名）。
+    fields:
+      - id: fileName
+        label: 文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        placeholder: "C:\\Temp\\sample.txt"
+        doc: 'official 语法行的 [readdata] <filename>（Specifies the full path to the file, including the file name and extension）；官方示例 fsutil usn readdata c:\temp\sample.txt'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 键名是英文的（Reason 是位标志之和，语义见官方 usn 页面与 MSDN 的 USN_RECORD 说明）。
+    examples:
+      - title: 读一个系统文件的 USN 记录（普通用户即可）
+        args: ["usn", "readdata", "C:\\Windows\\win.ini"]
+        expectExitCode: 0
+
+  # ============================================================ 会改动文件系统的操作（宿主只展示命令，不执行）
+  - id: usn-delete-journal
+    execution: info
+    category: 会改动系统的操作
+    title: 删除/禁用 USN 变更日志
+    description: >-
+      删除或禁用一个卷上的 USN 变更日志。**宿主不会执行这条命令**，只把完整命令行摆出来，
+      由你自己确认后在终端里运行。
+    command: usn
+    commandArgs: [deletejournal]
+    danger: destructive
+    confirmPhrase: "删除卷 {volumePath} 上的 USN 变更日志"
+    confirmText: >-
+      删掉 USN 变更日志会影响依赖它的程序（文件复制服务 FRS、索引服务、去重与备份类软件），
+      它们会被迫对整个卷做一次完整扫描 —— 官方原文写得很直白：
+      Deleting the change journal impacts the File Replication Service (FRS) and the Indexing Service,
+      because it requires these services to perform a complete (and time-consuming) scan of the volume。
+      官方 Remarks 还说明删除过程本身可能要几分钟、重启后还可能继续，期间日志不可访问、
+      所有日志操作都会报错。而**日志一旦删掉，记录的历史就找不回来了**（不可逆）。
+    requiresAdmin: true
+    sources:
+      - title: Microsoft Learn —— fsutil usn 的 deletejournal 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-usn
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil usn [deletejournal] {/d | /n} <volumepath>；官方在该参数上直接标了
+          **CAUTION**（原文见 confirmText）。/d = 返回 I/O 控制时禁用还在进行中；
+          /n = 等禁用完成再返回。官方示例 fsutil usn deletejournal /d c:。
+          **本动作本轮没有实跑**（红线：不改文件系统），字段依据全部来自官方页面；
+          提权需求来自官方那份管理员前提 + 本包其它 usn 动作的提权对照（NOTES.md §6）。
+    fields:
+      - id: volumePath
+        label: 卷
+        type: text
+        style: positional
+        required: true
+        placeholder: "D:"
+        help: 盘符加冒号。
+        doc: 'official 语法行的 <volumepath>（Specifies the drive letter followed by a colon）；官方示例 fsutil usn deletejournal /d c:'
+      - id: mode
+        label: 返回时机
+        type: enum
+        style: literal
+        required: true
+        default: "/d"
+        help: >-
+          /d = 发完禁用请求就返回（不等完成）；/n = 等日志真正禁用完成才返回。
+          官方把两者都放在 deletejournal 的必选位置（{/d | /n}），所以**必须选一个**。
+        values:
+          - { value: "/d", label: "/d —— 不等禁用完成就返回", isDefault: true, args: ["/d"] }
+          - { value: "/n", label: "/n —— 等禁用完成再返回", args: ["/n"] }
+        doc: 'official #parameters 的 /d（Disables an active USN change journal, and returns I/O control while the change journal is being disabled）与 /n'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        **本动作由宿主展示命令行、不执行**（规范 §2.6 的 execution: info）。
+        请在提升权限的终端里自己运行，并确认那个卷上确实没有依赖 USN 日志的程序。
+
+  - id: file-set-zero-data
+    execution: info
+    category: 会改动系统的操作
+    title: 把文件的某个区间清零（setzerodata）
+    description: >-
+      把文件里指定 offset/length 的区间写成全零 —— 官方原文说这会 empties the file，
+      稀疏文件的底层分配单元还会被释放（decommitted）。**宿主不会执行这条命令**。
+    command: file
+    commandArgs: [setZeroData]
+    danger: destructive
+    confirmPhrase: "把文件区间清零"
+    confirmText: >-
+      这是**不可逆的数据销毁**：区间里的原始内容会被零覆盖，文件系统没有撤销。（被清零的区间如果落在
+      稀疏文件上，底层分配单元会被释放，之后读回来的仍然是 0。）请务必先确认 offset 与 length
+      覆盖的正是你要丢弃的那一段，并且那个文件有备份。**建议用「查询文件的已分配区间」
+      先看清布局再决定。**
+    sources:
+      - title: Microsoft Learn —— fsutil file 的 setzerodata 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-file
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil file [setzerodata] offset=<offset> length=<length> <filename>；
+          参数表原文：Sets a range (specified by offset and length) of the file to zeroes,
+          which empties the file. If the file is a sparse file, the underlying allocation units are
+          decommitted；官方示例 fsutil file setzerodata offset=100 length=150 c:\temp\sample.txt。
+          **本动作本轮没有实跑**（红线：不改文件系统）；本机帮助与官方语法行形态一致
+          （Usage: fsutil file setZeroData offset=<val> length=<val> <filename>）。
+    fields:
+      - id: offset
+        label: 起始偏移（字节）
+        type: number
+        style: attached
+        prefix: "offset="
+        required: true
+        default: 0
+        help: 必须写成 offset=<值> 一个 token（同「查询文件的已分配区间」的实测结论：两 token 写法不被接受）。
+        doc: 'official 语法行的 offset=<offset>（Specifies the start of the range that should be set to zeroes）；官方示例 offset=100'
+      - id: length
+        label: 清零长度（字节）
+        type: number
+        style: attached
+        prefix: "length="
+        required: true
+        help: 必须写成 length=<值> 一个 token。
+        doc: 'official 语法行的 length=<length>（Specifies the length of the range in bytes）；官方示例 length=150'
+      - id: fileName
+        label: 文件
+        type: file
+        style: positional
+        required: true
+        placeholder: "C:\\Temp\\sample.txt"
+        doc: 'official 语法行末尾的 <filename>；官方示例 c:\temp\sample.txt'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        **本动作由宿主展示命令行、不执行**。请在终端里自己运行；运行前后都可以用
+        「查询文件的已分配区间」与「查询有效数据长度」核对到底改了什么。
+
+  - id: file-set-valid-data
+    execution: info
+    category: 会改动系统的操作
+    title: 设置文件的有效数据长度（setvaliddata）
+    description: >-
+      设置文件的有效数据长度（VDL）。VDL 以内的数据会被当成有效；VDL 与文件长度之间的读取由系统返回 0。
+      **宿主不会执行这条命令**。
+    command: file
+    commandArgs: [setValidData]
+    danger: destructive
+    confirmPhrase: "设置文件的有效数据长度"
+    confirmText: >-
+      这会把 VDL 与文件长度之间的数据变成"读到就是 0"。**注意这不会加长文件**：
+      新值必须大于当前 VDL、且小于当前文件长度，否则命令会失败（官方原话：
+      The setvaliddata parameter must be a positive value that is greater than the current VDL,
+      but less than the current file size）。原数据在语义上被丢弃，请先备份。
+      另外**它需要 SeManageVolumePrivilege 权限**（官方原话：only available for administrators
+      because it requires the Perform volume maintenance tasks (SeManageVolumePrivilege) privilege）。
+    requiresAdmin: true
+    sources:
+      - title: Microsoft Learn —— fsutil file 的 setvaliddata 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-file
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil file [setvaliddata] <filename> <datalength>；官方 Remarks 里明确写了
+          权限要求（SeManageVolumePrivilege）与取值范围约束，还有"为什么要设 VDL"的两种场景
+          （硬件通道直接写裸簇、创建大文件时省去填零时间）；官方示例
+          fsutil file setvaliddata c:\testfile.txt 4096。
+          **本动作本轮没有实跑**（红线：不改文件系统）；requiresAdmin 依据就是官方这段权限原文。
+    fields:
+      - id: fileName
+        label: 文件
+        type: file
+        style: positional
+        required: true
+        placeholder: "C:\\Temp\\testfile.txt"
+        doc: 'official 语法行的 setvaliddata <filename>；官方示例 c:\testfile.txt'
+      - id: dataLength
+        label: 有效数据长度（字节）
+        type: number
+        style: positional
+        required: true
+        placeholder: "4096"
+        help: 必须大于当前 VDL 且小于当前文件长度（官方 Remarks）。先用「查询有效数据长度（VDL）」看现值。
+        doc: 'official 语法行的 <datalength>（Specifies the length of the file in bytes）；官方示例 4096'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        **本动作由宿主展示命令行、不执行**。这是面向"硬件通道直接写裸簇"这类高级场景的参数，
+        普通用户几乎不需要它。
+
+  - id: repair-initiate
+    execution: info
+    category: 会改动系统的操作
+    title: 触发 NTFS 自愈修复（repair initiate）
+    description: >-
+      对一个指定的文件引用号触发 NTFS 自愈修复。**宿主不会执行这条命令**。
+    command: repair
+    commandArgs: [initiate]
+    danger: overwrite
+    confirmPhrase: "对卷 {volumePath} 的文件引用 {fileReference} 触发修复"
+    confirmText: >-
+      它会**改动卷上的文件系统元数据**（调用的正是 NTFS 自愈那一套在线修复流程）。
+      官方对 self-healing 的描述是「尝试在线纠正 NTFS 损坏，不必运行 chkdsk」——
+      也就是说它会动到卷的实际结构。请确保：① 目标卷有备份；② 你填的文件引用号确实是你想修的那个
+      （可以用「列出卷的损坏日志」或「查看 NTFS 卷信息」定位）。这不是只读查询。
+    requiresAdmin: true
+    sources:
+      - title: Microsoft Learn —— fsutil repair 的 initiate 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-repair
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil repair [initiate] <volumepath> <filereference>；参数表 initiate =
+          Initiates NTFS self-healing；<filereference> = the NTFS volume-specific file ID
+          (file reference number)，含文件的段号。官方页面开头说明 self-healing NTFS
+          attempts to correct corruptions of the NTFS file system online, without requiring
+          Chkdsk.exe to be run。**本动作本轮没有实跑**（红线：不改文件系统）；
+          requiresAdmin 依据：本包实测 repair query / state / enumerate 三个**只读**动作
+          在非管理员下都因「Error 5: Access is denied」失败（提权后成功），
+          加上官方主页的管理员前提（NOTES.md §5、§6）。
+    fields:
+      - id: volumePath
+        label: 卷
+        type: text
+        style: positional
+        required: true
+        placeholder: "C:"
+        doc: 'official 语法行的 repair [initiate] <volumepath>'
+      - id: fileReference
+        label: 文件引用号（file reference）
+        type: text
+        style: positional
+        required: true
+        placeholder: "0x001900000007af6e"
+        help: >-
+          这是 NTFS 卷内唯一的文件 ID（含段号），可以用「查文件的文件 ID」拿到。
+          官方特别注明 The file reference includes the segment number of the file。
+        doc: 'official #parameters 的 <filereference>（Specifies the NTFS volume-specific file ID (file reference number). The file reference includes the segment number of the file）'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        **本动作由宿主展示命令行、不执行**。自愈修复会改卷上的元数据，
+        请先确保备份、并确认文件引用号无误。
+
+  - id: volume-dismount
+    execution: info
+    category: 会改动系统的操作
+    title: 卸载卷（dismount）
+    description: >-
+      卸载一个卷（让文件系统下线）。**宿主不会执行这条命令**。
+    command: volume
+    commandArgs: [dismount]
+    danger: destructive
+    confirmPhrase: "卸载卷 {volumePath}"
+    confirmText: >-
+      卸载卷会让该卷上的文件系统立即下线：**正在使用这个卷上的文件的程序会立刻报错**，
+      未落盘的数据有丢失风险。如果卸载的是系统卷（C:），机器很可能需要重启才能恢复。
+      官方示例甚至直接给了 `fsutil volume dismount c:` —— 请不要在没有备份、也没有物理/远程
+      恢复手段的时候运行它。
+    requiresAdmin: true
+    sources:
+      - title: Microsoft Learn —— fsutil volume 的 dismount 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-volume
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil volume [dismount] <volumepath>；参数表 dismount = Dismounts a volume；
+          官方示例 fsutil volume dismount c:。**本动作本轮没有实跑**（红线：会改卷状态，
+          而且本机是正在使用的系统卷）；requiresAdmin 依据：同一子命令下的只读动作
+          diskfree / queryLabel 在非管理员下都因「Error 5: Access is denied」失败（NOTES.md §5）。
+    fields:
+      - id: volumePath
+        label: 卷
+        type: text
+        style: positional
+        required: true
+        placeholder: "D:"
+        doc: 'official #parameters 的 <volumepath>；官方示例 fsutil volume dismount c:'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        **本动作由宿主展示命令行、不执行**。卸载之后要重新挂载通常需要重启或磁盘管理操作，
+        请先确认这个卷上没有正在使用的文件。
+
+  - id: sparse-set-flag
+    execution: info
+    category: 会改动系统的操作
+    title: 把文件标记为稀疏（sparse setflag）
+    description: >-
+      把文件标记为稀疏文件（sparse file）。**宿主不会执行这条命令**——它会改文件的属性。
+    command: sparse
+    commandArgs: [setflag]
+    danger: overwrite
+    confirmPhrase: "把文件标记为稀疏"
+    confirmText: >-
+      这会把文件的稀疏标志写进文件系统元数据。标记之后，文件里大段全零的区间可以被释放
+      （NTFS 可能 de-allocate 这些簇），**这一步是"内容"层面的改动，不是只读操作**；
+      对于靠"文件实际占盘大小"做校验或备份的工具，行为会变。
+      官方 Remarks 明确：Only compressed or sparse files can have zeroed ranges known to the operating
+      system。请先确认那个文件确实适合当稀疏文件（例如虚拟机磁盘映像、预分配的大文件）。
+    requiresAdmin: false
+    sources:
+      - title: Microsoft Learn —— fsutil sparse 的 setflag 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-sparse
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil sparse [setflag] <filename>；参数表 setflag = Marks the indicated file as
+          sparse；官方示例 fsutil sparse setflag c:\temp\sample.txt。**本动作本轮没有实跑**
+          （红线：会改文件）；该子命令的只读动作（queryFlag）实测**普通用户就能跑**
+          （exit=0），所以这里先不标 requiresAdmin（规范 §2.5：不确定就不标）。
+    fields:
+      - id: fileName
+        label: 文件
+        type: file
+        style: positional
+        required: true
+        placeholder: "C:\\Temp\\big.vhdx"
+        doc: 'official 语法行的 setflag <filename>；官方示例 fsutil sparse setflag c:\temp\sample.txt'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        **本动作由宿主展示命令行、不执行**。标记之后可以用「查询文件是否被设为稀疏」确认结果。
+
+  - id: sparse-set-range
+    execution: info
+    category: 会改动系统的操作
+    title: 把文件的某个区间标记为稀疏（sparse setrange）
+    description: >-
+      把文件里指定偏移与长度的区间标记为稀疏（该区间被当作全零）。**宿主不会执行这条命令**。
+    command: sparse
+    commandArgs: [setrange]
+    danger: destructive
+    confirmPhrase: "把文件区间标记为稀疏"
+    confirmText: >-
+      官方原文：Fills a specified range of a file with zeros；Remarks 补充：If the file is sparse or
+      compressed, NTFS may de-allocate disk space within the file. This sets the range of bytes to
+      zeroes **without extending the file size**。也就是说被覆盖区间里的原始数据会变成零——
+      **与「把区间清零」同样是不可逆的数据销毁**，只是它还要求文件已经是稀疏或压缩文件。
+      请先备份、并确认偏移与长度。
+    requiresAdmin: false
+    sources:
+      - title: Microsoft Learn —— fsutil sparse 的 setrange 一节
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-sparse
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10 / 11、Server 2016–2025
+        note: >-
+          官方语法 fsutil sparse [setrange] <filename> <beginningoffset> <length>；
+          <beginningoffset> = the offset within the file to mark as sparse；
+          <length> = the length of the region in the file to be marked as sparse (in bytes)。
+          **本动作本轮没有实跑**（红线：会把数据变零）；该子命令的只读动作实测普通用户可用
+          （sparse queryFlag → exit=0），所以先不标 requiresAdmin。
+    fields:
+      - id: fileName
+        label: 文件
+        type: file
+        style: positional
+        required: true
+        placeholder: "C:\\Temp\\big.vhdx"
+        doc: 'official 语法行的 setrange <filename> <beginningoffset> <length>'
+      - id: beginningOffset
+        label: 起始偏移（字节）
+        type: number
+        style: positional
+        required: true
+        placeholder: "0"
+        doc: 'official #parameters 的 <beginningoffset>（Specifies the offset within the file to mark as sparse）'
+      - id: length
+        label: 区间长度（字节）
+        type: number
+        style: positional
+        required: true
+        placeholder: "1048576"
+        doc: 'official #parameters 的 <length>（Specifies the length of the region in the file to be marked as sparse (in bytes)）'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        **本动作由宿主展示命令行、不执行**。运行前后都可以用「扫描稀疏文件里的非零区间」
+        （sparse queryRange）核对区间的变化。
