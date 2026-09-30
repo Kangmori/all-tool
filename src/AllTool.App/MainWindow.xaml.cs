@@ -37,6 +37,9 @@ public sealed partial class MainWindow : Window
     private readonly GroupingStore _grouping = GroupingStore.OpenDefault();
     private readonly List<PackageEntry> _packages = [];
     private readonly List<ActionEntry> _actions = [];
+
+    /// <summary>中栏当前是不是首页（欢迎面板）。筛选变化时只有首页需要重建中栏。</summary>
+    private bool _showingWelcome;
     private readonly Dictionary<string, object?> _values = new(StringComparer.Ordinal);
     private readonly List<(string Id, Func<object?> Get)> _valueSync = [];
     private readonly List<string> _outputLines = [];
@@ -236,6 +239,8 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void ShowWelcomePanel()
     {
+        _showingWelcome = true;
+
         ActionTitle.Text = "欢迎使用 All Tool";
         ActionDescription.Text =
             "把 Windows 上已安装的命令行软件，变成可以点的界面。" + Environment.NewLine +
@@ -256,9 +261,29 @@ public sealed partial class MainWindow : Window
             ("dangerous", "🔴 高危工具"),
         };
 
+        var welcomeFilter = FilterBox?.Text?.Trim() ?? string.Empty;
+        var anyMatch = _packages.Any(p => Matches(
+            welcomeFilter, p.Display, p.Manifest.Description, p.Manifest.Id));
+
+        if (welcomeFilter.Length > 0 && !anyMatch)
+        {
+            FormPanel.Children.Add(new TextBlock
+            {
+                Text = $"没有匹配「{welcomeFilter}」的工具包。清空筛选框可以看到全部。",
+                Opacity = 0.75,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 8, 0, 0),
+            });
+        }
+
         foreach (var (kind, title) in kinds)
         {
-            var members = _packages.Where(p => p.Manifest.KindOrDefault == kind).ToList();
+            // 与左栏同一套筛选：首页这份列表也要跟着筛选框走
+            var filter = FilterBox?.Text?.Trim() ?? string.Empty;
+            var members = _packages
+                .Where(p => p.Manifest.KindOrDefault == kind)
+                .Where(p => Matches(filter, p.Display, p.Manifest.Description, p.Manifest.Id))
+                .ToList();
 
             if (members.Count == 0)
             {
@@ -724,6 +749,12 @@ public sealed partial class MainWindow : Window
             timer.Stop();
             RebuildPackageList();
             RebuildActionList();
+
+            // 中栏正停在首页时，它那份包列表也要跟着筛选走
+            if (_showingWelcome)
+            {
+                ShowWelcomePanel();
+            }
         };
 
         return timer;
@@ -731,6 +762,8 @@ public sealed partial class MainWindow : Window
 
     private void SelectPackage(PackageEntry entry, bool restoreAction)
     {
+        _showingWelcome = false;
+
         if (!ReferenceEquals(_manifest, entry.Manifest))
         {
             // 会话状态只在同一个工具包内有意义（不同工具包的"选中磁盘"没有关系）
