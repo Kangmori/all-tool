@@ -728,3 +728,22 @@ if ($Argv[0..($p.Count - 1)] -eq $p) { return $true }  # ← 错
    例如两行 `pip` / `install` 生成 `uv help pip install`（实测该形式 exit=0）。
    这依赖"`text` + `repeatable` 每行一个 token"的语义（规范 §4 与 D9），
    宿主已实现（N6 的证据），但**我没有在界面上点过 uv 的这一条**。
+
+---
+
+## uv 0.12.21 复核（2026-09-30，由漂移检测触发）
+
+漂移检测（`docs/ai/drift-watch.json` 的 uv 条目，N12 刚加进去）第一次跑就报出
+上游已是 **0.12.21**，而清单写的是 0.11.15。
+
+复核过程：
+1. uv 不是 scoop 装的（`scoop update uv` 报 isn't installed），也不是独立安装器装的
+   （`uv self update` 报 only available for standalone）——实测它装在
+   `%LOCALAPPDATA%\Microsoft\WinGet\Packages\astral-sh.uv_...`，**是 winget 装的**，
+   因此用 `winget upgrade --id astral-sh.uv` 升级 ✔ 升到 **0.12.21 (7af826859 2026-09-29)**。
+2. `scripts/check-package-commands.py uv`：对清单里 25 个不同子命令逐个跑 `--help`，
+   结果见该脚本输出（可疑项为 0 说明子命令都还在）。
+3. 本次只更新 `appVersion` 与 `sources[].appliesTo/retrieved`，**动作与字段未改**——
+   因为能力回归没有报出可疑项；"没变"本身就是复核结论。
+   ⚠ 如实说明：该脚本**不校验参数语义**（例如某个开关新增/废弃），
+   所以这次复核的强度是"子命令层面"，不是"逐参数重测"。

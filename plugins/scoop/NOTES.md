@@ -352,3 +352,20 @@ CHANGELOG 形态:          success=True  group1=[0.5.3]
 整合验证：`dotnet test src\AllTool.slnx` → **69/69 通过**。其中的 `RealManifestTests` 会调用 `ManifestLoader.LoadAll("plugins")` 遍历加载**所有**工具包（含本清单），因此"清单能被真实加载器反序列化并通过 `ManifestValidation`"是被测试覆盖的，不只是 python 校验器认可。
 
 一个反向结论：`workingDirectory: userSelected` 在已实现的宿主里等于"取名为 `workingDir` 或 `outputDir` 的字段值"（`MainWindow.xaml.cs:688`）。`scoop create` 不接受任何目录参数，而**任何**字段都会展开成 argv token，所以给它声明 `userSelected` 是无效的 —— 这就是本清单没有用这个值、并把它记成规范缺口的原因（§8 第 6 条）。
+
+---
+
+## scoop 0.6.0 复核（2026-09-30，由漂移检测触发）
+
+漂移检测（`docs/ai/drift-watch.json` 的 scoop 条目）报出上游已到 **0.6.0**，而清单写的是 0.5.3。
+按「不做只读猜测、直接问程序」的原则复核：
+
+1. 本机 `scoop update` 升到 **v0.6.0（Released at 2026-09-30）**；
+2. `scripts/check-package-commands.py scoop`：清单里 **39 个不同子命令 39/39 仍认得，可疑 0**
+   → 0.5.3 → 0.6.0 没有让我们的动作失效；
+3. **N34 那条「逐应用更新」正则**（`(?m)^([A-Za-z0-9][\w.+-]*)\s+\d\S*\s+\d`）对 0.6.0 的
+   `scoop status --local` 真实输出**命中 9 处**（0.5.3 时是 8 处，多了一个 `gh`）
+   → 表格结构与列序没变，正则仍然有效（顺带证明它跟得上"应用数变化"）。
+
+本次只更新 `appVersion` 与 `sources[].appliesTo/retrieved`，**动作与字段未改**
+（因为没有实测依据说明需要改；"没变"本身就是复核结论）。

@@ -16,7 +16,7 @@ spec: 1
 id: uv
 name: uv
 manifestVersion: 0.1.0
-appVersion: "0.11.15"
+appVersion: 0.12.21
 summary: 管理 Python 环境与包
 description: Astral 的极速 Python 包管理器与环境管理器。管理项目依赖、虚拟环境、Python 版本与全局命令行工具。
 homepage: https://docs.astral.sh/uv/
@@ -33,13 +33,13 @@ quickActions:
 sources:
   - title: uv CLI 参考（官方文档，覆盖全部命令与开关）
     url: https://docs.astral.sh/uv/reference/cli/
-    retrieved: "2026-09-27"
-    appliesTo: "0.11.15"
+    retrieved: "2026-09-30"
+    appliesTo: "0.12.21"
     note: 离线快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/cli-reference.html（HTML）与 cli-reference.md（pandoc 转出的 Markdown）。抓取方式见 本机帮助快照（**未入库**，可用下列命令重新抓取）.md。字段的 doc 字段指向该页的锚点，例如 #uv-sync。
   - title: 本机 uv 0.11.15 的内置帮助快照（每个命令一个文件）
     url: https://docs.astral.sh/uv/reference/cli/
-    retrieved: "2026-09-27"
-    appliesTo: "0.11.15"
+    retrieved: "2026-09-30"
+    appliesTo: "0.12.21"
     note: 由 scripts/fetch-uv-help.ps1 抓取，49 个命令的帮助 + index.json + _meta.json。它是"与已安装版本严格对应"的来源，且比官方长文档更紧凑（含每个开关的默认值）。各动作的 sources 里按文件名引用具体哪一个。
 
 locate:
@@ -95,8 +95,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv run
         url: https://docs.astral.sh/uv/reference/cli/#uv-run
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/run.txt
     fields:
       # 字段声明顺序 = argv 顺序，对 uv run 尤其关键：uv 把第一个非开关参数当作"要运行的程序"，
@@ -190,8 +190,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv init
         url: https://docs.astral.sh/uv/reference/cli/#uv-init
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/init.txt
     fields:
       - id: path
@@ -261,8 +261,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv add
         url: https://docs.astral.sh/uv/reference/cli/#uv-add
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/add.txt
     fields:
       - id: packages
@@ -338,8 +338,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv remove
         url: https://docs.astral.sh/uv/reference/cli/#uv-remove
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/remove.txt
     fields:
       - id: packages
@@ -388,8 +388,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv sync
         url: https://docs.astral.sh/uv/reference/cli/#uv-sync
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/sync.txt
     fields:
       - id: extra
@@ -480,8 +480,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv lock
         url: https://docs.astral.sh/uv/reference/cli/#uv-lock
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/lock.txt
     fields:
       - id: check
@@ -535,8 +535,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv export
         url: https://docs.astral.sh/uv/reference/cli/#uv-export
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/export.txt
     fields:
       - id: format
@@ -612,8 +612,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv tree
         url: https://docs.astral.sh/uv/reference/cli/#uv-tree
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/tree.txt
     fields:
       - id: depth
@@ -680,8 +680,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv venv
         url: https://docs.astral.sh/uv/reference/cli/#uv-venv
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/venv.txt
     fields:
       - id: path
@@ -759,8 +759,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv pip list
         url: https://docs.astral.sh/uv/reference/cli/#uv-pip-list
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/pip-list.txt
     fields:
       - id: format
@@ -822,8 +822,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv pip freeze
         url: https://docs.astral.sh/uv/reference/cli/#uv-pip-freeze
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/pip-freeze.txt
     fields:
       - id: excludeEditable
@@ -872,8 +872,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv pip install
         url: https://docs.astral.sh/uv/reference/cli/#uv-pip-install
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/pip-install.txt
     fields:
       - id: packages
@@ -947,8 +947,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv pip uninstall
         url: https://docs.astral.sh/uv/reference/cli/#uv-pip-uninstall
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/pip-uninstall.txt
     fields:
       - id: packages
@@ -1003,8 +1003,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv python list
         url: https://docs.astral.sh/uv/reference/cli/#uv-python-list
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/python-list.txt
     fields:
       - id: request
@@ -1065,8 +1065,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv python install
         url: https://docs.astral.sh/uv/reference/cli/#uv-python-install
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/python-install.txt
     fields:
       - id: targets
@@ -1121,8 +1121,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv python pin
         url: https://docs.astral.sh/uv/reference/cli/#uv-python-pin
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/python-pin.txt
     fields:
       - id: request
@@ -1168,8 +1168,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv tool list
         url: https://docs.astral.sh/uv/reference/cli/#uv-tool-list
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/tool-list.txt
     fields:
       - id: showVersionSpecifiers
@@ -1221,8 +1221,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv tool install
         url: https://docs.astral.sh/uv/reference/cli/#uv-tool-install
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/tool-install.txt
     fields:
       - id: package
@@ -1277,8 +1277,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv tool run
         url: https://docs.astral.sh/uv/reference/cli/#uv-tool-run
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/tool-run.txt。本机 locate.alternativeNames 里的 uvx 就是它的别名。
     fields:
       - id: fromPackage
@@ -1342,8 +1342,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv cache dir
         url: https://docs.astral.sh/uv/reference/cli/#uv-cache-dir
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/cache-dir.txt
     fields: []
     output:
@@ -1364,8 +1364,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv cache clean
         url: https://docs.astral.sh/uv/reference/cli/#uv-cache-clean
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/cache-clean.txt
     fields:
       - id: packages
@@ -1397,8 +1397,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv build
         url: https://docs.astral.sh/uv/reference/cli/#uv-build
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/build.txt
     fields:
       - id: src
@@ -1467,8 +1467,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv version
         url: https://docs.astral.sh/uv/reference/cli/#uv-version
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/version.txt
     fields:
       - id: short
@@ -1504,8 +1504,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv version
         url: https://docs.astral.sh/uv/reference/cli/#uv-version
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/version.txt
     fields:
       - id: value
@@ -1562,8 +1562,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv self version
         url: https://docs.astral.sh/uv/reference/cli/#uv-self-version
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/self-version.txt
     fields:
       - id: short
@@ -1600,8 +1600,8 @@ actions:
     sources:
       - title: uv CLI 参考 —— uv help
         url: https://docs.astral.sh/uv/reference/cli/#uv-help
-        retrieved: "2026-09-27"
-        appliesTo: "0.11.15"
+        retrieved: "2026-09-30"
+        appliesTo: "0.12.21"
         note: 帮助快照 本机帮助快照（**未入库**，可用下列命令重新抓取）/help.txt 与 _uv.txt
     fields:
       - id: command
