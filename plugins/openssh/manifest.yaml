@@ -368,7 +368,7 @@ actions:
   # ==================================================== 密钥管理（本地）
 
   - id: keygen-generate
-      executable: ssh-keygen.exe
+    executable: ssh-keygen.exe
     category: 密钥
     title: 生成密钥对
     description: >-
@@ -461,7 +461,7 @@ actions:
       - { title: "密钥类型写错（应报 unknown key type）", args: ["-t", "bogustype", "-N", "", "-f", "%TEMP%\\openssh-smoke\\id_bad", "-q"], expectExitCode: 255 }
 
   - id: keygen-public
-      executable: ssh-keygen.exe
+    executable: ssh-keygen.exe
     category: 密钥
     title: 从私钥导出公钥
     description: >-
@@ -492,7 +492,7 @@ actions:
       - { title: "从私钥打印公钥", args: ["-y", "-f", "%TEMP%\\openssh-smoke\\id_ed25519"], expectExitCode: 0 }
 
   - id: keygen-fingerprint
-      executable: ssh-keygen.exe
+    executable: ssh-keygen.exe
     category: 密钥
     title: 查看密钥指纹
     description: >-
@@ -532,7 +532,7 @@ actions:
       - { title: "看指纹与随机图", args: ["-l", "-v", "-f", "%TEMP%\\openssh-smoke\\id_ed25519.pub"], expectExitCode: 0 }
 
   - id: keygen-passphrase
-      executable: ssh-keygen.exe
+    executable: ssh-keygen.exe
     category: 密钥
     title: 修改私钥口令
     description: >-
@@ -567,7 +567,7 @@ actions:
   # ==================================================== 文件复制（交互，真终端）
 
   - id: scp-copy
-      executable: scp.exe
+    executable: scp.exe
     category: 文件复制
     title: 复制文件或目录（scp）
     description: >-
