@@ -1635,7 +1635,7 @@ public sealed partial class MainWindow : Window
 
         if (manifest.Locate is not null)
         {
-            var location = await ToolLocator.LocateAsync(manifest.Locate, _runner);
+            var location = await ToolLocator.LocateAsync(manifest.Locate, _runner, _action?.Executable);
             lines.Add(location is null
                 ? $"实际定位：找不到 {manifest.Locate.Executable}"
                 : $"实际定位：{location.ExecutablePath}");
@@ -2969,7 +2969,7 @@ public sealed partial class MainWindow : Window
         if (_executablePath is null)
         {
             StatusText.Text = "正在查找可执行文件…";
-            var location = await ToolLocator.LocateAsync(_manifest.Locate, _runner);
+            var location = await ToolLocator.LocateAsync(_manifest.Locate, _runner, _action?.Executable);
 
             if (location is null)
             {

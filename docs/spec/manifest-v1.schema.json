@@ -386,6 +386,10 @@
         "confirmPhrase": {
           "type": "string",
           "description": "极高风险动作的逐字确认短语（例如「清空磁盘 0」）。点确认按钮的认知负担不够，打字才有。"
+        },
+        "executable": {
+          "type": "string",
+          "description": "这个动作要用哪个可执行文件；不写则用包级 locate.executable。用于一个软件有多个可执行文件的情况（OpenSSH 的 ssh/ssh-keygen/scp，将来的 node+npm、python+pip、git+git-lfs）。覆盖时不使用 alternativeNames。"
         }
       }
     },

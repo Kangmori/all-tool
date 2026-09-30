@@ -73,11 +73,17 @@ public static class ToolLocator
     public static async Task<ToolLocation?> LocateAsync(
         LocateSpec locate,
         ProcessRunner runner,
+        string? executableOverride = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(runner);
 
-        var path = FindExecutable(locate);
+        // 动作级可执行文件覆盖（见 ManifestAction.Executable）：只换名字，搜索路径与版本检查沿用包级。
+        var effective = string.IsNullOrWhiteSpace(executableOverride)
+            ? locate
+            : locate with { Executable = executableOverride.Trim(), AlternativeNames = null };
+
+        var path = FindExecutable(effective);
         if (path is null)
         {
             return null;

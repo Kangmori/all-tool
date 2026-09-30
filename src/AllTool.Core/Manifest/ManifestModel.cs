@@ -73,7 +73,7 @@ public sealed class ManifestSource
 }
 
 /// <summary>如何找到这个程序、如何取版本。</summary>
-public sealed class LocateSpec
+public sealed record LocateSpec
 {
     public string? Executable { get; init; }
     public List<string>? AlternativeNames { get; init; }
@@ -149,6 +149,16 @@ public sealed class ManifestAction
 
     /// <summary>把工具包级的默认值算进来，得到这个动作最终是否需要管理员。</summary>
     public bool RequiresAdminEffective(bool packageDefault) => RequiresAdmin ?? packageDefault;
+
+    /// <summary>
+    /// 这个动作要用**哪个可执行文件**；不写就用包级 <c>locate.executable</c>。
+    ///
+    /// 为什么需要它：一个软件可能有多个可执行文件 —— OpenSSH 是 ssh / ssh-keygen / scp，
+    /// 将来还有 node+npm、python+pip、git+git-lfs。没有它，宿主会拿主程序去跑别的工具，
+    /// 结果只是用法错误（openssh 的 keygen/scp 动作就是这么发现的）。
+    /// 覆盖时**不使用** <c>alternativeNames</c>：那是"主程序找不到才退而求其次"的语义。
+    /// </summary>
+    public string? Executable { get; init; }
 
     /// <summary>
     /// 这个动作怎么执行：<c>run</c>（默认，宿主直接跑并捕获输出）、

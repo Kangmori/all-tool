@@ -289,6 +289,320 @@ actions:
     examples:
       - { title: "连到 192.0.2.1（TEST-NET-1，保留地址，不可路由，仅演示 argv）", args: ["-p", "2222", "-o", "ConnectTimeout=5", "192.0.2.1"] }
 
+  - id: keygen-generate
+      executable: ssh-keygen.exe
+    category: 密钥
+    title: 生成密钥对
+    description: >-
+      用 ssh-keygen 生成一对公私钥。默认不带口令（相当于 -N ""），实测生成的是未加密的
+      OPENSSH PRIVATE KEY。**写私钥是不可逆的**：路径下已有同名密钥时 ssh-keygen 会先问
+      "Overwrite (y/n)?" —— 所以这个动作在真终端里跑，让用户自己回答。
+    command: ""
+    execution: terminal
+    danger: overwrite
+    confirmText: 会在指定路径写入私钥与 .pub 公钥；若该私钥已存在，ssh-keygen 会询问是否覆盖（覆盖后旧密钥不可恢复）。
+    fields:
+      - id: keyType
+        label: 密钥类型
+        type: enum
+        style: attached
+        prefix: "-t"
+        required: true
+        default: "ed25519"
+        values:
+          - { value: "ed25519", label: "ed25519（推荐，短且快）", isDefault: true }
+          - { value: "rsa", label: "rsa（兼容老服务器）" }
+          - { value: "ecdsa", label: "ecdsa" }
+          - { value: "dsa", label: "dsa（已淘汰，不建议）" }
+          - { value: "ed25519-sk", label: "ed25519-sk（需硬件安全密钥）" }
+          - { value: "ecdsa-sk", label: "ecdsa-sk（需硬件安全密钥）" }
+        doc: "ssh-keygen(1) -t 一节：dsa | ecdsa | ecdsa-sk | ed25519 | ed25519-sk | rsa（本机 usage 行与手册页一致）"
+      - id: bits
+        label: 密钥位数
+        type: number
+        style: attached
+        prefix: "-b"
+        required: false
+        placeholder: "3072"
+        help: 只对 rsa / ecdsa 有意义；ed25519 固定 256 位，填了也会被忽略。
+        doc: "ssh-keygen(1) -b bits"
+      - id: comment
+        label: 备注
+        type: text
+        style: attached
+        prefix: "-C"
+        required: false
+        placeholder: "user@host"
+        help: 会原样写进公钥末尾，用来区分这把密钥是谁的。
+        save: true
+        doc: "ssh-keygen(1) -C comment"
+      - id: passphrase
+        label: 私钥口令（-N）
+        type: password
+        style: separate
+        prefix: "-N"
+        required: false
+        help: >-
+          留空 = 生成**不加密**的私钥（等于 -N ""）。必须是两个 token：实测把 -N 写成 -N-q 这种
+          粘连形式会报 Too many arguments（退出码 1）。注意口令会出现在命令行里，
+          同机器上的其它进程能看到；要更安全就别填，让 ssh-keygen 在终端里交互询问。
+        doc: "ssh-keygen(1) -N new_passphrase"
+      - id: outputKeyfile
+        label: 私钥保存路径
+        type: text
+        style: attached
+        prefix: "-f"
+        required: true
+        placeholder: "C:\\Users\\you\\.ssh\\id_ed25519"
+        help: 公钥会写在同路径加 .pub。这个位置参数必须排在所有开关之后 —— 实测把路径写在 -N 前面会报 Too many arguments。
+        save: true
+        doc: "ssh-keygen(1) -f output_keyfile"
+      - id: quiet
+        label: 安静模式
+        type: bool
+        style: flag
+        prefix: "-q"
+        default: false
+        doc: "ssh-keygen(1) -q —— Silence ssh-keygen"
+    output:
+      showCommandLine: true
+      resultNote: 在真终端里运行：没有可用 tty 时 ssh-keygen 会因读不到确认而直接退出（实测退出码 1），有 tty 时才会走到 Overwrite 询问。
+    sources:
+      - title: OpenSSH 手册页 ssh-keygen(1) —— 生成密钥对
+        url: https://man.openbsd.org/ssh-keygen
+        retrieved: "2026-09-30"
+        appliesTo: OpenSSH 9.5p2（本机实测）
+        note: "usage 行 ssh-keygen [-q] [-a rounds] [-b bits] [-C comment] [-f output_keyfile] [-m format] [-N new_passphrase] [-O option] [-t dsa | ecdsa | ecdsa-sk | ed25519 | ed25519-sk | rsa] [-w provider] [-Z cipher]。本机实测四种字段顺序都试过，只有「路径排最后」这一条是硬要求。"
+      - title: Microsoft Learn —— OpenSSH 密钥管理
+        url: https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_keymanagement
+        retrieved: "2026-09-30"
+        note: "该页给出 Windows 上生成密钥对的推荐用法：ssh-keygen -t ed25519，默认位置 %USERPROFILE%\\.ssh。"
+    examples:
+      - { title: "生成 ed25519 密钥（无口令）", args: ["-t", "ed25519", "-C", "test@alltool", "-N", "", "-f", "%TEMP%\\openssh-smoke\\id_ed25519", "-q"], expectExitCode: 0 }
+      - { title: "生成 3072 位 RSA 密钥", args: ["-t", "rsa", "-b", "3072", "-N", "", "-f", "%TEMP%\\openssh-smoke\\id_rsa", "-q"], expectExitCode: 0 }
+      - { title: "密钥类型写错（应报 unknown key type）", args: ["-t", "bogustype", "-N", "", "-f", "%TEMP%\\openssh-smoke\\id_bad", "-q"], expectExitCode: 255 }
+
+  - id: keygen-public
+      executable: ssh-keygen.exe
+    category: 密钥
+    title: 从私钥导出公钥
+    description: >-
+      读私钥算出公钥并打印（ssh-keygen -y）。想把公钥贴到服务器的 authorized_keys，
+      但手上只有私钥、.pub 丢了的时候用。不改动任何文件。
+    command: ""
+    commandArgs: ["-y"]
+    fields:
+      - id: keyfile
+        label: 私钥文件
+        type: file
+        style: attached
+        prefix: "-f"
+        required: true
+        placeholder: "C:\\Users\\you\\.ssh\\id_ed25519"
+        save: true
+        doc: "ssh-keygen(1) -y 小节：ssh-keygen -y [-f input_keyfile]"
+    output:
+      mode: capture
+      showCommandLine: true
+    sources:
+      - title: OpenSSH 手册页 ssh-keygen(1) —— -y
+        url: https://man.openbsd.org/ssh-keygen
+        retrieved: "2026-09-30"
+        appliesTo: OpenSSH 9.5p2（本机实测）
+        note: "本机 usage 行：ssh-keygen -y [-f input_keyfile]。实测生成密钥后 -y 退出码 0，输出 ssh-ed25519 AAAA… 备注。"
+    examples:
+      - { title: "从私钥打印公钥", args: ["-y", "-f", "%TEMP%\\openssh-smoke\\id_ed25519"], expectExitCode: 0 }
+
+  - id: keygen-fingerprint
+      executable: ssh-keygen.exe
+    category: 密钥
+    title: 查看密钥指纹
+    description: >-
+      打印密钥的指纹（ssh-keygen -l）。核对服务器主机密钥时，
+      官方文档给的做法就是拿这条命令看指纹再和对方比对；加 -v 还会打出 ASCII 随机图便于肉眼比对。
+    command: ""
+    commandArgs: ["-l"]
+    fields:
+      - id: keyfile
+        label: 密钥文件
+        type: file
+        style: attached
+        prefix: "-f"
+        required: true
+        placeholder: "C:\\Users\\you\\.ssh\\id_ed25519.pub"
+        help: 公钥、私钥、known_hosts 文件都能读。
+        save: true
+        doc: "ssh-keygen(1) -l 小节：ssh-keygen -l [-v] [-E fingerprint_hash] [-f input_keyfile]"
+      - id: verbose
+        label: 显示 ASCII 随机图
+        type: bool
+        style: flag
+        prefix: "-v"
+        default: false
+        doc: "ssh-keygen(1) -l 的 -v；手册页 VERIFYING HOST KEYS 一节给出用法 ssh-keygen -lv -f ~/.ssh/known_hosts"
+    output:
+      mode: capture
+      showCommandLine: true
+    sources:
+      - title: OpenSSH 手册页 ssh-keygen(1) —— -l 与 VERIFYING HOST KEYS
+        url: https://man.openbsd.org/ssh-keygen
+        retrieved: "2026-09-30"
+        appliesTo: OpenSSH 9.5p2（本机实测）
+        note: "手册页原文：Fingerprints can be determined using ssh-keygen: ssh-keygen -l -f /etc/ssh/ssh_host_ed25519_key；随机图用法是 ssh-keygen -lv -f ~/.ssh/known_hosts。实测本机 -l 输出 256 SHA256:<base64> 备注 (ED25519)，-l -v 额外打印 +--[ED25519 256]--+ 图形，均退出码 0。"
+    examples:
+      - { title: "看公钥指纹", args: ["-l", "-f", "%TEMP%\\openssh-smoke\\id_ed25519.pub"], expectExitCode: 0 }
+      - { title: "看指纹与随机图", args: ["-l", "-v", "-f", "%TEMP%\\openssh-smoke\\id_ed25519.pub"], expectExitCode: 0 }
+
+  - id: keygen-passphrase
+      executable: ssh-keygen.exe
+    category: 密钥
+    title: 修改私钥口令
+    description: >-
+      改私钥的保护口令（ssh-keygen -p）。**会在真终端里运行**：即使给了 -P/-N，
+      ssh-keygen 也可能就旧口令、新口令、确认依次提问，这些提示宿主没法代答。
+    command: ""
+    commandArgs: ["-p"]
+    danger: overwrite
+    confirmText: 会就地改写指定的私钥文件（换口令）。口令忘了就再也打不开这把密钥，操作前请先备份私钥。
+    fields:
+      - id: keyfile
+        label: 私钥文件
+        type: file
+        style: attached
+        prefix: "-f"
+        required: true
+        placeholder: "C:\\Users\\you\\.ssh\\id_ed25519"
+        save: true
+        doc: "ssh-keygen(1) -p 小节：ssh-keygen -p [-a rounds] [-f keyfile] [-m format] [-N new_passphrase] [-P old_passphrase] [-Z cipher]"
+    output:
+      showCommandLine: true
+      resultNote: 在真终端里运行，口令提示由 ssh-keygen 自己交互询问。
+    sources:
+      - title: OpenSSH 手册页 ssh-keygen(1) —— -p 与 -N / -P
+        url: https://man.openbsd.org/ssh-keygen
+        retrieved: "2026-09-30"
+        appliesTo: OpenSSH 9.5p2（本机实测）
+        note: "本机 usage 行：ssh-keygen -p [-a rounds] [-f keyfile] [-m format] [-N new_passphrase] [-P old_passphrase] [-Z cipher]。实测 -p -f <不存在的文件> 立即报 No such file or directory 并退出 255，未进入口令交互。"
+    examples:
+      - { title: "对不存在的私钥执行（会立刻报错退出，不进交互）", args: ["-p", "-f", "%TEMP%\\openssh-smoke\\nonexistent_key"], expectExitCode: 255 }
+
+  # ==================================================== 文件复制（交互，真终端）
+
+  - id: scp-copy
+      executable: scp.exe
+    category: 文件复制
+    title: 复制文件或目录（scp）
+    description: >-
+      在本地与远程之间、或两台远程主机之间复制文件。远端路径写成 [user@]host:[path]。
+      **会在真终端里运行**：scp 自己会问密码，第一次连某台主机也会要求确认主机指纹；
+      OpenSSH 9 起 scp 默认走 SFTP 协议（要老协议加 -O，本包没收录该开关）。
+      注意本包的 locate.executable 是 ssh.exe，这条动作能否跑取决于宿主选中的可执行文件（见 NOTES §7）。
+    command: ""
+    execution: terminal
+    danger: overwrite
+    confirmText: 目标位置已存在的同名文件会被覆盖，覆盖后原内容不可恢复。
+    fields:
+      - id: port
+        label: 端口
+        type: number
+        style: attached
+        prefix: "-P"
+        required: false
+        placeholder: "22"
+        help: 是**大写 P**。小写 -p 在 scp 里表示保留文件时间与权限位。
+        doc: "scp(1) -P port —— 手册页明确写了为什么用大写：因为 -p 已被保留用于保留时间与权限位"
+      - id: identityFile
+        label: 身份（私钥）文件
+        type: file
+        style: attached
+        prefix: "-i"
+        required: false
+        doc: "scp(1) -i identity_file"
+      - id: configFile
+        label: 配置文件
+        type: text
+        style: attached
+        prefix: "-F"
+        required: false
+        doc: "scp(1) -F ssh_config"
+      - id: option
+        label: 传给 ssh 的配置项（-o）
+        type: text
+        style: separate
+        prefix: "-o"
+        required: false
+        placeholder: "ConnectTimeout=10"
+        doc: "scp(1) -o ssh_option"
+      - id: limit
+        label: 限速（Kbit/s）
+        type: number
+        style: attached
+        prefix: "-l"
+        required: false
+        placeholder: "1000"
+        doc: "scp(1) -l limit —— Limits the used bandwidth, specified in Kbit/s"
+      - id: recursive
+        label: 递归复制整个目录
+        type: bool
+        style: flag
+        prefix: "-r"
+        default: false
+        doc: "scp(1) -r"
+      - id: preserve
+        label: 保留时间与权限位
+        type: bool
+        style: flag
+        prefix: "-p"
+        default: false
+        doc: "scp(1) -p —— Preserves modification times, access times, and file mode bits"
+      - id: quiet
+        label: 安静模式
+        type: bool
+        style: flag
+        prefix: "-q"
+        default: false
+        doc: "scp(1) -q"
+      - id: verbose
+        label: 详细模式
+        type: bool
+        style: flag
+        prefix: "-v"
+        default: false
+        doc: "scp(1) -v"
+      - id: source
+        label: 源
+        type: textarea
+        style: positional
+        positionalMode: perLine
+        required: true
+        placeholder: "C:\\Users\\you\\file.txt"
+        help: 本地路径，或 [user@]host:[path]。每行一个源，多行就是多个源。**必须排在所有开关之后**。
+        save: true
+        doc: "scp(1) 语法行：source ... target（源可以多个，故本字段按行展开成多个 argv）"
+      - id: target
+        label: 目标
+        type: text
+        style: positional
+        required: true
+        placeholder: "user@example.com:/home/user/"
+        save: true
+        doc: "scp(1) 语法行：source ... target"
+    output:
+      showCommandLine: true
+      resultNote: 在真终端里运行，宿主不捕获输出；进度条与密码提示都在终端里。
+    sources:
+      - title: OpenSSH 手册页 scp(1) —— 全部开关与退出状态
+        url: https://man.openbsd.org/scp
+        retrieved: "2026-09-30"
+        appliesTo: OpenSSH 9.5p2（本机实测）
+        note: "手册页语法行 scp [-346ABCOpqRrTv] [-c cipher] [-D sftp_server_path] [-F ssh_config] [-i identity_file] [-J destination] [-l limit] [-o ssh_option] [-P port] [-S program] [-X sftp_option] source ... target，与本机 usage 行完全一致。EXIT STATUS：scp exits 0 on success, and >0 if an error occurs。"
+      - title: Microsoft Learn —— OpenSSH 概览（Windows 自带组件）
+        url: https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh-overview
+        retrieved: "2026-09-30"
+        note: "确认 scp.exe 是 Windows OpenSSH 客户端自带的工具之一，随客户端可选功能一起安装。"
+    examples:
+      - { title: "本地复制到保留地址 192.0.2.1（连不通，仅演示 argv）", args: ["-P", "2222", "-i", "%TEMP%\\openssh-smoke\\id_ed25519", "C:\\Windows\\win.ini", "192.0.2.1:/tmp/"] }
+      - { title: "只给一个路径（scp 打印用法并退出 1）", args: ["C:\\Windows\\win.ini"], expectExitCode: 1 }
   - id: run-command
     category: 连接
     title: 在远程主机上执行一条命令
