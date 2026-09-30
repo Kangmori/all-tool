@@ -1,0 +1,388 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# pathping —— Windows 自带的「路径 + 逐跳丢包统计」工具（C:\Windows\System32\PATHPING.EXE）。
+#
+# 参数知识来源：
+#   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/pathping
+#   2) 本机 `pathping /?` 的真实输出（**不入库**，可用 scripts/fetch-win-help.ps1 重新抓取）
+#
+# ⚠⚠ 这个工具**很慢**，这是本包最重要的信息，务必先读 NOTES.md §2：
+#   - 不带任何开关跑一次 `pathping 127.0.0.1`，实测墙上耗时 **26.1 秒**（本机回环！）。
+#   - 慢的根本原因**不是** -q/-p，而是**逐跳反向 DNS 解析**与固定的统计等待期。
+#     实测：`-q 1 -p 100 -h 5`（任务里建议的「快速模式」）对局域网目标仍要 **24.4 秒**，
+#     与不加这些参数几乎一样；真正把时间压下来的是 **-n**（不做名称解析）。
+#   - 对能通的局域网目标，`-n -q 1 -p 100 -h 5` 实测 **0.13~0.14 秒**；
+#     对不可达目标则受 **-w** 支配（默认 3000ms/跳），`-w 200` 把 11.8 秒压到 1.5 秒。
+#   所以本包的「快速模式」= **-n -q 1 -p 100 -h 5**（再加 -w），并把它做成单独的
+#   trace-fast 动作放在第一位。-n 是默认勾选的，用户可以取消。
+#
+# ⚠ 来源冲突（已逐条记进 NOTES.md §7）：
+#   - 官方文档写 /q 的**默认是 100**，本机实测默认是 **25**（输出里写 0/  25 = 0%，
+#     且 `-q 25` 与「不给 -q」的自报统计时长都是 6 秒、墙上耗时一致）。
+#   - 官方文档用 `/` 写开关，本机 `/?` 用 `-` 写。实测**两种都能用**，清单按官方写 `/`。
+#   - 官方 Remarks 声称「All parameters are case-sensitive」，实测确实如此：`/N` 报无效选项。
+#
+# 版本：Windows 自带命令没有 --version 开关，故不写 versionArgs/versionPattern（R1）。
+# 编码：实测为 OEM 代码页（本机 936），见 NOTES.md §5。与 route 不同，pathping 的本地化
+#      不受控制台有无影响，两种执行条件下都是中文。
+
+spec: 1
+id: pathping
+name: 路径丢包统计
+manifestVersion: 0.1.0
+appVersion: Windows 10/11 自带（随系统版本发布）
+kind: system
+summary: 逐跳丢包统计（很慢）
+description: >-
+  先像 tracert 一样列出到目标经过的每一台路由器，再对这些路由器**持续发送探测**并按跳统计丢包率，
+  用来定位是「哪一跳/哪条链路」在丢包。比 tracert 精细得多，但**默认非常慢**
+  （实测本机回环都要 26 秒），请用「快速模式」动作。Windows 自带，无需安装。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/pathping
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 网络, 诊断, 丢包, 路由]
+
+sources:
+  - title: pathping 命令官方参考（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/pathping
+    retrieved: "2026-10-01"
+    appliesTo: Windows 10/11
+    note: >-
+      参数表含 /n /h /g /p /q /w /i /4 /6、targetname、/?，并写明「busy message 大约 90 秒」
+      与各参数默认值（/p 250ms、/q 100、/w 3000ms、/h 30）。注意官方写的 /q 默认 100
+      与本机实测的 25 不符，见 NOTES.md §7。
+  - title: 本机 pathping /? 的真实输出快照
+    url: file:///<仓库目录>/本机帮助快照（**未入库**，可用 scripts/fetch-win-help.ps1 重新抓取）/pathping.txt
+    retrieved: "2026-10-01"
+    appliesTo: Windows 11 26200 / PATHPING.EXE 文件版本 10.0.26100.8875
+    note: >-
+      由 .NET Process（CreateNoWindow=true，即宿主式执行条件）抓取，**不入库**（微软文本）。
+      本机帮助用 `-` 写开关（-g -h -i -n -p -q -w -4 -6），官方用 `/`；实测两者都可解析。
+      本机帮助的用法行把 target_name 写在最后，本清单每个动作的 target 字段都声明在最后。
+
+locate:
+  executable: pathping.exe
+  searchPaths:
+    - "%SystemRoot%\\System32"
+  notFoundHint: pathping.exe 是 Windows 自带命令，正常情况下都在 C:\Windows\System32 下。
+
+runtime:
+  encoding: oem
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  # 默认不设超时：pathping 的合法用法本身就可能跑几分钟，由用户自己取消。
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  usePseudoConsole: false
+
+# 退出码：微软的 pathping 文档没有退出码章节（已核对）。下面来自实测，见 NOTES.md §4。
+exitCodes:
+  - code: 0
+    meaning: 成功完成（即使中间有 100% 丢失的跳，命令本身仍返回 0）
+    severity: ok
+  - code: 1
+    meaning: >-
+      参数或目标错误。实测：/? 帮助、无参数运行、无效开关、只有 -i 而未强制 IPv6
+      这四种情况都返回 1
+    severity: error
+
+actions:
+
+  # ================================================================= 快速诊断
+  - id: trace-fast
+    category: 快速诊断
+    title: 快速路径丢包统计（推荐先用这条）
+    description: >-
+      不做名称解析、每跳只探测 1 次、最多 5 跳、探测间隔 100 毫秒。
+      实测对能通的局域网目标约 0.1~0.2 秒返回，是这个工具里唯一「点了立刻有结果」的形态。
+      代价：只有 1 次探测，丢包率不具统计意义——它用来**快速看路径通不通**，
+      要看丢包率请改用「完整统计」动作。
+    command: ""
+    sources:
+      - title: pathping 官方参考 —— /n /q /p /h /w 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/pathping#parameters
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          /n 阻止把中间路由器的 IP 解析成名称并「might expedite the display of pathping results」；
+          /q 每跳探测数；/p 相邻探测间隔毫秒；/h 最大跳数；/w 每次回复等待毫秒。
+          本机 /? 快照同样有 -n -q -p -h -w 五行。**耗时结论来自实测**，见 NOTES.md §2。
+    fields:
+      - id: noResolve
+        label: 不做名称解析（/n）
+        type: bool
+        style: flag
+        prefix: "/n"
+        default: true
+        help: >-
+          官方说这条可以加快结果显示。实测这是**唯一真正大幅提速**的开关：
+          局域网目标从 24.4 秒降到 0.14 秒。强烈建议保持勾选。
+        doc: official #parameters 的 /n；本机 /? 快照的 -n 一行
+      - id: numQueries
+        label: 每跳探测次数（/q）
+        type: number
+        style: separate
+        prefix: "/q"
+        default: 1
+        group: 探测参数
+        placeholder: 默认 25（官方文档写 100，实测是 25）
+        help: >-
+          每台路由器发送的回显请求数。减小它能缩短统计时长（实测近似线性：
+          /q 25 约 6 秒、/q 50 约 12 秒、/q 100 约 25 秒），但次数太少丢包率就没有统计意义。
+        doc: official #parameters 的 /q <numqueries>；本机 /? 快照的 -q num_queries
+      - id: period
+        label: 探测间隔毫秒（/p）
+        type: number
+        style: separate
+        prefix: "/p"
+        default: 100
+        group: 探测参数
+        placeholder: 官方默认 250
+        help: >-
+          相邻两次探测之间等待的毫秒数。官方提醒「pings should be sent at a sufficiently slow pace」
+          以避免拥塞、也避免突发丢包失真，所以别设得太小。
+        doc: official #parameters 的 /p <period>；本机 /? 快照的 -p period
+      - id: maxHops
+        label: 最大跳数（/h）
+        type: number
+        style: separate
+        prefix: "/h"
+        default: 5
+        group: 探测参数
+        placeholder: 官方默认 30
+        help: 搜索目标时经过的最大跃点数。限制它可以避免为了一个远端目标等很久。
+        doc: official #parameters 的 /h <maximumhops>；本机 /? 快照的 -h maximum_hops
+      - id: timeout
+        label: 每跳等待毫秒（/w）
+        type: number
+        style: separate
+        prefix: "/w"
+        group: 探测参数
+        placeholder: 官方默认 3000
+        help: >-
+          每次回复的等待毫秒数。对**不可达或被防火墙丢弃**的目标影响最大：
+          实测默认 3000 时 -h 5 要 11.8 秒，改成 200 后只要 1.5 秒。
+          目标不通时把它调小是唯一的提速手段。
+        doc: official #parameters 的 /w <timeout>；本机 /? 快照的 -w timeout
+      - id: target
+        label: 目标主机
+        type: text
+        style: positional
+        required: true
+        placeholder: 例 127.0.0.1 / 192.168.2.1 / example.com
+        help: >-
+          目标的主机名或 IP 地址。字段声明在最后，因为本机帮助的用法行把 target_name
+          写在所有开关之后（字段声明顺序 = argv 顺序）。
+        doc: official #parameters 的 <targetname>；本机 /? 快照用法行末的 target_name
+    examples:
+      - title: 快速统计到本机网关（实测约 0.14 秒）
+        args: ["/n", "/q", "1", "/p", "100", "/h", "5", "192.168.2.1"]
+        expectExitCode: 0
+      - title: 快速统计到本机回环（实测约 0.13 秒）
+        args: ["/n", "/q", "1", "/p", "100", "/h", "5", "127.0.0.1"]
+        expectExitCode: 0
+
+  # ================================================================= 完整统计
+  - id: trace
+    category: 完整统计
+    title: 完整统计到目标（很慢，默认 25 次/跳）
+    description: >-
+      用默认参数做完整统计：不限制跳数、每跳 25 次探测。**实测本机回环就要 26.1 秒**，
+      跨网段/对端不回应的目标会更久。统计完成后会打印每一跳的丢失率与链路丢失率。
+      建议先跑「快速路径丢包统计」确认路径通，再用这条量化丢包。
+    command: ""
+    sources:
+      - title: pathping 官方参考 —— 语法与默认值
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/pathping
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方说明该命令会「over a period of time」对源与目标之间的每台路由器发送多条
+          回显请求再计算统计，并提示 busy 消息大约持续 90 秒（随跳数变化）。
+          耗时数据来自本机实测，见 NOTES.md §2。
+    fields:
+      - id: noResolve
+        label: 不做名称解析（/n）
+        type: bool
+        style: flag
+        prefix: "/n"
+        default: false
+        help: >-
+          关掉它可以看到每一跳的域名（更好读），但实测会明显变慢，因为要对每一跳做反向解析。
+          局域网目标开着它 0.14 秒、关掉 24.4 秒，差了两个数量级。
+        doc: official #parameters 的 /n；本机 /? 快照的 -n 一行
+      - id: numQueries
+        label: 每跳探测次数（/q）
+        type: number
+        style: separate
+        prefix: "/q"
+        group: 探测参数
+        placeholder: 默认 25（官方文档写 100，实测是 25）
+        help: 留空则用默认的 25 次。降低它能明显缩短统计时长。
+        doc: official #parameters 的 /q <numqueries>；本机 /? 快照的 -q num_queries
+      - id: maxHops
+        label: 最大跳数（/h）
+        type: number
+        style: separate
+        prefix: "/h"
+        group: 探测参数
+        placeholder: 官方默认 30
+        help: 留空则用默认的 30 跳。
+        doc: official #parameters 的 /h <maximumhops>；本机 /? 快照的 -h maximum_hops
+      - id: target
+        label: 目标主机
+        type: text
+        style: positional
+        required: true
+        placeholder: 例 127.0.0.1 / example.com
+        doc: official #parameters 的 <targetname>；本机 /? 快照用法行末的 target_name
+    examples:
+      - title: 完整统计到本机回环（实测 26.1 秒）
+        args: ["127.0.0.1"]
+        expectExitCode: 0
+
+  # ================================================================= IPv6
+  - id: trace-ipv6
+    category: 完整统计
+    title: 强制 IPv6 并指定源地址
+    description: >-
+      只用 IPv6 做路径丢包统计，可选指定源地址。注意 -i（源地址）在实测里
+      **只被 IPv6 支持**：不强制 IPv6 时用它会被拒绝，所以这两个字段放在同一个动作里。
+    command: ""
+    sources:
+      - title: pathping 官方参考 —— /4 /6 /i 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/pathping#parameters
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方 /4 只使用 IPv4、/6 只使用 IPv6、/i 指定源地址。
+          但实测（本机中文提示「仅 IPv6 支持选项 -i」）说明 /i 只在 IPv6 下被接受——
+          官方文档没有写这层限制，差异记进 NOTES.md §7。
+    fields:
+      - id: sourceAddress
+        label: 源地址（/i，仅 IPv6）
+        type: text
+        style: separate
+        prefix: "/i"
+        placeholder: 例 ::1
+        help: >-
+          指定回显请求使用的源地址。必须与 /6 一起用：实测只给 /i 会被拒绝并返回 1，
+          提示「仅 IPv6 支持选项 -i」。
+        doc: official #parameters 的 /i <IPaddress>；本机 /? 快照的 -i address
+      - id: forceIpv6
+        label: 强制 IPv6（/6）
+        type: bool
+        style: flag
+        prefix: "/6"
+        default: true
+        help: 官方：只使用 IPv6。
+        doc: official #parameters 的 /6 <IPv6>；本机 /? 快照的 -6 一行
+      - id: noResolve
+        label: 不做名称解析（/n）
+        type: bool
+        style: flag
+        prefix: "/n"
+        default: true
+        group: 探测参数
+        advanced: true
+        doc: official #parameters 的 /n；本机 /? 快照的 -n 一行
+      - id: numQueries
+        label: 每跳探测次数（/q）
+        type: number
+        style: separate
+        prefix: "/q"
+        default: 1
+        group: 探测参数
+        advanced: true
+        doc: official #parameters 的 /q <numqueries>；本机 /? 快照的 -q num_queries
+      - id: maxHops
+        label: 最大跳数（/h）
+        type: number
+        style: separate
+        prefix: "/h"
+        default: 3
+        group: 探测参数
+        advanced: true
+        doc: official #parameters 的 /h <maximumhops>；本机 /? 快照的 -h maximum_hops
+      - id: target
+        label: 目标主机（IPv6）
+        type: text
+        style: positional
+        required: true
+        placeholder: 例 ::1
+        doc: official #parameters 的 <targetname>；本机 /? 快照用法行末的 target_name
+    examples:
+      - title: 强制 IPv6 统计到回环（实测约 0.28 秒）
+        args: ["/n", "/q", "1", "/h", "3", "/6", "::1"]
+        expectExitCode: 0
+      - title: 指定 IPv6 源地址（实测约 0.29 秒）
+        args: ["/n", "/q", "1", "/h", "2", "/i", "::1", "/6", "::1"]
+        expectExitCode: 0
+
+  # ================================================================= 高级
+  - id: trace-loose-source
+    category: 高级
+    title: 松散源路由统计（/g，最多 9 个地址）
+    description: >-
+      让回显请求按 IP 头里的「松散源路由」选项走指定的中间地址，用来验证某条指定路径。
+      多数现代网络会丢弃这类报文，成功与否取决于沿途路由器。
+    command: ""
+    sources:
+      - title: pathping 官方参考 —— /g 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/pathping#parameters
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方：使用 IP 头的 Loose Source Route 选项，中间目的地址写在 hostlist 里，
+          相邻中间目的之间可以隔一个或多个路由器，**地址或名称最多 9 个**，地址用点分十进制并以空格分隔。
+          本机 /? 快照的 -g host-list 一行。
+    fields:
+      - id: hostList
+        label: 中间地址列表（/g）
+        type: text
+        style: separate
+        prefix: "/g"
+        required: true
+        placeholder: 例 192.168.2.1 10.0.0.1
+        help: >-
+          官方要求是把多个点分十进制地址写在同一项里、**以空格分隔**（最多 9 个）。
+          这里用单行文本字段而不是多行列表，因为「一个参数里带空格」正是官方的写法。
+        doc: official #parameters 的 /g <hostlist>；本机 /? 快照的 -g host-list 一行
+      - id: noResolve
+        label: 不做名称解析（/n）
+        type: bool
+        style: flag
+        prefix: "/n"
+        default: true
+        group: 探测参数
+        advanced: true
+        doc: official #parameters 的 /n；本机 /? 快照的 -n 一行
+      - id: numQueries
+        label: 每跳探测次数（/q）
+        type: number
+        style: separate
+        prefix: "/q"
+        default: 1
+        group: 探测参数
+        advanced: true
+        doc: official #parameters 的 /q <numqueries>；本机 /? 快照的 -q num_queries
+      - id: maxHops
+        label: 最大跳数（/h）
+        type: number
+        style: separate
+        prefix: "/h"
+        default: 1
+        group: 探测参数
+        advanced: true
+        doc: official #parameters 的 /h <maximumhops>；本机 /? 快照的 -h maximum_hops
+      - id: target
+        label: 目标主机
+        type: text
+        style: positional
+        required: true
+        placeholder: 例 127.0.0.1
+        doc: official #parameters 的 <targetname>；本机 /? 快照用法行末的 target_name
+    examples:
+      - title: 经本地回环做松散源路由统计（实测约 0.29 秒）
+        args: ["/n", "/q", "1", "/h", "1", "/g", "127.0.0.1", "127.0.0.1"]
+        expectExitCode: 0

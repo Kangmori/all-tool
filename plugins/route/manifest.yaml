@@ -1,0 +1,169 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# route —— Windows 自带的路由表查看工具（C:\Windows\System32\ROUTE.EXE）。
+#
+# **本工具包只做只读动作**：只有 print（以及 print 的开关与目标过滤）。
+# add / delete / change 会修改系统路由表，属于管理员权限的写操作，本包**刻意不收录**
+# （理由见 NOTES.md §3）。route /? 的 -f 会清空网关项，同样不收录。
+#
+# 参数知识来源：
+#   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/route_ws2008
+#      （注意：不是 .../windows-commands/route，那个 URL 404，实测确认）
+#   2) 本机 `route /?` 的真实输出（**不入库**，可用 scripts/fetch-win-help.ps1 重新抓取）
+#
+# ⚠ 来源冲突（已逐条记进 NOTES.md §7）：官方页面写 [/f] [/p] [<command> ...]，
+#   而本机 `/?` 的用法行是 ROUTE [-f] [-p] [-4|-6] command [destination]。
+#   差异是 **-4 / -6**：官方页面通篇没有这两个开关，本机帮助有、且实测可用。
+#   本清单收录 -4/-6 并在对应动作的 sources 里注明其出处只有本机帮助一侧。
+#
+# 版本：Windows 自带命令没有 --version 开关，故不写 versionArgs/versionPattern（R1）。
+# 编码：实测为 OEM 代码页（本机 936）。注意 route.exe 的**本地化受控制台有无影响**，
+#      详见 NOTES.md §5（这条与其它 Windows 命令包不同，是本包特有的坑）。
+
+spec: 1
+id: route
+name: 路由表
+manifestVersion: 0.1.0
+appVersion: Windows 10/11 自带（随系统版本发布）
+kind: system
+summary: 查看本机路由表
+description: 显示本机 IP 路由表的条目，可以只看 IPv4 或只看 IPv6，也可以按目标网段过滤。Windows 自带，无需安装。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/route_ws2008
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 网络, 路由, 诊断]
+
+sources:
+  - title: route 命令官方参考（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/route_ws2008
+    retrieved: "2026-10-01"
+    appliesTo: Windows 10/11
+    note: >-
+      参数表含 /f /p、command（add/change/delete/print）、destination、mask、netmask、gateway、
+      metric、if、/?。该页**没有** -4 与 -6；本机帮助有，见 NOTES.md §7。
+  - title: 本机 route /? 的真实输出快照
+    url: file:///<仓库目录>/本机帮助快照（**未入库**，可用 scripts/fetch-win-help.ps1 重新抓取）/route.txt
+    retrieved: "2026-10-01"
+    appliesTo: Windows 11 26200 / ROUTE.EXE 文件版本 10.0.26100.8875
+    note: >-
+      由 .NET Process（CreateNoWindow=true，即宿主式执行条件）抓取，**不入库**（微软文本）。
+      本清单的每个开关都对着这份输出核对过；-4 / -6 / 通配符规则的出处就在这份输出里。
+
+locate:
+  executable: route.exe
+  searchPaths:
+    - "%SystemRoot%\\System32"
+  notFoundHint: route.exe 是 Windows 自带命令，正常情况下都在 C:\Windows\System32 下。
+
+runtime:
+  encoding: oem
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  usePseudoConsole: false
+
+# 退出码：微软的 route 文档没有退出码章节（已核对）。下面来自实测，见 NOTES.md §4。
+# 本包只收录只读动作，所以只需覆盖成功与用法错误两条路径。
+exitCodes:
+  - code: 0
+    meaning: 成功（即使过滤条件没有匹配到任何路由，也仍然返回 0 并打印表头）
+    severity: ok
+  - code: 1
+    meaning: 用法或参数错误（实测：非法开关、多给一个位置参数、无参数运行、/? 帮助都返回 1）
+    severity: error
+
+actions:
+
+  # ================================================================= 路由表
+  - id: print-routes
+    category: 路由表
+    title: 查看路由表
+    description: 打印本机 IP 路由表。可只看 IPv4 或只看 IPv6，也可按目标网段过滤（支持 * 与 ? 通配符）。
+    command: print
+    sources:
+      - title: route 官方参考 —— print 命令与 destination 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/route_ws2008
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方把 print 列为 <command> 的合法取值之一，示例有 route print 与 route print 10.*。
+          本机 /? 快照的 PRINT 一行与通配符说明（157.*.1、157.*、127.*、*224*）。
+      - title: 本机 route /? —— -4 / -6 与通配符规则
+        url: file:///<仓库目录>/本机帮助快照（**未入库**，可用 scripts/fetch-win-help.ps1 重新抓取）/route.txt
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / ROUTE.EXE 10.0.26100.8875
+        note: >-
+          family 字段的取值 -4 / -6 只出现在本机帮助里（官方页面没有这两个开关），
+          实测 route print -4 与 route print -6 均 exit 0 且输出确实按地址族过滤，故收录。
+    fields:
+      - id: family
+        label: 地址族
+        type: enum
+        style: literal
+        switchBase: "-4"
+        doc: >-
+          本机 /? 快照用法行的 [-4|-6] 与两个说明行（官方页面未列这两个开关，见 NOTES.md §7）
+        values:
+          - value: ""
+            label: 全部（IPv4 + IPv6）
+            args: []
+            isDefault: true
+          - value: v4
+            label: 只看 IPv4
+            args: ["-4"]
+          - value: v6
+            label: 只看 IPv6
+            args: ["-6"]
+      - id: destination
+        label: 目标过滤（留空 = 全部）
+        type: text
+        style: positional
+        placeholder: 例 10.* / 192.168.* / 127.*
+        help: >-
+          只打印匹配该目标的路由。可用 * （任意字符串）与 ? （任意单个字符）。
+          必须排在 -4/-6 之后（字段声明顺序就是 argv 顺序），与本机帮助的示例
+          route PRINT -4 同序。
+        doc: >-
+          official #parameters 的 <destination> 与 Remarks 的通配符段；本机 /? 快照的示例
+          route PRINT 157* 与「只有在 PRINT 命令中才允许模式匹配」
+    examples:
+      - title: 打印全部路由
+        args: ["print"]
+        expectExitCode: 0
+      - title: 只看 IPv4 路由
+        args: ["print", "-4"]
+        expectExitCode: 0
+      - title: 只看 IPv6 路由
+        args: ["print", "-6"]
+        expectExitCode: 0
+      - title: 只看 127 开头的路由（本机帮助里的示例形态）
+        args: ["print", "127*"]
+        expectExitCode: 0
+      - title: 只看 IPv4 的 127 开头路由（开关与目标过滤叠加）
+        args: ["print", "-4", "127*"]
+        expectExitCode: 0
+
+  # ================================================================= 永久路由
+  - id: print-persistent
+    category: 路由表
+    title: 查看永久路由（/p）
+    description: 打印路由表，并让其中「永久路由」的部分显式列出。永久路由存在注册表里，重启后依然有效。
+    command: print
+    commandArgs: ["/p"]
+    sources:
+      - title: route 官方参考 —— /p 与 print 联用
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/route_ws2008
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方 /p 一节写明与 print 联用时列出永久路由，并给出注册表位置
+          HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\PersistentRoutes。
+          关于 /p 与 print 的先后：官方语法行把 /p 列在 <command> 之前，而示例里是 route print /p。
+          实测两种顺序都 exit 0 且输出完全相同（4637 B）。本清单实际生成的是 route print /p
+          （宿主按 [command] + commandArgs 组装，见规范 §3.2），即官方示例的形态。
+    fields: []
+    examples:
+      - title: 查看永久路由（宿主实际生成的 argv 就是 route print /p）
+        args: ["print", "/p"]
+        expectExitCode: 0
