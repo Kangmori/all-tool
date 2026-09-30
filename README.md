@@ -26,7 +26,7 @@ dotnet build src\AllTool.slnx
 pwsh -File scripts/publish-app.ps1
 ```
 
-## 已经带的工具包（27 个 / 385 个动作 / 918 个参数字段）
+## 已经带的工具包（27 个 / 508 个动作 / 918 个参数字段）
 
 | ⚪ 你自己装的工具 | 动作 | 字段 |
 |---|---|---|
