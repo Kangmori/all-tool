@@ -1,0 +1,422 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# fc —— Windows 自带的文件比较工具（C:\Windows\System32\fc.exe）。
+#
+# 参数知识来源（两个官方来源 + 本机 /? 逐条对照）：
+#   1) Microsoft Learn 官方参考 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fc
+#      （HTTP Last-Modified: Tue, 25 Aug 2026 22:33:27 GMT；页面自报 "Last updated on 2025-01-07"）。
+#      语法行：fc /a [/c] [/l] [/lb<n>] [/n] [/off[line]] [/t] [/u] [/w] [/<nnnn>] <filename1> <filename2>
+#              fc /b <filename1> <filename2>
+#      该页有独立的 "#exit codes" 小节：0 = 文件相同 / 1 = 文件不同 / 2 = 比较时出错。
+#   2) 本机 `fc /?` 的真实输出（906 字节，**未入库**，随时可重取）。注意它的语言会变：
+#      有控制台时是英文，宿主那种"无控制台 + 重定向"的情况下是中文（见 NOTES.md §4）。
+#
+# **本包最重要的一条事实：退出码 1 不是失败。**
+#   1 = 两个文件确实不同（比较成功完成），这是本工具的**正常结果**；
+#   2 = 比较过程出错（例如文件打不开）；0 = 完全相同。
+#   另有 0xFFFFFFFF（cmd 里显示为 -1）= 参数不足或 /?，见 NOTES.md §3。
+#
+# 版本：官方文档只给了 /? 这一条"取用法"的路，fc 没有 --version 之类的版本开关（R1）。
+#   所以 locate.versionArgs 用 ["/?"] + versionPattern 提取语法行里的 FC 版本标记，
+#   **不写 minVersion**（"10.0.26100" 是 exe 的文件版本，不是 fc 自报的版本号，见 NOTES.md §2）。
+#
+# 编码：实测原始字节为 OEM 代码页 936（中文输出 + 中文文件名都是 GBK 字节，严格 UTF-8 解码抛异常），
+#   见 NOTES.md §4 的字节级证据。
+#
+# 本包全部是只读动作：fc 只读两个文件、只打印差异，不改任何文件。
+
+spec: 1
+id: fc
+name: 文件比较
+manifestVersion: 0.1.0
+appVersion: Windows 10/11 自带（随系统版本发布）
+kind: system
+summary: 比较两个文件的差异
+description: >-
+  Windows 自带的文件比较工具（fc.exe）。把两个文本文件逐行比出差异，或把两个文件逐字节做二进制比较。
+  常用于"这两份配置/日志/脚本到底哪里不一样"。只读，不会修改被比较的文件。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fc
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 文件, 比较, 差异]
+
+sources:
+  - title: fc 命令官方参考（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fc
+    retrieved: "2026-10-01"
+    appliesTo: Windows 10 / Windows 11 / Windows Server 2016-2025
+    note: >-
+      语法行给了两条形态（文本比较与 /b 二进制比较）。#parameters 一节逐条列出 /a /b /c /l /lb<n> /n
+      /off[line] /t /u /w /<nnnn> 与两个位置参数。#exit codes 一节明确写：0 = Files are identical /
+      1 = Files are different / 2 = An error occurred during comparison。Remarks 里还有两条重要事实：
+      默认文本比较，但 .exe/.com/.sys/.obj/.lib/.bin 这六种扩展名默认走 /b 二进制比较；
+      文件名位置支持通配符 * 和 ?。另注明 'fc' 在 PowerShell 里是 Format-Custom 的别名，必须写成 fc.exe。
+      ⚠ 其中"用 /l 可以切回 ASCII 模式"这一条**与本机实测不符**，见 NOTES.md §1.2(f)。
+  - title: 本机 `fc /?` 的真实输出快照（**未入库**，可用 `fc.exe /?` 随时重取）
+    url: file:///%SystemRoot%/System32/fc.exe
+    retrieved: "2026-10-01"
+    appliesTo: Windows 11 26200 / fc.exe 文件版本 10.0.26100.8875
+    note: >-
+      906 字节，退出码 0xFFFFFFFF（cmd 显示 -1）。列出的开关与官方 #parameters 完全一致
+      （/A /B /C /L /LBn /N /OFF[LINE] /T /U /W /nnnn，外加两个位置参数）。
+      **它在"有控制台"时是英文、在宿主那种无控制台的重定向下是中文**，两种语言都抓过，见 NOTES.md §4。
+
+locate:
+  executable: fc.exe
+  searchPaths:
+    - "%SystemRoot%\\System32"
+  versionArgs: ["/?"]
+  versionPattern: '(?m)^\s*FC\s+\[/A\]'
+  notFoundHint: >-
+    fc.exe 是 Windows 自带命令，正常情况下就在 C:\Windows\System32\fc.exe。
+    另外注意：在 PowerShell 里直接敲 fc 会命中 Format-Custom 别名，必须写 fc.exe。
+
+runtime:
+  encoding: oem
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  # 不开伪控制台：fc 的输出不是"只在真控制台里画"的东西，被重定向时输出完整
+  #（/N /A /B 三种模式的输出都实测过，见 NOTES.md §5）。
+  usePseudoConsole: false
+
+# 退出码：0/1/2 三条是官方 #exit codes 小节逐字给出的。
+# 额外实测到第四条 **0xFFFFFFFF（cmd 里显示 -1）**：参数不足（只给一个文件名或干脆不给）
+# 与 /? 都走这个码 —— 官方页没有列它，但本机两次实测一致（见 NOTES.md §3）。
+exitCodes:
+  - code: 0
+    meaning: 两个文件完全相同（官方 #exit codes：Files are identical）
+    severity: ok
+  - code: 1
+    meaning: >-
+      **两个文件不同 —— 这是本工具的正常结果，不是失败**（官方 #exit codes：Files are different）。
+      fc 用它的退出码表示"比较结论"，所以界面不该把它染成红色错误。
+    severity: warning
+  - code: 2
+    meaning: >-
+      比较过程中出错（官方 #exit codes：An error occurred during comparison）。
+      实测情形：任一文件不存在或打不开（本机报 "FC: 无法打开 <路径> - 找不到此类文件或文件夹"）。
+    severity: error
+  - code: -1
+    meaning: >-
+      参数不足或请求帮助，命令本身以 0xFFFFFFFF 退出（cmd 里 %errorlevel% 显示 -1）。
+      实测两种情形都命中它：不给文件名 / 只给一个文件名（打印 "FC: 文件规范数不足"），以及 fc /?。
+      **官方 #exit codes 一节没有列出这个码**，是本机实测补充的（见 NOTES.md §3）。
+    severity: warning
+
+actions:
+
+  # ================================================================= 查看
+  - id: version
+    category: 查看
+    title: 查看 fc 的用法与开关一览（fc /?）
+    description: >-
+      fc 没有 --version 之类的版本开关，/? 是它唯一自带的用法输出。
+      注意 /? 的退出码是 0xFFFFFFFF（cmd 里显示 -1），不是 0。
+    command: ""
+    commandArgs: ["/?"]
+    fields: []
+    sources:
+      - title: fc 命令官方参考 —— Syntax 与 /? 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fc
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方 #parameters 表最后一行：/? Displays help at the command prompt。
+          Remarks 也提示 PowerShell 里要把可执行文件写全（fc.exe）。
+      - title: 本机 `fc /?` 的真实输出
+        url: file:///%SystemRoot%/System32/fc.exe
+        retrieved: "2026-10-01"
+        appliesTo: fc.exe 10.0.26100.8875
+        note: 实测退出码 0xFFFFFFFF（cmd 里显示 -1）。**它的语言与字节数随"有没有控制台"变**：宿主形态（无控制台、重定向）是中文 906 字节，有控制台时是英文 1173 字节（本机 chcp 实测 936）。内容与官方 #parameters 表逐条对得上（见 NOTES.md §4.1 与 §5）。
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - title: 查看用法
+        args: ["/?"]
+        expectExitCode: -1
+
+  # ================================================================= 文本比较
+  - id: compare-text
+    category: 文本比较
+    title: 比较两个文本文件（逐行）
+    description: >-
+      默认的 ASCII 文本比较：逐行比出差异并显示。若文件名扩展名是 .exe/.com/.sys/.obj/.lib/.bin，
+      fc 会**自动改用二进制比较**（官方 Remarks）。**本机实测：加 /L 也顶不回文本模式**
+      （见 NOTES.md §1.2(f)），想强制文本比较只能先把文件改成别的扩展名。
+      **两个文件不同时退出码是 1，那是正常结果、不是失败。**
+    command: ""
+    danger: none
+    sources:
+      - title: fc 命令官方参考 —— /a /c /l /lb<n> /n /off[line] /t /u /w 与两个位置参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fc
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文要点：/l Compares the files in ASCII mode, line-by-line, and attempts to resynchronize
+          the files after finding a mismatch. This is the default mode for comparing files, except files
+          with the following file extensions: .exe, .com, .sys, .obj, .lib, or .bin；
+          /c Ignores the letter case；/n Displays the line numbers during an ASCII comparison；
+          /w Compresses white space (that is, tabs and spaces) during the comparison … When used with /w,
+          fc ignores white space at the beginning and end of a line；
+          /t Prevents fc from converting tabs to spaces … the default behavior is to treat tabs as spaces,
+          with stops at each eighth character position；
+          /lb<n> Sets the number of lines for the internal line buffer to N. The default length of the line
+          buffer is 100 lines；/<nnnn> Specifies the number of consecutive lines that must match following
+          a mismatch, before fc considers the files to be resynchronized. The default value is 2；
+          /off[line] Doesn't skip files that have the offline attribute set。
+    fields:
+      - id: caseInsensitive
+        label: 忽略大小写（/C）
+        type: bool
+        style: flag
+        prefix: "/C"
+        default: false
+        help: 官方：/c Ignores the letter case。实测同一对文件加 /C 后差异行数变少（apple 与 APPLE 不再算差异）。
+        doc: 'official #parameters 的 /c；本机 /? 快照的 /C（不分大小写）'
+      - id: abbreviate
+        label: 每个差异块只显示首末两行（/A）
+        type: bool
+        style: flag
+        prefix: "/A"
+        default: false
+        help: >-
+          官方：/a Abbreviates the output of an ASCII comparison … fc displays only the first and last
+          line for each set of differences。差异很多时用它把输出压短。
+        doc: 'official #parameters 的 /a；本机 /? 快照的 /A（只显示每个不同处的第一行和最后一行）'
+      - id: lineNumbers
+        label: 显示行号（/N）
+        type: bool
+        style: flag
+        prefix: "/N"
+        default: false
+        help: >-
+          官方：/n Displays the line numbers during an ASCII comparison。
+          实测输出把行号右对齐加在每行前面（形如「    2:  第二行 apple」）。
+        doc: 'official #parameters 的 /n；本机 /? 快照的 /N（在 ASCII 比较上显示行数）'
+      - id: ignoreWhiteSpace
+        label: 压缩空白后再比较（/W）
+        type: bool
+        style: flag
+        prefix: "/W"
+        default: false
+        group: 高级
+        advanced: true
+        help: >-
+          官方：/w Compresses white space（tabs and spaces）during the comparison … fc ignores white space
+          at the beginning and end of a line。实测：一对"Tab 分隔 vs 多空格分隔"的文件，不加 /W 算不同（退出码 1），
+          加了 /W 判定为找不到差异（退出码 0）。
+          ⚠ 它**只管空白、不管大小写**：同一对文件里若有 apple 与 APPLE，/W 仍然会判为不同
+          （本机实测，所以示例里的 /W 用的是一对只差空白的文件）。
+        doc: 'official #parameters 的 /w；本机 /? 快照的 /W（为了比较而压缩空白）'
+      - id: keepTabs
+        label: 不把制表符展开成空格（/T）
+        type: bool
+        style: flag
+        prefix: "/T"
+        default: false
+        group: 高级
+        advanced: true
+        help: >-
+          官方：/t Prevents fc from converting tabs to spaces. The default behavior is to treat tabs as
+          spaces, with stops at each eighth character position。**注意这是"关闭"语义的开关**：
+          默认（不勾）就是"把 Tab 当第 8 列的空格"。
+        doc: 'official #parameters 的 /t；本机 /? 快照的 /T（不要将制表符扩充到空格）'
+      - id: unicodeText
+        label: 按 UNICODE 文本比较（/U）
+        type: bool
+        style: flag
+        prefix: "/U"
+        default: false
+        group: 高级
+        advanced: true
+        help: >-
+          官方：/u Compares files as Unicode text files。
+          ⚠ 实测提醒：拿普通 ANSI/GBK 文本文件加 /U 去比，输出会变成一堆问号（本机实测），
+          只有当两个文件**本来就是 UTF-16 文本**时它才是有用的。
+        doc: 'official #parameters 的 /u；本机 /? 快照的 /U（将文件作为 UNICODE 文本文件比较）'
+      - id: asciiText
+        label: 按 ASCII 文本比较（/L）
+        type: bool
+        style: flag
+        prefix: "/L"
+        default: false
+        group: 高级
+        advanced: true
+        help: >-
+          官方 /l 原文：Compares the files in ASCII mode, line-by-line … This is the default mode for
+          comparing files, except files with the following file extensions: .exe, .com, .sys, .obj, .lib,
+          or .bin。**但本机实测：对那六种扩展名加 /L 并不会切回文本模式** ——
+          `.exe/.com/.sys/.obj/.lib/.bin` 六种扩展名加不加 /L 的输出**字节完全一样**（都是二进制样式），
+          `.dat/.txt` 则都是文本样式。所以本机这个版本上 `/L` 基本是"默认值复述"，
+          **想强制文本比较只能先把文件改成别的扩展名**。详见 NOTES.md §1.2(f) 与 §5.4。
+        doc: 'official #parameters 的 /l；本机 /? 快照的 /L（将文件作为 ASCII 文字比较）。⚠ 本机实测它不能顶掉 .exe/.bin 的自动二进制模式'
+      - id: lineBuffer
+        label: 内部行缓冲的行数（/LBn）
+        type: number
+        style: attached
+        prefix: "/LB"
+        group: 高级
+        advanced: true
+        help: >-
+          官方：/lb<n> Sets the number of lines for the internal line buffer to N. The default length of
+          the line buffer is 100 lines. If the files that you are comparing have more than 100 consecutive
+          differing lines, fc cancels the comparison。
+          **实测：值必须与 /LB 紧贴（/LB2 ✔ 会真的改变行为）；写成 /LB 2 会被当成"要比较的文件名"，
+          不报错但结果完全不同 —— 见 NOTES.md §5.2。**
+          留空 = 官方默认 100 行。
+        doc: 'official #parameters 的 /lb<n>；本机 /? 快照的 /LBn（将连续不匹配的最大值设置为指定的行数）'
+      - id: resyncLines
+        label: 判定重新同步所需的连续相同行数（/nnnn）
+        type: number
+        style: attached
+        prefix: "/"
+        group: 高级
+        advanced: true
+        placeholder: 官方默认 2
+        help: >-
+          官方：/<nnnn> Specifies the number of consecutive lines that must match following a mismatch,
+          before fc considers the files to be resynchronized … The default value is 2。留空 = 官方默认 2。
+          **实测：值必须与斜杠紧贴成一个 token（/3 ✔）。** 本机拿一对前 6 行不同的文件量过：
+          /0 会把后面 8 行全打成差异，/1 及以上的输出一致（都在第一处重新同步的行停下）。
+        doc: 'official #parameters 的 /<nnnn>；本机 /? 快照的 /nnnn（指定不匹配处后必须连续匹配的行数）'
+      - id: skipOffline
+        label: 不跳过带脱机属性的文件（/OFFLINE）
+        type: bool
+        style: flag
+        prefix: "/OFFLINE"
+        default: false
+        group: 高级
+        advanced: true
+        help: >-
+          官方：/off[line] Doesn't skip files that have the offline attribute set。
+          给 OneDrive 等"按需文件"用：默认它们会被跳过，勾上才会去读（可能触发下载）。
+          本机没有带脱机属性的文件，**这一条的语义只按官方原文描述、没有实测到差异**（见 NOTES.md §5.4）。
+        doc: 'official #parameters 的 /off[line]；本机 /? 快照的 /OFF[LINE]（不要跳过带有脱机属性集的文件）'
+      - id: file1
+        label: 第一个文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 D:\a\config.ini
+        help: 官方：filename1 is required。可以用通配符 * 与 ?（此时 fc 会把匹配到的每个文件都与第二个文件比一遍）。
+        doc: 'official #parameters 的 [<drive1>:][<path1>]<filename1>（filename1 is required）与 Remarks 的 wildcard 说明；本机 /? 快照的第一个位置参数'
+      - id: file2
+        label: 第二个文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 D:\b\config.ini
+        help: 官方对通配符的补充：If you use a wildcard in filename2, fc uses the corresponding value from filename1。
+        doc: 'official #parameters 的 [<drive2>:][<path2>]<filename2>（filename2 is required）；本机 /? 快照的第二个位置参数'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        退出码 0 = 文件相同；**1 = 文件不同（这是正常结果，不是失败）**；
+        2 = 出错（多半是某个文件打不开）；0xFFFFFFFF（cmd 里显示 -1）= 参数不足。
+        输出里 "FC: 找不到差异" 是中文系统上的正常提示；不要按提示文案判成败，看退出码。
+    examples:
+      - title: 比较两个文本文件（忽略大小写、带行号）
+        args: ["/C", "/N", "a.txt", "b.txt"]
+        expectExitCode: 1
+      - title: 忽略空白差异后再比较（换成一对只差空白的文件）
+        args: ["/W", "tab-a.txt", "tab-b.txt"]
+        expectExitCode: 0
+
+  # ================================================================= 二进制比较
+  - id: compare-binary
+    category: 二进制比较
+    title: 比较两个文件的每一个字节（fc /B）
+    description: >-
+      二进制比较：不尝试重新同步，直接把每个不相同的字节按 "地址: 文件1字节 文件2字节" 打印出来。
+      官方说明它对 .exe/.com/.sys/.obj/.lib/.bin 是**默认模式**，但显式加 /B 更清楚。
+      注意 /B 与 /A /C /L /N /T /U /W /LB 这些文本比较开关是互斥的（官方把语法分成两条）。
+    command: ""
+    commandArgs: ["/B"]
+    danger: none
+    sources:
+      - title: fc 命令官方参考 —— /b 与二进制比较语法行
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fc
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方语法第二条：fc /b [<drive1:>][<path1>]<filename1> [<drive2:>][<path2>]<filename2>；
+          /b Compares the two files in binary mode, byte by byte, and does not attempt to resynchronize
+          the files after finding a mismatch. This is the default mode for comparing files that have the
+          following file extensions: .exe, .com, .sys, .obj, .lib, or .bin；
+          Remarks 给出输出格式 \<XXXXXXXX: YY ZZ>，XXXXXXXX 是从文件开头算起的相对十六进制地址，
+          YY 与 ZZ 分别是 filename1 与 filename2 的不相同字节。
+    fields:
+      - id: file1
+        label: 第一个文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        help: 官方：filename1 is required。通配符 * 与 ? 同样可用。
+        doc: 'official 二进制语法行的 [<drive1:>][<path1>]<filename1>；本机 /? 快照的第一个位置参数'
+      - id: file2
+        label: 第二个文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        doc: 'official 二进制语法行的 [<drive2>:][<path2>]<filename2>；本机 /? 快照的第二个位置参数'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        输出形如 00000018: 61 41（地址: 第一个文件的字节 第二个文件的字节），
+        末尾另有一行说明哪个文件更长。退出码含义与文本比较相同：0 相同 / 1 不同 / 2 出错。
+    examples:
+      - title: 二进制比较两个文件
+        args: ["/B", "a.bin", "b.bin"]
+        expectExitCode: 1
+
+  # ================================================================= 默认模式比较
+  - id: compare-auto
+    category: 文本比较
+    title: 按文件类型自动选择比较方式（fc，无模式开关）
+    description: >-
+      不加 /L 也不加 /B 的原始形态：由 fc 按扩展名自己决定。.exe/.com/.sys/.obj/.lib/.bin 走二进制比较，
+      其余走 ASCII 文本比较。想看差异请用「比较两个文本文件」，想按字节比请用「比较两个文件的每一个字节」——
+      **注意本机实测加 /L 并不能把二进制扩展名顶回文本模式**（NOTES.md §1.2(f)）。
+    command: ""
+    danger: none
+    sources:
+      - title: fc 命令官方参考 —— 默认比较模式
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fc
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方 /b 与 /l 两条各自写明"默认"：/b … This is the default mode for comparing files that have
+          the following file extensions: .exe, .com, .sys, .obj, .lib, or .bin；
+          /l … This is the default mode for comparing files, except files with the following file
+          extensions: .exe, .com, .sys, .obj, .lib, or .bin。
+    fields:
+      - id: file1
+        label: 第一个文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        doc: 'official #parameters 的 [<drive1>:][<path1>]<filename1>；本机 /? 快照的第一个位置参数'
+      - id: file2
+        label: 第二个文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        doc: 'official #parameters 的 [<drive2>:][<path2>]<filename2>；本机 /? 快照的第二个位置参数'
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - title: 让 fc 自己决定比较方式
+        args: ["a.exe", "b.exe"]
+        expectExitCode: 1

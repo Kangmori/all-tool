@@ -1,0 +1,321 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# sort —— Windows 自带的文本排序/去重工具（C:\Windows\System32\sort.exe）。
+#
+# 参数知识来源：
+#   1) Microsoft Learn 官方参考 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/sort
+#      （HTTP Last-Modified: Tue, 25 Aug 2026 22:33:28 GMT；页面自报 "Last updated on 2023-02-03"）。
+#      语法行：
+#        sort [/r] [/+<N>] [/m <kilobytes>] [/l <locale>] [/rec <characters>]
+#             [[<drive1>:][<path1>]<filename1>] [/t [<drive2>:][<path2>]] [/o [<drive3>:][<path3>]<filename3>]
+#      #parameters 表里有 10 项：#/r /+<N> /m /l /rec filename1 /t /o **/unique** /?。
+#      Remarks 写明：不给文件名就排标准输入；只有 C locale 是系统默认 locale 之外的选择；
+#      排序不分大小写；大于 ASCII 127 的字符按 Country.sys / 代码页的对照表排。
+#   2) 本机 `sort /?` 的真实输出（2196 字节，**未入库**，随时可重取）。
+#      ⚠ 它列了 /R /+n /M /L /REC /T /O 与位置参数，**但没有 /unique**（官方有、本机帮助没有，
+#      实测 /unique 确实可用 —— 见 NOTES.md §1.2 与 §5）。
+#
+# ★★ 本包最重要的一条：**这个命令默认从"标准输入"读，而不是从文件参数读** ★★
+#   官方语法里 filename1 是可选的（[[<drive1>:][<path1>]<filename1>]），Remarks 原文
+#   "If no file name is specified, the standard input is sorted"。而本项目宿主**会立刻关闭子进程的 stdin**，
+#   于是"裸 sort"（不给文件名）会立刻拿到 EOF：**退出码 0、stdout 0 字节、stderr 0 字节**，
+#   看起来像成功、实际什么都没排（本机实测，见 NOTES.md §3.1）。
+#   → 所以本清单**每一个动作都强制要求填「要排序的文件」**，把 filename1 位置参数变成必填，
+#     让界面不可能生成"裸 sort"。这正是官方语法里那条"直接给输入文件更快、更推荐"的路径。
+#   → 另一个能工作的形态（cmd /c type <文件> | sort，以及 cmd /c sort < <文件>）也实测可用，
+#     记在 NOTES.md §3.2，本清单不用它：多一层 cmd 会让"显示将运行的完整命令行"变得难读，
+#     而官方本来就支持直接给文件名。
+#
+# 版本：官方文档没有给版本开关（/? 是用法输出），所以 locate.versionArgs 用 ["/?"]，
+#   **不写 minVersion**（见 NOTES.md §2）。文件版本可用 Get-Item 读，是 10.0.26100.8875。
+#
+# 编码：实测原始字节为 OEM 代码页 936（中文内容与中文文件名都是 GBK 字节，严格 UTF-8 解码抛异常），
+#   见 NOTES.md §4 的字节级证据。
+#
+# 本包全部是只读动作：排序结果打到标准输出，**不写任何文件**。
+#   官方的 /O（把排序结果写进文件）**故意不收录** —— 见 NOTES.md §6，理由是本包只做只读动作。
+
+spec: 1
+id: sort
+name: 文本排序与去重
+manifestVersion: 0.1.0
+appVersion: Windows 10/11 自带（随系统版本发布）
+kind: system
+summary: 排序文本行、去重复行
+description: >-
+  Windows 自带的文本排序工具（sort.exe）。把一个文本文件的行按字典序排好、或反向排、或去掉重复行，
+  结果直接打在输出区。适合整理名单、日志、hosts、配置清单。只读，不会修改被排序的文件。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/sort
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 文本, 排序, 去重]
+
+sources:
+  - title: sort 命令官方参考（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/sort
+    retrieved: "2026-10-01"
+    appliesTo: Windows 10 / Windows 11 / Windows Server 2016-2025
+    note: >-
+      语法行与 #parameters 表给了 /r /+<N> /m /l /rec filename1 /t /o /unique /?。
+      filename1 的说明原文：Specifies the file to be sorted. If no file name is specified, the standard
+      input is sorted. Specifying the input file is faster than redirecting the same file as standard input。
+      /unique 的说明原文：Only returns unique results。Remarks 还写明：只有 C locale 是默认 locale 之外的
+      选择（"it sorts characters according to their binary encodings"）、排序不分大小写、
+      大于 ASCII 127 的字符按 Country.sys / 代码页的对照表排序、以及可以用 | 与 < > 重定向。
+  - title: 本机 `sort /?` 的真实输出快照（**未入库**，可用 `sort.exe /?` 随时重取）
+    url: file:///%SystemRoot%/System32/sort.exe
+    retrieved: "2026-10-01"
+    appliesTo: Windows 11 26200 / sort.exe 文件版本 10.0.26100.8875
+    note: >-
+      2196 字节，退出码 0，帮助写 **stdout**、内容为**中文**（本机 936 代码页）。
+      列出的开关是 /R /+n /M[EMORY] /L[OCALE] /REC[ORD_MAXIMUM] /T[EMPORARY] /O[UTPUT] 与位置参数，
+      **没有 /unique**（官方 #parameters 有它，本机实测也可用）。这个差异记在 NOTES.md §1.2。
+  - title: 本机原型命令真机冒烟（40 余条，含退出码与原始字节）
+    url: file:///%TEMP%/fc-sort-probe/smoke.log
+    retrieved: "2026-10-01"
+    appliesTo: Windows 11 26200 / sort.exe 10.0.26100.8875（非管理员账号）
+    note: >-
+      在 %TEMP%\fc-sort-probe 里造中文样本与重复行样本实跑，记录退出码、stdout/stderr 原始字节；
+      全部结果抄进 plugins/sort/NOTES.md §5。**原始 log 与样本都在临时目录、不入库**，收尾前已删除。
+
+locate:
+  executable: sort.exe
+  searchPaths:
+    - "%SystemRoot%\\System32"
+  versionArgs: ["/?"]
+  versionPattern: '(?m)^\s*SORT\s+\[/R\]'
+  notFoundHint: >-
+    sort.exe 是 Windows 自带命令，正常情况下就在 C:\Windows\System32\sort.exe。
+    另外注意：在 PowerShell 里直接敲 sort 会命中 Sort-Object 别名，必须写 sort.exe。
+
+runtime:
+  encoding: oem
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  # 不开伪控制台：sort 的输出是纯文本行，被重定向时完整（实测 46 字节输入 → 46 字节输出）。
+  usePseudoConsole: false
+
+# 退出码：官方页**没有** exit codes 小节，所以这里只写本机实测到的两条，不编造码表（R1）。
+exitCodes:
+  - code: 0
+    meaning: >-
+      排序完成（本机实测的正常结果）。**注意它并不保证"真的排了东西"**：
+      不给输入文件时 sort 会去读标准输入，而宿主会立刻关掉 stdin，于是它以 0 退出、却什么都不输出
+      （见 NOTES.md §3.1）。本清单的所有动作都把输入文件设为必填，就是为了堵住这条路。
+    severity: ok
+  - code: 1
+    meaning: >-
+      出错（本机实测）。见到过的情形：输入文件不存在（stderr：<路径>系统找不到指定的文件。）、
+      开关拼错（stderr：无效命令行开关。）、/+n 的值不是正数（stderr：排序位置必须大于零。）、
+      /REC 超过 65535（stderr：记录数量最多不得超过 65535。）、/L 给了本机不支持的区域设置
+      （stderr：无效的区域设置。）、文件名里带通配符（stderr：文件名、目录名或卷标语法不正确。）。
+    severity: error
+
+actions:
+
+  # ================================================================= 查看
+  - id: version
+    category: 查看
+    title: 查看 sort 的用法与开关一览（sort /?）
+    description: >-
+      sort 没有 --version 之类的版本开关，/? 是它唯一自带的用法输出（退出码 0、写 stdout、中文）。
+      它能告诉你本机版本支持哪些开关。
+    command: ""
+    commandArgs: ["/?"]
+    fields: []
+    sources:
+      - title: sort 命令官方参考 —— Syntax 与 /? 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/sort
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: 官方 #parameters 表最后一行：/? Displays help at the command prompt。
+      - title: 本机 `sort /?` 的真实输出
+        url: file:///%SystemRoot%/System32/sort.exe
+        retrieved: "2026-10-01"
+        appliesTo: sort.exe 10.0.26100.8875
+        note: 实测 2196 字节、退出码 0、stdout（stderr 0 字节）。**它没有列 /unique** —— 见 NOTES.md §1.2。
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - title: 查看用法
+        args: ["/?"]
+        expectExitCode: 0
+
+  # ================================================================= 排序
+  - id: sort-asc
+    category: 排序
+    title: 按字典序排序（升序）
+    description: >-
+      把输入文件的每一行按字典序排好打到输出区。**排序不分大小写**（官方 Remarks 原文），
+      所以 Apple 与 apple 相邻。实测表现为稳定排序（内容相同的行保持原有先后）。
+      输入文件不会被修改。
+    command: ""
+    danger: none
+    sources:
+      - title: sort 命令官方参考 —— filename1 与排序语义
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/sort
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方 filename1 行：Specifies the file to be sorted. If no file name is specified, the standard
+          input is sorted. Specifying the input file is faster than redirecting the same file as standard
+          input；Remarks：The sort command doesn't distinguish between uppercase and lowercase letters and
+          has no limit on file size；The sort program uses the collating-sequence table that corresponds to
+          the Country/Region code and code-page settings. Characters greater than ASCII code 127 are sorted
+          based on information in the Country.sys file。
+    fields:
+      - id: inputFile
+        label: 要排序的文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 D:\data\names.txt
+        help: >-
+          **必填。** 官方允许省略它（此时排标准输入），但本项目的宿主会立刻关闭子进程的 stdin，
+          裸跑 sort 会"退出码 0 且没有任何输出"。填了文件名就是官方推荐的"直接指定输入文件"路径。
+          不接受通配符（本机实测 *.txt 会以 exit 1 报"文件名、目录名或卷标语法不正确"）。
+        doc: 'official 语法行的 [[<drive1>:][<path1>]<filename1>] 与 #parameters 的 filename1；本机 /? 快照的 [drive1:][path1]filename1'
+      - id: startColumn
+        label: 从第几个字符开始比较（/+n）
+        type: number
+        style: attached
+        prefix: "/+"
+        group: 高级
+        advanced: true
+        placeholder: 例 3 表示从每行第 3 个字符起比较
+        help: >-
+          官方：/+<N> Specifies the character position number where sort will begin each comparison；
+          Remarks：Lines with fewer than N characters collate before other lines。
+          **实测：值必须与 /+ 紧贴成一个 token（/+3 ✔）；写成 /+ 3 会以 exit 1 报"排序位置必须大于零"。**
+          留空 = 从每行第一个字符开始（官方默认）。
+        doc: 'official #parameters 的 /+<N> 与 Remarks；本机 /? 快照的 /+n'
+      - id: cLocale
+        label: 用 C 区域设置排序（/L C）—— 按字节编码排，更快
+        type: bool
+        style: flag
+        prefix: "/LOCALE C"
+        default: false
+        help: >-
+          官方：/l <locale> Overrides the sort order of characters that are defined by the system default
+          locale；Remarks：Currently, the only alternative to the default locale is the C locale, which is
+          faster than natural language sorting（it sorts characters according to their binary encodings）。
+          **本机实测能用的写法只有「/L C」这种"开关与值分两个 token"**：/LC 与 /L:C 都以 exit 1 报
+          "无效命令行开关"（见 NOTES.md §5）。本机 /L zh-CN 也不被接受（报"无效的区域设置"）。
+          所以这里把整个 "/LOCALE C" 当成一个固定的 flag token，让界面不可能拼错。
+        doc: 'official #parameters 的 /l <locale> 与 Remarks；本机 /? 快照的 /L[OCALE] locale'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        退出码 0 = 排序完成（但若输入文件字段被绕过就会"成功却无输出"）；
+        退出码 1 = 出错，具体原因看输出区里的中文提示。本机 sort 的输出编码是 OEM 代码页（936）。
+    examples:
+      - title: 排序一个文本文件
+        args: ["names.txt"]
+        expectExitCode: 0
+      - title: 从第 3 个字符开始排序
+        args: ["/+3", "names.txt"]
+        expectExitCode: 0
+
+  - id: sort-desc
+    category: 排序
+    title: 按字典序反向排序（降序，/R）
+    description: 把输入文件的行按字典序倒过来排（Z 到 A、9 到 0）。输入文件不会被修改。
+    command: ""
+    danger: none
+    sources:
+      - title: sort 命令官方参考 —— /r
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/sort
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方：/r Reverses the sort order（that is, sorts from Z to A and from 9 to 0）。
+          官方示例：sort /r expenses.txt。本机实测 sort /R <文件> 退出码 0，
+          输出把「中文字 / cherry / banana / Banana / Apple / apple」倒序打出。
+    fields:
+      - id: inputFile
+        label: 要排序的文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        help: 必填，理由见「按字典序排序（升序）」里的同一段说明（宿主会关掉 stdin，裸 sort 会静默无输出）。
+        doc: 'official #parameters 的 filename1 与 Remarks；本机 /? 快照的 [drive1:][path1]filename1'
+      - id: cLocale
+        label: 用 C 区域设置排序（/L C）—— 按字节编码排，更快
+        type: bool
+        style: flag
+        prefix: "/LOCALE C"
+        default: false
+        help: 官方 Remarks：the only alternative to the default locale is the C locale。写法必须是两个 token（/L C）。
+        doc: 'official #parameters 的 /l <locale>；本机 /? 快照的 /L[OCALE] locale'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 退出码同升序：0 = 完成，1 = 出错（详见 NOTES.md §3）。输入文件不会被修改。
+    examples:
+      - title: 反向排序一个文本文件
+        args: ["/R", "names.txt"]
+        expectExitCode: 0
+
+  # ================================================================= 去重
+  - id: sort-unique
+    category: 去重
+    title: 排序并去掉重复行（/UNIQUE）
+    description: >-
+      排出字典序，并且把内容重复的行只保留一行（比较时不区分大小写，所以 Apple 与 apple 算同一行）。
+      适合整理重复名单、重复的配置项。输入文件不会被修改。
+    command: ""
+    danger: none
+    sources:
+      - title: sort 命令官方参考 —— /unique
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/sort
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方 #parameters 表原文：/unique | Only returns unique results。
+          **本机 `sort /?` 的帮助里没有列这一项**，但实测 sort /unique <文件> 退出码 0 且真的去重
+          （6 行 → 3 行）。出处只有官方页一侧，已按 playbook §10 第 32 条如实标注，见 NOTES.md §1.2。
+    fields:
+      - id: inputFile
+        label: 要排序去重的文件
+        type: file
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 D:\data\list.txt
+        help: 必填，理由见「按字典序排序（升序）」里的同一段说明。不接受通配符（本机实测 exit 1）。
+        doc: 'official #parameters 的 filename1；本机 /? 快照的 [drive1:][path1]filename1'
+      - id: unique
+        label: 去掉重复行（/UNIQUE）
+        type: bool
+        style: flag
+        prefix: "/UNIQUE"
+        default: true
+        help: 官方：/unique Only returns unique results。**实测：大小写不同但内容相同的行也算重复**（Apple 与 apple 只留一个）。
+        doc: 'official #parameters 的 /unique'
+      - id: reverse
+        label: 反向排列（/R）
+        type: bool
+        style: flag
+        prefix: "/R"
+        default: false
+        help: 官方：/r Reverses the sort order。实测 /unique /R 一起给时先排序去重再倒序（本机输出 pear / Fig / Apple）。
+        doc: 'official #parameters 的 /r（官方示例 sort /r expenses.txt）与本机 /? 快照的 /R[EVERSE]'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        退出码 0 = 完成，1 = 出错。注意「去重」是按大小写不敏感的比较做的，
+        所以只留一个 Apple/apple，但留下的那一个保持它在文件里第一次出现的写法。
+    examples:
+      - title: 排序并去重
+        args: ["/UNIQUE", "list.txt"]
+        expectExitCode: 0
+      - title: 排序去重后倒序
+        args: ["/UNIQUE", "/R", "list.txt"]
+        expectExitCode: 0
