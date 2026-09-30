@@ -4,14 +4,6 @@ r"""抓语料（第二版：逐条容错 + 超时 + 给 win-help 开 .gitignore 
   ① 有的命令连 /? 都需要提升（WinError 740）→ 整脚本崩掉，只写了 5 个
   ② docs/reference/win-help 被 .gitignore 忽略 → 加不进仓库
 """
-"""
-与既有脚本的分工（两份**并存**，互不改动）：
-  · scripts/fetch-win-help.ps1      —— 最初那 12 个 Windows 自带命令：分开记 stdout/stderr、
-                                       产出 _meta.json、对会弹对话框的 GUI 程序有超时。**不要改它。**
-  · scripts/capture-command-help.py（本文件）—— 按**每个工具包自己的 locate** 抓其余包：
-                                       PATH/别名/常见目录定位，必要时走提权通路。
-  · diskpart 的 /? 本身要提权：做法是把重定向写进临时 .cmd，再 Start-Process -Verb RunAs -Wait
-    运行该文件（引号只有一层；直接塞 cmd /c "..." 会因多层引号写坏而挂住）。
 
 import datetime
 import pathlib
