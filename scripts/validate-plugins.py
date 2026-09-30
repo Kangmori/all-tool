@@ -21,6 +21,15 @@ import pathlib
 import re
 import sys
 
+# Windows 上 Python 的 stdout 默认是系统代码页（cp1252 / cp936 等），
+# 一旦脚本打印中文就会 UnicodeEncodeError 崩掉（CI 实测：cp1252）。
+# 所以在任何输出之前先把标准流固定成 UTF-8 —— 不依赖调用方去设 PYTHONUTF8。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
 try:
     import yaml
     from jsonschema import Draft202012Validator

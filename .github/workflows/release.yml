@@ -36,7 +36,10 @@ jobs:
       - name: 校验工具包清单（发布前必须全绿）
         # 发布包里的 plugins/ 会原样带走，所以先把清单校验拉进来。
         # 用与 ci.yml 相同的 setup-uv 动作（不自己下载脚本执行）。
+        # PYTHONUTF8 是双保险：脚本自己也兜了编码，这里再显式设一次。
         shell: pwsh
+        env:
+          PYTHONUTF8: '1'
         run: uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py
 
       - name: 检查 tag 与应用版本是否一致（避免发错版本号）
