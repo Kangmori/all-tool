@@ -1,0 +1,213 @@
+spec: 1
+id: sqlite3
+name: SQLite
+manifestVersion: 0.1.0
+kind: user
+summary: >-
+  单文件数据库的命令行工具。会话型：先「打开数据库」，之后的查询类动作才可用；
+  没打开时它们会灰显并说明原因。所有命令都由脚本重放执行，执行前能看到完整命令行。
+appVersion: "3.44.3"
+runtime:
+  encoding: oem
+
+locate:
+  executable: sqlite3.exe
+  alternativeNames: [sqlite3.exe]
+  searchPaths:
+    - "${env:USERPROFILE}\\platform-tools"
+    - "${env:LOCALAPPDATA}\\Microsoft\\WinGet\\Links"
+  versionArgs: ["--version"]
+  versionPattern: "(?m)^(\\d+\\.\\d+\\.\\d+)"
+  minVersion: "3.0"
+  notFoundHint: >-
+    找不到 sqlite3.exe。它是单文件程序：从 https://sqlite.org/download.html 下载
+    sqlite-tools-win-x64-*.zip，解压后把 sqlite3.exe 放到任意 PATH 目录即可。
+
+session:
+  executable: sqlite3.exe
+  scriptArgs: ["-init", "{script}"]
+  scriptExtension: .sql
+  exitCommand: .quit
+  errorPatterns:
+    - '(?im)^Error:'
+    - '(?im)^Parse error'
+    - '(?im)^Error: near'
+    - '(?im)unable to open database file'
+  state:
+    - key: db
+      title: 已打开的数据库
+      capture: path
+      captureField: path
+      # sqlite3 成功时没有独特文案（输出就是查询结果），而且**出错时退出码也是 0**，
+      # 所以真正的成败判定完全靠上面 session.errorPatterns；这里给一个永远匹配的占位，
+      # 只为满足规范（schema 目前要求 state 必须写 successPattern）。
+      successPattern: '(?s).*'
+
+actions:
+  - id: open-db
+    category: 会话
+    title: 打开数据库
+    description: >-
+      打开（不存在则创建）一个数据库文件，之后的查询类动作都以它为目标。
+      注意：脚本里的路径用正斜杠 —— SQLite 的 dot-command 会把反斜杠当转义符（实测踩过）。
+    command: ""
+    establishes: db
+    sessionCommand: '.open "{path}"'
+    sources:
+      - title: "SQLite 官方文档 —— CLI 的 dot-commands"
+        url: https://sqlite.org/cli.html
+        retrieved: "2026-09-30"
+        appliesTo: "3.44.3"
+        note: ".open FILENAME 打开数据库；dot-command 参数里的反斜杠会被当转义符。"
+    fields:
+      - id: path
+        label: 数据库文件
+        type: file
+        style: positional
+        help: "文档：.open FILENAME。路径请用正斜杠，或把反斜杠写成两个。"
+        doc: "SQLite CLI dot-commands：.open FILENAME"
+  - id: tables
+    category: 查询
+    title: 列出表
+    description: "列出当前数据库里的表（.tables）"
+    command: ""
+    requires: [db]
+    requiresHint: 先执行「打开数据库」
+    sessionCommand: .tables
+    sources:
+      - title: "SQLite 官方文档 —— CLI dot-commands"
+        url: https://sqlite.org/cli.html
+        retrieved: "2026-09-30"
+        appliesTo: "3.44.3"
+        note: ".tables ?TABLE? 列出表名。"
+    fields: []
+
+  - id: schema
+    category: 查询
+    title: 查看建表语句
+    description: "打印库里的 CREATE 语句（.schema）"
+    command: ""
+    requires: [db]
+    requiresHint: 先执行「打开数据库」
+    sessionCommand: .schema
+    sources:
+      - title: "SQLite 官方文档 —— CLI dot-commands"
+        url: https://sqlite.org/cli.html
+        retrieved: "2026-09-30"
+        appliesTo: "3.44.3"
+        note: ".schema ?PATTERN? 打印 CREATE 语句。"
+    fields: []
+
+  - id: databases
+    category: 查询
+    title: 列出已附加的库
+    description: "列出当前连接里的数据库（.databases）"
+    command: ""
+    requires: [db]
+    requiresHint: 先执行「打开数据库」
+    sessionCommand: .databases
+    sources:
+      - title: "SQLite 官方文档 —— CLI dot-commands"
+        url: https://sqlite.org/cli.html
+        retrieved: "2026-09-30"
+        appliesTo: "3.44.3"
+        note: ".databases 列出附加的库与它们的文件路径。"
+    fields: []
+
+  - id: query
+    category: 查询
+    title: 执行查询
+    description: "执行一条 SQL 并把结果打出来（select / pragma 等）"
+    command: ""
+    requires: [db]
+    requiresHint: 先执行「打开数据库」
+    sessionCommand: "{sql}"
+    sources:
+      - title: "SQLite 官方文档 —— CLI 用法"
+        url: https://sqlite.org/cli.html
+        retrieved: "2026-09-30"
+        appliesTo: "3.44.3"
+        note: "直接在命令行给 SQL，或用 .read 从文件读；会话型工具包里我们走脚本重放。"
+    fields:
+      - id: sql
+        label: SQL
+        type: textarea
+        style: positional
+        required: true
+        help: "会原样写进会话脚本。以分号结尾。"
+        doc: "SQLite CLI：把 SQL 作为参数传入"
+  - id: integrity
+    category: 维护
+    title: 完整性检查
+    description: "对当前库做完整性检查（pragma integrity_check）"
+    command: ""
+    requires: [db]
+    requiresHint: 先执行「打开数据库」
+    sessionCommand: "pragma integrity_check;"
+    sources:
+      - title: "SQLite 官方文档 —— PRAGMA integrity_check"
+        url: https://sqlite.org/pragma.html#pragma_integrity_check
+        retrieved: "2026-09-30"
+        appliesTo: "3.44.3"
+        note: "PRAGMA integrity_check 返回 ok 或问题列表。"
+    fields: []
+
+  - id: vacuum
+    category: 维护
+    title: 整理数据库（VACUUM）
+    description: "重建数据库文件以回收空间。会重写整个文件，且不可中断。"
+    command: ""
+    requires: [db]
+    requiresHint: 先执行「打开数据库」
+    danger: overwrite
+    confirmText: "VACUUM 会重写整个数据库文件（先确认有备份，且磁盘有足够空间）。"
+    execution: info
+    sessionCommand: "vacuum;"
+    sources:
+      - title: "SQLite 官方文档 —— VACUUM"
+        url: https://sqlite.org/lang_vacuum.html
+        retrieved: "2026-09-30"
+        appliesTo: "3.44.3"
+        note: "VACUUM 重建数据库文件；官方提醒需要临时空间、且不能在事务里执行。"
+    fields: []
+
+  - id: drop-table
+    category: 维护
+    title: 删除表（DROP TABLE）
+    description: "删除一张表。**不可恢复**，所以本工具只给出命令与解释，不代为执行。"
+    command: ""
+    requires: [db]
+    requiresHint: 先执行「打开数据库」
+    danger: destructive
+    execution: info
+    confirmText: "DROP TABLE 会把表连同数据一起删掉，无法撤销。"
+    sessionCommand: "drop table {table};"
+    sources:
+      - title: "SQLite 官方文档 —— DROP TABLE"
+        url: https://sqlite.org/lang_droptable.html
+        retrieved: "2026-09-30"
+        appliesTo: "3.44.3"
+        note: "DROP TABLE [IF EXISTS] name 删除表；无 IF EXISTS 时表不存在会报错。"
+    fields:
+      - id: table
+        label: 表名
+        type: text
+        style: positional
+        required: true
+        placeholder: "例如 学生"
+        help: "会拼进 drop table 语句。"
+        doc: "SQLite DROP TABLE 语法"
+
+  - id: version
+    category: 帮助
+    title: 查看版本
+    description: "打印 SQLite 版本与编译信息"
+    command: ""
+    sessionCommand: ""
+    sources:
+      - title: "SQLite 官方文档 —— CLI 用法"
+        url: https://sqlite.org/cli.html
+        retrieved: "2026-09-30"
+        appliesTo: "3.44.3"
+        note: "命令行 --version 打印版本、日期与源码哈希。"
+    fields: []
