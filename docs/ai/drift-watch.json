@@ -5,7 +5,8 @@
     "版本探测优先用 git ls-remote --tags：不限流、无需解析 HTML，且直接给出权威版本号。",
     "不要用 api.github.com：实测在本机（经代理的共享出口 IP）会 403 rate limit exceeded。",
     "7-Zip 的文档只随 CHM 分发，没有等价的在线文档，所以它只做版本探测——版本一变就说明该重新导出 CHM 并复核清单。",
-    "scoop 的 wiki 可以用 raw.githubusercontent.com/wiki/<owner>/<repo>/<page>.md 抓取；实测与我们 clone 下来的快照逐字节一致（归一化换行后哈希相同）。"
+    "scoop 的 wiki 可以用 raw.githubusercontent.com/wiki/<owner>/<repo>/<page>.md 抓取；实测与我们 clone 下来的快照逐字节一致（归一化换行后哈希相同）。",
+    "docs[].snapshot 只在第三方文档确实随仓库分发时才有意义。本项目转公开时已把第三方快照移出仓库（只保留我们自己提取的事实性数据），所以这里的条目一般**不带 snapshot**，只做版本探测与人工复核。"
   ],
   "tools": [
     {
@@ -30,21 +31,19 @@
       "docs": [
         {
           "url": "https://raw.githubusercontent.com/wiki/ScoopInstaller/Scoop/Commands.md",
-          "snapshot": "docs/reference/scoop-wiki/Commands.md",
-          "note": "命令清单；变了说明 scoop help 的表面可能变了"
+          "note": "命令清单；变了说明 scoop help 的表面可能变了；第三方快照只存在于本机专属库，公开仓库不保存，故此处不做快照比对"
         },
         {
           "url": "https://raw.githubusercontent.com/wiki/ScoopInstaller/Scoop/Buckets.md",
-          "snapshot": "docs/reference/scoop-wiki/Buckets.md"
+          "note": "第三方快照只存在于本机专属库，公开仓库不保存，故此处不做快照比对"
         },
         {
           "url": "https://raw.githubusercontent.com/wiki/ScoopInstaller/Scoop/Global-Installs.md",
-          "snapshot": "docs/reference/scoop-wiki/Global-Installs.md",
-          "note": "全局安装与提权语义"
+          "note": "全局安装与提权语义；第三方快照只存在于本机专属库，公开仓库不保存，故此处不做快照比对"
         },
         {
           "url": "https://raw.githubusercontent.com/wiki/ScoopInstaller/Scoop/Persistent-data.md",
-          "snapshot": "docs/reference/scoop-wiki/Persistent-data.md"
+          "note": "第三方快照只存在于本机专属库，公开仓库不保存，故此处不做快照比对"
         }
       ]
     },
