@@ -1,0 +1,461 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# whoami —— Windows 自带的"我是谁"查询工具（C:\Windows\System32\whoami.exe）。
+#
+# 参数知识来源：
+#   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/whoami
+#      （页面 "Last updated on 2025-05-26"，2026-10-01 抓取核对）
+#   2) 本机 `whoami /?` 的真实输出（2805 字节，stdout，退出码 0）
+# 两处**完全一致**：开关集合 = { /upn /fqdn /logonid /user /groups /claims /priv /fo /nh /all /? }，
+# 语法分三种形态（互斥组），/fo 的取值 table|list|csv、默认 table —— 没有对不上的地方。
+#
+# 本包只做**只读查询**：全部动作都跑在"查询当前登录身份与它的令牌"这一条路径上，
+# 不改任何系统状态，因此所有动作的 danger 都是默认的 none，execution 都是 run。
+#
+# 版本：Windows 自带命令没有 --version 开关，故不写 versionArgs/versionPattern（R1）。
+#   **必须提醒宿主**：ToolLocator.LocateAsync 在 versionPattern 为空时依然会把
+#   `locate.versionArgs ?? []`（= 无参数）跑一遍取版本输出。对 whoami 而言无参数运行
+#   是无害的（只打印 `域\用户名`，退出码 0，实测 16 字节），但这条路径确实会被走到，
+#   所以 NOTES §5.2 把它记下来了。这也是本批 3 个包都不写 versionArgs 的原因。
+# 编码：实测原始字节是 **UTF-8**（不是 OEM）。证据：`whoami /groups` 输出里的
+#   `NT AUTHORITY\本地帐户` 原始字节是 4e 54 … 5c e6 9c ac e5 9c b0 e5 b8 90 e6 88 b7
+#   （e6 9c ac = 「本」的 UTF-8），严格 UTF-8 解码全部成功；详见 NOTES §4。
+#
+# 刻意不做：无。whoami 的开关集合很小（11 个），本包全部收录了。
+
+spec: 1
+id: whoami
+name: 当前用户
+manifestVersion: 0.1.0
+appVersion: Windows 10/11 自带（随系统版本发布；本机 whoami.exe 文件版本 10.0.26100.8875）
+kind: system
+summary: 查当前登录身份
+description: >-
+  显示当前登录用户的身份信息：域名与用户名、安全标识符（SID）、所属组、访问令牌里的特权、
+  登录 ID、声明（claims）。Windows 自带，无需安装。 这些信息在图形界面里要翻好几层
+  （设置 → 账户、或 lusrmgr.msc、或"高级系统设置"），命令行一条就能查全。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/whoami
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 身份, 安全, 只读查询]
+
+sources:
+  - title: whoami 命令官方参考（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/whoami
+    retrieved: "2026-10-01"
+    appliesTo: Windows 10/11 / Windows Server 2016-2025
+    note: >-
+      Applies to 列出 Windows Server 2025/2022/2019/2016、Windows 11、Windows 10。
+      页面给出三段语法：`whoami [/upn | /fqdn | /logonid]`、
+      `whoami {[/user] [/groups] [/claims] [/priv]} [/fo <format>] [/nh]`、
+      `whoami /all [/fo <format>] [/nh]`；参数表共 11 项。
+  - title: 本机 `whoami /?` 的真实输出（2805 字节，stdout，退出码 0）
+    url: file:///本机实测，未入库（微软帮助文本，可随时重跑 `whoami /?` 复现）
+    retrieved: "2026-10-01"
+    appliesTo: Windows 11 26200（25H2）/ whoami.exe 文件版本 10.0.26100.8875
+    note: >-
+      与官方页面的开关集合、/fo 取值、默认格式**逐项一致**，没有冲突项。
+      帮助写 **stdout**（stderr 0 字节），退出码 **0**。
+
+locate:
+  executable: whoami.exe
+  searchPaths:
+    - "%SystemRoot%\\System32"
+  notFoundHint: >-
+    whoami.exe 是 Windows 自带的命令行工具，正常情况下就在 C:\Windows\System32 下。
+    若确实找不到，请检查系统文件完整性（另一个管理员会话里跑 sfc /scannow）。
+
+runtime:
+  # 实测：输出是 UTF-8，不是 OEM 代码页（证据见文件头与 NOTES §4）。
+  encoding: utf-8
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  usePseudoConsole: false
+
+# 退出码：微软的 whoami 文档**没有**退出码章节（已核对整页）。下面全部来自实测，见 NOTES §4。
+# 实测依据（2026-10-01，本机非管理员账号）：
+#   whoami /user /fo csv /nh           -> 0
+#   whoami /nosuchswitch               -> 1（stderr: ERROR: Invalid argument/option …）
+#   whoami /user /user                 -> 1（stderr: Invalid syntax … allowed more than 1 time(s)）
+#   whoami /all /user                  -> 1（stderr: ERROR: Invalid syntax.）
+#   whoami /fo list                    -> 1（stderr: ERROR: Invalid syntax.）
+#   whoami /upn（非域账号）            -> 1（stderr: not a domain user.）
+#   whoami /fqdn（非域账号）           -> 1（stderr: not a domain user.）
+exitCodes:
+  # 块式写法，理由见 plugins/ping/manifest.yaml 的同一处注释。
+  - code: 0
+    meaning: 成功（帮助输出 /? 也返回 0）
+    severity: ok
+  - code: 1
+    meaning: >-
+      用法错误（未知开关、语法互斥被违反、同一开关重复），或查询在当前账号形态下无法完成
+      （例如非域账号下 /upn 与 /fqdn 取不到值）。详细信息在 stderr。
+    severity: error
+
+actions:
+
+  # ================================================================= 当前用户
+  - id: show
+    category: 当前用户
+    title: 当前登录用户名
+    description: >-
+      按 NTLM 格式输出 `域\用户名`（本机实测：kangmori\steve）。不带任何开关就是这条，
+      也是最快的一条 —— 图形界面里要翻到"设置 → 账户"才能看到同样的信息。
+    command: ""
+    sources:
+      - title: whoami 官方参考 —— 无参数行为
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/whoami
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：When run without any parameters, whoami returns the current domain and user name.
+          页面示例输出 `DOMAIN1\administrator`。实测本机输出 `kangmori\steve`（16 字节，含 CRLF），退出码 0。
+          本机 `/?` 的说法一致：If no switch is specified, tool displays the user name in NTLM format.
+    fields: []
+    output:
+      mode: capture
+      showCommandLine: true
+      resultNote: 输出只有一行 `域\用户名`。
+    examples:
+      - title: 查看当前登录用户名
+        args: []
+        expectExitCode: 0
+
+  # ================================================================= 当前用户
+  - id: user
+    category: 当前用户
+    title: 当前用户与 SID
+    description: >-
+      显示用户名和安全标识符（SID）。本机实测：kangmori\steve +
+      S-1-5-21-…-1002。装软件报"权限不足"、配共享目录 ACL、写策略时经常要拿这个 SID。
+    command: ""
+    sources:
+      - title: whoami 官方参考 —— /user 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/whoami
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/user Displays the current domain and user name and the security identifier (SID)。
+          本机 `/?` 也是同一句（along with the security identifier (SID)）。
+          官方语法归在第二形态 `{[/user] [/groups] [/claims] [/priv]} [/fo <format>] [/nh]` 里，
+          所以 /fo 与 /nh 对它有效。
+    fields:
+      - id: format
+        label: 输出格式（/fo）
+        type: enum
+        style: separate
+        prefix: "/fo"
+        group: 输出
+        help: 文档：table 是默认值；csv 格式下不带列标题。
+        doc: "official #parameters 的 /fo <format>（table | list | csv）；本机 /? 快照的 /FO format"
+        values:
+          - value: ""
+            label: 表格 TABLE（默认）
+            isDefault: true
+          - value: list
+            label: 列表 LIST
+          - value: csv
+            label: CSV
+      - id: noHeader
+        label: 不显示列标题（/nh）
+        type: bool
+        style: flag
+        prefix: "/nh"
+        group: 输出
+        default: false
+        help: 文档：只对 table 与 csv 两种格式有效。
+        doc: "official #parameters 的 /nh；本机 /? 快照的 /NH"
+    output:
+      mode: capture
+      showCommandLine: true
+    examples:
+      - title: 表格（默认）
+        args: []
+        expectExitCode: 0
+      - title: 只输出值（/fo csv /nh，适合粘进表格）
+        args: ["/fo", "csv", "/nh"]
+        expectExitCode: 0
+
+  # ================================================================= 当前用户
+  - id: upn
+    category: 当前用户
+    title: 用户主体名称 UPN
+    description: >-
+      以 UPN 格式（user@domain）显示用户名。**只有域账号才有 UPN**：
+      本机实测（Microsoft 账户 + 本地账号，非域）返回退出码 1 与
+      "the current logged-on user is not a domain user."，属于预期失败而不是清单写错。
+    command: ""
+    sources:
+      - title: whoami 官方参考 —— /upn 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/whoami
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/upn Displays the user name in user principal name (UPN) format。
+          官方语法把它单独放在第一形态 `whoami [/upn | /fqdn | /logonid]` 里
+          —— 与 /user /groups /claims /priv 那组互斥，也**不接受 /fo 与 /nh**，
+          所以本动作不声明任何字段，只按官方语法原样发出一个开关。
+    fields: []
+    output:
+      mode: capture
+      showCommandLine: true
+      resultNote: 非域账号会失败（退出码 1，stderr 提示 not a domain user），这是预期行为。
+    examples:
+      - title: 查询 UPN（域账号才有值）
+        args: ["/upn"]
+        expectExitCode: 1
+
+  # ================================================================= 当前用户
+  - id: logonid
+    category: 当前用户
+    title: 登录 ID
+    description: >-
+      显示当前用户的登录 ID（本机实测：S-1-5-5-0-359587）。排查"这个会话是谁的"、
+      比对事件日志里的登录 ID 时用。
+    command: ""
+    sources:
+      - title: whoami 官方参考 —— /logonid 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/whoami
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/logonid Displays the logon ID of the current user。
+          与 /upn 同属第一形态（不接受 /fo、/nh），故本动作不声明字段。
+    fields: []
+    output:
+      mode: capture
+      showCommandLine: true
+    examples:
+      - title: 查看当前登录 ID
+        args: ["/logonid"]
+        expectExitCode: 0
+
+  # ================================================================= 所属组
+  - id: groups
+    category: 所属组
+    title: 所属组与组 SID
+    description: >-
+      列出当前用户所属的全部组（含组的类型、SID 与属性，如"Enabled by default"
+      "Group used for deny only"）。实测本机 13 个组。这条最能解释"为什么我有/没有某个权限"。
+    command: ""
+    sources:
+      - title: whoami 官方参考 —— /groups 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/whoami
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/groups Displays the user groups to which the current user belongs。
+          本机 `/?` 补充了列的含义：type of account, SIDs and attributes。
+          官方示例里有 `WHOAMI /GROUPS /FO CSV /NH`，本动作的字段即照此设计。
+    fields:
+      - id: format
+        label: 输出格式（/fo）
+        type: enum
+        style: separate
+        prefix: "/fo"
+        group: 输出
+        help: 文档：table 是默认值。组表列很宽，用 list 更好读。
+        doc: "official #parameters 的 /fo <format>；本机 /? 快照的 /FO format（示例 WHOAMI /GROUPS /FO CSV /NH）"
+        values:
+          - value: ""
+            label: 表格 TABLE（默认）
+            isDefault: true
+          - value: list
+            label: 列表 LIST
+          - value: csv
+            label: CSV
+      - id: noHeader
+        label: 不显示列标题（/nh）
+        type: bool
+        style: flag
+        prefix: "/nh"
+        group: 输出
+        default: false
+        doc: "official #parameters 的 /nh（valid only for table and CSV formats）；本机 /? 快照的 /NH"
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 本机实测输出 3289 B（表格）/ 2047 B（列表）。
+    examples:
+      - title: 表格（默认）
+        args: []
+        expectExitCode: 0
+      - title: 列表（每个组一块，长属性不被截断）
+        args: ["/fo", "list"]
+        expectExitCode: 0
+      - title: CSV 且不带列标题
+        args: ["/fo", "csv", "/nh"]
+        expectExitCode: 0
+
+  # ================================================================= 权限
+  - id: priv
+    category: 权限
+    title: 访问令牌里的特权
+    description: >-
+      列出当前访问令牌里的特权（SeShutdownPrivilege、SeChangeNotifyPrivilege 等）及
+      其启用状态。实测本机 6 条，只有 SeChangeNotifyPrivilege 是 Enabled ——
+      这条能一眼看出"我为什么不能关机/改时区/加载驱动"。
+    command: ""
+    sources:
+      - title: whoami 官方参考 —— /priv 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/whoami
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/priv Displays the security privileges of the current user。
+          本机 `/?` 的示例里有 WHOAMI /PRIV 与 WHOAMI /PRIV /FO TABLE。
+          本机实测（非管理员、非提权）输出 PRIVILEGES INFORMATION 表，6 行，退出码 0
+          —— 即**普通用户就能跑**，这条不需要管理员。
+    fields:
+      - id: format
+        label: 输出格式（/fo）
+        type: enum
+        style: separate
+        prefix: "/fo"
+        group: 输出
+        help: 文档：table 是默认值。
+        doc: "official #parameters 的 /fo <format>；本机 /? 快照的 /FO format（示例 WHOAMI /PRIV /FO TABLE）"
+        values:
+          - value: ""
+            label: 表格 TABLE（默认）
+            isDefault: true
+          - value: list
+            label: 列表 LIST
+          - value: csv
+            label: CSV
+      - id: noHeader
+        label: 不显示列标题（/nh）
+        type: bool
+        style: flag
+        prefix: "/nh"
+        group: 输出
+        default: false
+        doc: "official #parameters 的 /nh；本机 /? 快照的 /NH"
+    output:
+      mode: capture
+      showCommandLine: true
+      resultNote: 实测本机 6 条特权，输出 668 B（表格）/ 711 B（列表）。
+    examples:
+      - title: 表格（默认）
+        args: []
+        expectExitCode: 0
+      - title: 列表
+        args: ["/fo", "list"]
+        expectExitCode: 0
+      - title: CSV 且不带列标题（方便逐条比对）
+        args: ["/fo", "csv", "/nh"]
+        expectExitCode: 0
+
+  # ================================================================= 权限
+  - id: claims
+    category: 权限
+    title: 访问令牌声明（claims）
+    description: >-
+      显示当前用户的声明（claim 名称、标志、类型与取值）。**当前账号形态下没有任何输出**：
+      实测本机（Microsoft 账户 + 本地账号，非域、无动态访问控制）stdout 与 stderr 都是
+      0 字节、退出码 0。收录它是为了如实覆盖官方参数表，而不是因为它在普通 PC 上有用。
+    command: ""
+    sources:
+      - title: whoami 官方参考 —— /claims 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/whoami
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/claims Displays the claims for current user, such as claim name, flags, type and values。
+          本机 `/?` 的示例有 WHOAMI /CLAIMS 与 WHOAMI /CLAIMS /FO LIST。
+          实测本机三种写法（/claims、/claims /fo list、/all 里的 CLAIMS 段）**都是 0 字节输出**，
+          退出码 0 —— 没有声明可显示时不报错、也不打印空表头。
+    fields:
+      - id: format
+        label: 输出格式（/fo）
+        type: enum
+        style: separate
+        prefix: "/fo"
+        group: 输出
+        help: 文档：table 是默认值。本机无声明可显示，因此这个开关实测看不出差别。
+        doc: "official #parameters 的 /fo <format>；本机 /? 快照的 /FO format（示例 WHOAMI /CLAIMS /FO LIST）"
+        values:
+          - value: ""
+            label: 表格 TABLE（默认）
+            isDefault: true
+          - value: list
+            label: 列表 LIST
+      - id: noHeader
+        label: 不显示列标题（/nh）
+        type: bool
+        style: flag
+        prefix: "/nh"
+        group: 输出
+        default: false
+        doc: "official #parameters 的 /nh；本机 /? 快照的 /NH"
+    output:
+      mode: capture
+      showCommandLine: true
+      resultNote: 当前账号形态下实测输出为空（0 字节、退出码 0）——不是命令失败。
+    examples:
+      - title: 查看声明
+        args: []
+        expectExitCode: 0
+
+  # ================================================================= 全部信息
+  - id: all
+    category: 全部信息
+    title: 一次看全（/all）
+    description: >-
+      一次输出用户信息、组信息与特权三块（本机实测 4.2 KB）。给"我就想看全"的场景，
+      也适合把整段贴进工单。文档明确 /all 与 /user /groups /claims /priv 那组互斥。
+    command: ""
+    sources:
+      - title: whoami 官方参考 —— /all 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/whoami
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/all Displays all information in the current access token, including the current
+          user name, security identifiers (SID), privileges, and groups that the current user belongs to。
+          官方语法单列一式：`whoami /all [/fo <format>] [/nh]`；官方示例有 whoami /all。
+          实测本机（字节数，均为稳定值、连跑多次一致）：`/groups` = 3289 B、
+          `/groups /fo list` = 2047 B、`/all` = 4192 B、`/all /fo list` = 2890 B、
+          `/all /fo csv /nh` = 1880 B，均退出码 0；
+          而 `whoami /all /user` 退出码 1（Invalid syntax）—— 与外层互斥一致。
+    fields:
+      - id: format
+        label: 输出格式（/fo）
+        type: enum
+        style: separate
+        prefix: "/fo"
+        group: 输出
+        help: 文档：table 是默认值。整段信息用 list 更好读、用 csv 更好处理。
+        doc: "official #parameters 的 /fo <format>；本机 /? 快照的 /FO format（示例 WHOAMI /ALL /FO LIST、WHOAMI /ALL /FO CSV /NH）"
+        values:
+          - value: ""
+            label: 表格 TABLE（默认）
+            isDefault: true
+          - value: list
+            label: 列表 LIST
+          - value: csv
+            label: CSV
+      - id: noHeader
+        label: 不显示列标题（/nh）
+        type: bool
+        style: flag
+        prefix: "/nh"
+        group: 输出
+        default: false
+        doc: "official #parameters 的 /nh；本机 /? 快照的 /NH"
+    output:
+      mode: capture
+      showCommandLine: true
+      resultNote: 实测本机 4192 B（表格默认）/ 2890 B（列表）/ 1880 B（CSV）。
+    examples:
+      - title: 一次看全（表格）
+        args: []
+        expectExitCode: 0
+      - title: 一次看全（列表，最好读）
+        args: ["/fo", "list"]
+        expectExitCode: 0
+      - title: 一次看全（CSV，不带列标题）
+        args: ["/fo", "csv", "/nh"]
+        expectExitCode: 0

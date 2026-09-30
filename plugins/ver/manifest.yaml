@@ -1,0 +1,196 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# ver —— Windows 的"看系统版本"命令。**它是 cmd.exe 的内建命令，没有 ver.exe**
+# （实测 `Get-Command ver` 找不到、`where.exe ver` 输出
+#  "INFO: Could not find files for the given pattern(s)." 且退出码 1）。
+#
+# 因此本包的 locate.executable 是 **cmd.exe**，用 `command` / `commandArgs` 表达那次调用。
+#
+# ── 最终采用的表达方式（三种候选都在本机试过，结果见 NOTES §2）────────────────────
+#   locate.executable: cmd.exe
+#   command: ""
+#   commandArgs: ["/c", "ver"]
+#   → 宿主组装出的 argv = [cmd.exe, /c, ver]    实测 exit=0，stdout 47 字节
+# 为什么这样拆：`/c` 与 `ver` 都是"交给 cmd 的第一段非开关文本"的一部分，
+# 谁都不该独占 `command`（`command` 的语义是"程序自己的子命令"，如 7z 的 `a`），
+# 所以 `command: ""`，两个 token 一起进 `commandArgs`。三种候选的取舍见 NOTES §2。
+#
+# 参数知识来源：
+#   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ver
+#      （页面 "Last updated on 2023-02-03"，2026-10-01 抓取核对）
+#   2) 本机 `cmd /c ver` 的真实输出（47 字节，stdout，退出码 0）
+#   3) cmd.exe 自身的 `cmd /?`（8008 字节，stdout，退出码 1）—— 用于核对 /c 的语义
+# 三处一致：`ver` 无参数无开关；文档写"This command is supported in the Windows Command prompt
+# (Cmd.exe), but not in any version of PowerShell"（本机实测确认：PowerShell 里直接 `ver`
+# 会去调 Invoke-History 的别名，与系统版本无关）；`/?` 只是显示帮助。
+#
+# 版本：**本包恰好有一个能取到系统版本的版本命令**（`cmd /c ver`），所以写了
+#   versionArgs / versionPattern / minVersion —— 这与同批其它 Windows 自带命令包
+#   （ping/systeminfo/… 一律不写版本）不同，因为 ver 本身就是"报版本"的命令。
+#   实测：`Microsoft Windows [Version 10.0.26200.8655]` → 捕获组 10.0.26200.8655，
+#   与注册表 `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion` 的
+#   CurrentBuild 26200 + UBR 8655 完全吻合（NOTES §6）。
+# 编码：没有中文样本 —— 实测 47 字节全是 ASCII（`0d 0a 4d 69 63 …` =
+#   CRLF + "Microsoft Windows [Version 10.0.26200.8655]" + CRLF），
+#   按字节判定为 UTF-8 可解码的纯 ASCII，encoding 写 utf-8；详见 NOTES §4。
+
+spec: 1
+id: ver
+name: Windows 版本
+manifestVersion: 0.1.0
+appVersion: Windows 10/11 自带（随系统版本发布；本机 cmd.exe 文件版本 10.0.26100.8875）
+kind: system
+summary: 显示 Windows 版本
+description: >-
+  显示操作系统版本号（本机实测：Microsoft Windows [Version 10.0.26200.8655]）。
+  这是 cmd.exe 的内建命令，**没有 ver.exe**，所以本包包装的是 `cmd /c ver`。
+  在 PowerShell 里 `ver` 不是系统版本命令（会被解析成 Invoke-History 的别名），
+  图形界面里要看版本得开"关于 Windows"或翻注册表 —— 一条命令更快。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ver
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, cmd 内建, 版本, 只读查询]
+
+sources:
+  - title: ver 命令官方参考（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ver
+    retrieved: "2026-10-01"
+    appliesTo: Windows 10/11 / Windows Server 2016-2025
+    note: >-
+      Applies to 列出 Windows Server 2025/2022/2019/2016、Windows 11、Windows 10。
+      页面语法只有 `ver` 一行；正文明确 "This command is supported in the Windows Command prompt
+      (Cmd.exe), but not in any version of PowerShell"，并给出 PowerShell 的替代写法
+      （$PSVersionTable.BuildVersion / $PSVersionTable.OS）。
+      参数表里除 `/?` 外没有任何开关。
+  - title: cmd 命令官方参考（Microsoft Learn）—— /c 的语义
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cmd
+    retrieved: "2026-10-01"
+    appliesTo: Windows 10/11
+    note: >-
+      用来核对"怎么把内建命令交给 cmd 跑"：官方语法行（逐字抄）
+      `cmd [/c|/k] [/s] [/q] [/d] [/a|/u] [/t:{<b><f> | <f>}] [/e:{on | off}] [/f:{on | off}]
+      [/v:{on | off}] [<string>]`；参数表：`/c` Carries out the command specified by <string>。
+      即 `/c` 之后那一段就是 string（要跑的命令）—— 这就是本包 `commandArgs: ["/c", "ver"]`
+      的依据。本机 `cmd /?` 输出 8008 字节、退出码 1，
+      其措辞是 "Carries out the command specified by string and then terminates"，与官方页一致。
+  - title: 本机 `cmd /c ver` 的真实输出（47 字节，stdout，退出码 0）
+    url: file:///本机实测，未入库（微软程序输出，可随时重跑 `cmd /c ver` 复现）
+    retrieved: "2026-10-01"
+    appliesTo: Windows 11 26200（25H2）/ cmd.exe 文件版本 10.0.26100.8875
+    note: >-
+      原始字节：`0d 0a 4d 69 63 72 6f 73 6f 66 74 20 57 69 6e 64 6f 77 73 20 5b 56 65 72 73 69 6f 6e 20
+      31 30 2e 30 2e 32 36 32 30 30 2e 38 36 35 35 5d 0d 0a`（CRLF 开头、CRLF 结尾，全是 ASCII）。
+      stderr 0 字节。连跑两次输出完全一致（无抖动）。
+
+locate:
+  executable: cmd.exe
+  searchPaths:
+    - "%SystemRoot%\\System32"
+  # 本包唯一能取版本的路径：cmd 内建命令必须经由 /c 交给 cmd 跑。
+  versionArgs: ["/c", "ver"]
+  # 实测匹配 `Microsoft Windows [Version 10.0.26200.8655]` → 捕获组 10.0.26200.8655
+  # （输出首行是空行，所以必须带 (?m)，理由见规范 §3.1 与 playbook P4）。
+  versionPattern: '(?m)Version\s+([0-9][0-9.]*)'
+  minVersion: "6.1"
+  notFoundHint: >-
+    找不到 cmd.exe。Windows 一定自带它（C:\Windows\System32\cmd.exe）；
+    如果出现这一条，请检查系统文件是否被改动。
+
+runtime:
+  # 实测：纯 ASCII 输出，无中文样本，按字节判定为 UTF-8 可解码。
+  encoding: utf-8
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  usePseudoConsole: false
+
+# 退出码：微软的 ver 文档**没有**退出码章节（已核对整页）。下面来自实测（2026-10-01，非管理员账号）：
+#   cmd /c ver                 -> 0（stdout 47 字节）
+#   cmd /c ver /?              -> 1（stdout 38 字节：Displays the Windows version. + 空行 + VER，stderr 0 字节）
+#   cmd /c ver -x              -> 0（-x 被 ver 忽略，仍打印版本）
+#   cmd /c ver /nosuch         -> 1（stderr 41 字节：The syntax of the command is incorrect.）
+#   cmd /c nosuchcommandxyz    -> 1（stderr 107 字节：'…' is not recognized …）
+#   cmd /c                     -> 0（无参数 = 不执行任何命令，直接退出）
+#   cmd /?                     -> 1（stdout 8008 字节，帮助）
+# 结论：0 = 正常打印了版本；1 = 语法错误 / 不认识的东西，详细原因在 stderr。
+exitCodes:
+  # 块式写法，理由见 plugins/ping/manifest.yaml 的同一处注释。
+  - code: 0
+    meaning: 成功，已打印 Windows 版本
+    severity: ok
+  - code: 1
+    meaning: 语法错误或参数不被接受（例如 /?、多余的未知参数），消息在 stderr
+    severity: error
+
+actions:
+
+  # ================================================================= Windows 版本
+  - id: show
+    category: Windows 版本
+    title: 显示 Windows 版本
+    description: >-
+      打印一行 `Microsoft Windows [Version 10.0.x.yyyy]`（本机实测 10.0.26200.8655）。
+      这是 cmd 内建命令，本动作通过 `cmd /c ver` 调用；没有任何开关可调。
+    # `ver` 是 cmd 的**内建**命令，不是 exe；`/c` 是"跑完就退出"的开关
+    # （官方语法 `cmd [/c|/k] … [<string>]` 里 `/c` 之后那一段才是要跑的命令）。
+    # 两个 token 都属于"交给 cmd 的那段文本"，都不该占 `command`（那是程序自己的子命令位），
+    # 所以 command 留空、两者一起放 commandArgs —— 这是本包最需要说清的一处表达选择，见 NOTES §2。
+    command: ""
+    commandArgs: ["/c", "ver"]
+    sources:
+      - title: ver 官方参考（Microsoft Learn）—— 语法只有 ver
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ver
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方语法行：`ver`；参数表只有 `/?`；官方正文与示例：
+          "To obtain the version number of the operating system from the Command shell (cmd.exe), type: ver"。
+          本机实测 `cmd /c ver` 输出 47 字节、退出码 0。
+      - title: cmd 官方参考（Microsoft Learn）—— /c 的语义
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cmd
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/c Carries out the command specified by <string>；
+          语法 `cmd [/c|/k] … [<string>]`。这就是把内建命令 `ver` 交给 cmd 的依据。
+    fields: []
+    output:
+      mode: capture
+      showCommandLine: true
+      resultNote: >-
+        实际执行的是 cmd.exe /c ver（版本是 cmd 内建命令，没有 ver.exe）。
+        输出形如 `Microsoft Windows [Version 10.0.26200.8655]`。
+    examples:
+      - title: 显示 Windows 版本
+        args: []
+        expectExitCode: 0
+
+  # ================================================================= Windows 版本
+  - id: help
+    category: Windows 版本
+    title: 查看 ver 的帮助
+    description: >-
+      打印 ver 的简短帮助（`Displays the Windows version.` + 语法行 `VER`）。
+      实测这条的退出码是 **1**（不是 0）—— 帮助文本本身出现在 stdout，但 `ver /?`
+      返回的就是 1，cmd 只是把这个码原样传出来。
+    command: ""
+    commandArgs: ["/c", "ver", "/?"]
+    sources:
+      - title: ver 官方参考（Microsoft Learn）—— /? 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ver
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方参数表：`/?` Displays help at the command prompt。
+          本机实测 `cmd /c ver /?`：stdout **38** 字节，内容 `Displays the Windows version.` + 空行 + `VER`，
+          退出码 **1**（与官方未写退出码的差异记在 NOTES §7）。
+    fields: []
+    output:
+      mode: capture
+      showCommandLine: true
+      resultNote: 这条的退出码是 1（帮助本身不算错误，但 cmd 就是这么返回的）。
+    examples:
+      - title: ver 的帮助
+        args: []
+        expectExitCode: 1

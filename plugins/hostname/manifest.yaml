@@ -1,0 +1,126 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# hostname —— Windows 自带的计算机名查看工具（C:\Windows\System32\HOSTNAME.EXE）。
+#
+# 参数知识来源：
+#   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/hostname
+#      （页面 "Last updated on 2024-11-01"，2026-10-01 抓取核对）
+#   2) 本机 `hostname /?` 的真实输出（54 字节，stdout，退出码 **1**）
+# 两处**完全一致**：语法只有 `hostname` 一条，没有任何开关；唯一的参数是 `/?`。
+# 官方原文还给出了本包 exitCodes 的依据：
+#   "Any parameter different than /? produces an error message and sets the errorlevel to 1."
+#   —— 本机实测 `hostname /?` 与 `hostname /nosuchswitch` **都是 1**，与文档一致。
+#
+# 因此本包**只有一个动作、零字段**：这条命令没有任何可调的东西，
+# 加字段就等于发明参数（违反 R1）。多词的"命令"也不存在，故 `command: ""`。
+#
+# 版本：Windows 自带命令没有 --version 开关，故不写 versionArgs/versionPattern（R1）。
+#   宿主 ToolLocator.LocateAsync 会把 `locate.versionArgs ?? []`（= 无参数）跑一遍取版本输出，
+#   对 hostname 而言这一跑是无害的（打印主机名，退出码 0，实测 10 字节），NOTES §5 记了这条。
+# 编码：实测输出是**纯 ASCII**（10 字节 `4b 61 6e 67 6d 6f 72 69 0d 0a` = "Kangmori" + CRLF），
+#   `hostname /?` 的 54 字节同样是纯 ASCII —— **没有中文样本可判**，
+#   按字节判定为"UTF-8 可解码的纯 ASCII"，因此 encoding 写 utf-8；详见 NOTES §4。
+#
+# 顺带一个真实价值点（官方 Notes 里写了，本机实测确认）：
+#   hostname 输出的是计算机名的**原始大小写**，而 `%COMPUTERNAME%` 环境变量是大写。
+#   本机 hostname = Kangmori，%COMPUTERNAME% = KANGMORI。
+
+spec: 1
+id: hostname
+name: 计算机名
+manifestVersion: 0.1.0
+appVersion: Windows 10/11 自带（随系统版本发布；本机 HOSTNAME.EXE 文件版本 10.0.26100.8875）
+kind: system
+summary: 显示计算机名
+description: >-
+  显示本机的主机名（计算机名的 host 部分）。Windows 自带，无需安装。
+  图形界面里要看到它得翻到"设置 → 系统 → 系统信息 → 重命名这台电脑"，或者右键"此电脑"→属性；
+  命令行只有这一条命令、没有任何开关。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/hostname
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 计算机名, 只读查询]
+
+sources:
+  - title: hostname 命令官方参考（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/hostname
+    retrieved: "2026-10-01"
+    appliesTo: Windows 10/11 / Windows Server 2016-2025
+    note: >-
+      Applies to 列出 Windows Server 2025/2022/2019/2016、Windows 11、Windows 10。
+      页面语法只有 `hostname` 一行，参数表里只有 `/?`；正文还写明：
+      "This command is available only if the Internet Protocol (TCP/IP) protocol is installed"、
+      "Any parameter different than /? produces an error message and sets the errorlevel to 1"、
+      `%COMPUTERNAME%` 通常打印同样的字符串但**是大写**、
+      以及 `_CLUSTER_NETWORK_NAME_` 环境变量存在时会覆盖输出。
+  - title: 本机 `hostname /?` 的真实输出（54 字节，stdout，退出码 1）
+    url: file:///本机实测，未入库（微软帮助文本，可随时重跑 `hostname /?` 复现）
+    retrieved: "2026-10-01"
+    appliesTo: Windows 11 26200（25H2）/ HOSTNAME.EXE 文件版本 10.0.26100.8875
+    note: >-
+      原文（前有 1 个空行）：`Prints the name of the current host.` + 空行 + `hostname`。
+      与官方页面一致（语法只有 hostname、只有 /? 参数），没有冲突项。
+      帮助写 **stdout**（stderr 0 字节），退出码 **1**。
+      实现细节：`/?` 之外任何参数都会走到 sethostname 分支，打印
+      `sethostname: Use the Network Control Panel Applet to set hostname.` / `hostname -s is not supported.`
+
+locate:
+  executable: hostname.exe
+  searchPaths:
+    - "%SystemRoot%\\System32"
+  notFoundHint: >-
+    hostname.exe 是 Windows 自带的命令行工具，正常情况下就在 C:\Windows\System32 下。
+    找不到时也可以用 `%COMPUTERNAME%`（注意是全大写）。
+
+runtime:
+  # 实测：纯 ASCII 输出（本机 10 字节），没有非 ASCII 字节，按字节判定为 UTF-8 可解码。
+  encoding: utf-8
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  usePseudoConsole: false
+
+# 退出码：微软的 hostname 文档**没有独立章节**，但正文里写了一句 errorlevel 语义
+# （"Any parameter different than /? … sets the errorlevel to 1"）。下面两条 = 那句话 + 实测。
+# 实测依据（2026-10-01，本机非管理员账号）：
+#   hostname                  -> 0，stdout 10 字节 `Kangmori\r\n`
+#   hostname /?               -> 1，stdout 54 字节（帮助）
+#   hostname /nosuchswitch    -> 1，stderr 99 字节（sethostname: …）
+exitCodes:
+  # 块式写法，理由见 plugins/ping/manifest.yaml 的同一处注释。
+  - code: 0
+    meaning: 成功，已打印计算机名
+    severity: ok
+  - code: 1
+    meaning: 给了 `/` 以外的任何参数（含 `/`），只打印提示或错误，不打印计算机名
+    severity: error
+
+actions:
+
+  # ================================================================= 计算机名
+  - id: show
+    category: 计算机名
+    title: 显示计算机名
+    description: >-
+      打印本机主机名（本机实测：Kangmori，原始大小写）。没有任何参数可调 ——
+      官方语法就只有 `hostname` 一条，加字段等于发明参数。
+    command: ""
+    sources:
+      - title: hostname 官方参考 —— 语法与唯一参数 /?
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/hostname
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方语法行：`hostname`；参数表只有 `/?`。
+          官方示例：To display the name of the computer, type: hostname。
+          本机 /? 快照与之一致（正文 + 语法行）。本机实测输出 10 字节、退出码 0。
+    fields: []
+    output:
+      mode: capture
+      showCommandLine: true
+      resultNote: 输出只有一行计算机名；注意它保留原始大小写，而 %COMPUTERNAME% 是全大写。
+    examples:
+      - title: 显示计算机名
+        args: []
+        expectExitCode: 0
