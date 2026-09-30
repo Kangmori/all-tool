@@ -265,6 +265,9 @@ def switch_source_report(manifest: dict) -> tuple[list[str], int, int]:
     corpus, own_files, shared_files = load_reference_corpus(str(manifest.get("id", "")), manifest)
     plugin_id = str(manifest.get("id", ""))
 
+    # files 表示"这次实际用了几个语料文件"（下面 own_files == 0 的分支可能改写它）
+    files = own_files
+
     # 只并了共享语料时，不能拿别的命令的页面来证明本命令的开关——那是"假完整"。
     # 改为查 _switches.json 里**本命令自己的条目**；没有条目就明确报未覆盖。
     if own_files == 0:
