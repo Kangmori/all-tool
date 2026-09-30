@@ -1,0 +1,1016 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# dism —— Windows 自带的「部署映像服务和管理」工具（C:\Windows\System32\Dism.exe）。
+#
+# 参数知识来源（两边核对，对不上的记进 NOTES.md §7）：
+#   1) 官方文档（Microsoft Learn，全部实测 HTTP 200）：
+#        概念与权限     .../windows-hardware/manufacture/desktop/what-is-dism
+#        映像管理       .../windows-hardware/manufacture/desktop/dism-image-management-command-line-options-s14
+#        OS 包服务      .../windows-hardware/manufacture/desktop/dism-operating-system-package-servicing-command-line-options
+#        驱动程序服务   .../windows-hardware/manufacture/desktop/dism-driver-servicing-command-line-options-s14
+#        启用/禁用功能  .../windows-hardware/manufacture/desktop/enable-or-disable-windows-features-using-dism
+#        修复映像       .../windows-hardware/manufacture/desktop/repair-a-windows-image
+#        退出码 50/87/740 的语义来自 Win32 系统错误码页与 KB3082581。
+#      **官方没有「一个 DISM 主页 + 逐命令子页」的结构**，它是「一个主题一页、页内含多个命令」，
+#      所以一个动作的 sources 可能挂两页（例如 /Cleanup-Image 同时出现在 OS 包服务页与修复映像页）。
+#   2) 本机帮助：**本机 non-admin 下 `dism /?` 与 `dism /Online /?` 都只打印 Error: 740，拿不到帮助文本**
+#      （实测，见 NOTES.md §3）。替代证据是微软随系统分发的本地化资源
+#      `C:\Windows\System32\zh-CN\Dism.exe.mui`（内含完整的中文 DISM 帮助串，含全局选项表）。
+#      本清单**没有**把任何只出现在该 MUI 里的开关写进来 —— 仍以官方页面为准（R1）。
+#
+# **管理员权限：全部动作 requiresAdmin: true。** 两重依据：
+#   ① 官方页原话 "DISM has to run from a Command Prompt running as administrator."
+#      （what-is-dism）；
+#   ② 本机实测：当前账号非管理员，**连 `dism /?` 都直接返回 740**
+#      （stdout 122 字节 `\r\nError: 740\r\n\r\nElevated permissions are required to run DISM. \r\n...`，
+#       stderr 0 字节）。740 = ERROR_ELEVATION_REQUIRED「The requested operation requires elevation.」。
+#       DISM 在解析命令行之前就先做提权检查 —— 所以本机**无法实测任何成功路径**（见 NOTES.md §3/§9）。
+#
+# **输出编码：oem（本机 = cp936）。判定依据见 NOTES.md §4**：本机只能拿到 ASCII 英文提权错误，
+#   但同一台机器是非 Unicode 程序（UMB）环境（中文系统区域 zh-CN、OEM 代码页 936、
+#   中文资源 `zh-CN\Dism.exe.mui` 里就有「操作成功完成。」与「错误: %1!d!」），
+#   所以中文系统上 DISM 的控制台输出按 OEM 代码页写出。
+#
+# **字段风格：全部带值开关用 `style: attached`，并把冒号写进 `prefix`**（例如 `prefix: "/Format:"`），
+#   生成的是官方语法里的单 token 形态 `/Switch:Value`。**不能写 `separator: ":"`** ——
+#   schema 的 `separator` 枚举只有 "" / " " / "="，没有冒号（这与 `wevtutil` 撞过的是同一个坑，
+#   规范里的绕法就是把冒号写进 prefix）。理由与"没能实测两 token 写法"的如实说明见 NOTES.md §5。
+#
+# 版本：Windows 自带命令没有 --version 开关，故不写 versionArgs / versionPattern / minVersion（R1）。
+#       Dism.exe 文件版本实测 10.0.26100.8875（WinBuild.160101.0800）。
+
+spec: 1
+id: dism
+name: DISM
+manifestVersion: 0.1.0
+appVersion: Windows 10/11 自带（随系统版本发布）
+kind: system
+summary: 查看与修复 Windows 映像
+description: >-
+  部署映像服务和管理（DISM）：检查与修复运行中系统的组件存储（CheckHealth / ScanHealth / RestoreHealth），
+  查看已安装的更新包、Windows 功能与第三方驱动，查看 .wim 映像里的版本索引，以及应用/清理映像。
+  全部操作都需要管理员权限（官方原话：DISM 必须在以管理员身份运行的命令提示符里跑；实测非管理员连 /? 都被拒）。
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+homepage: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/what-is-dism
+tags: [windows, 自带命令, 映像, 组件存储, 系统维护, WinSxS]
+
+sources:
+  - title: What is DISM?（Microsoft Learn）—— DISM 是什么、权限要求、限制
+    url: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/what-is-dism
+    retrieved: "2026-02-12"
+    appliesTo: Windows 10/11
+    note: >-
+      本清单 requiresAdmin 的官方文字依据就在这一页："DISM has to run from a Command Prompt running as administrator."。
+      同页还列了三条会影响界面设计的限制：① 不支持通配符；② 一条命令行上不能同时用多个服务命令
+      （/Add-Driver /Remove-Driver 这种组合不合法）；③ 目标映像的版本不能高于本机 DISM 的版本。
+  - title: DISM Image Management Command-Line Options（Microsoft Learn）—— 映像管理一族
+    url: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/dism-image-management-command-line-options-s14
+    retrieved: "2026-02-12"
+    appliesTo: Windows 10/11
+    note: >-
+      /Get-ImageInfo、/Mount-Image、/Apply-Image、/Capture-Image、/Export-Image、/Split-Image、
+      /Unmount-Image、/Cleanup-Mountpoints、/Get-MountedImageInfo 等的语法行与参数表都在这一页。
+      /Apply-Image 的 /ApplyDir 是位置参数（官方语法 ... /ApplyDir:<target_location>）。
+  - title: DISM Operating System Package (.cab or .msu) Servicing Command-Line Options（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/dism-operating-system-package-servicing-command-line-options
+    retrieved: "2026-02-12"
+    appliesTo: Windows 10/11
+    note: >-
+      本工具包的包/功能/组件存储系列动作全部出自这一页：/Get-Packages、/Get-PackageInfo、/Add-Package、
+      /Remove-Package、/Get-Features、/Get-FeatureInfo、/Enable-Feature、/Disable-Feature、/Cleanup-Image。
+      页面顶部的语法行是 DISM.exe {/Image:<path_to_image_directory> | /Online} [dism_global_options]
+      {servicing_option} [<servicing_argument>] —— 这就是本清单「服务命令写在 command 里、
+      它前面的东西留给固定 token」的顺序依据。
+  - title: DISM Driver Servicing (.inf) Command-Line Options（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/dism-driver-servicing-command-line-options-s14
+    retrieved: "2026-02-12"
+    appliesTo: Windows 10/11
+    note: >-
+      /Get-Drivers 与 /Get-DriverInfo 的语法与参数表。该页明确写 /Driver can point to a folder or an
+      individual .inf file；/Get-Drivers 默认只列第三方驱动，/all 才连自带驱动一起列。
+      另外该页只给运行中系统列了 /Get-Drivers | /Get-DriverInfo | /Export-Driver（不含 /Add-Driver）。
+  - title: Enable or Disable Windows Features Using DISM（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/enable-or-disable-windows-features-using-dism
+    retrieved: "2026-02-12"
+    appliesTo: Windows 10/11
+    note: >-
+      官方操作步骤页。正文明确要求 "Open a command prompt with administrator privileges"，
+      并给出 Dism /online /Get-Features 与 Dism /online /Enable-Feature /FeatureName:<name> 的用法与
+      「用 Get-Features 先找功能名」的建议 —— 这就是本清单两个 nextSteps 的依据。
+  - title: Repair a Windows Image（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/repair-a-windows-image
+    retrieved: "2026-02-12"
+    appliesTo: Windows 10/11
+    note: >-
+      组件存储修复的三段式官方流程依据：先 /ScanHealth 扫（"This operation will take several minutes"），
+      再 /CheckHealth 看结果（会报 healthy / repairable / non-repairable），可修复才 /RestoreHealth。
+      同页给出 /RestoreHealth /Source:... /LimitAccess 的用法与「不指定 /Source 就用默认修复源」。
+  - title: DISM command fails with error code 87（Microsoft Learn 疑难解答，原 KB3082581）
+    url: https://learn.microsoft.com/en-us/troubleshoot/windows-client/setup-upgrade-and-drivers/dism-error-87-apply-windows-10-image
+    retrieved: "2026-02-12"
+    appliesTo: Windows 10
+    note: >-
+      退出码 87 的官方出处：该页标题与 Symptoms 一节直接写 "the command fails with error code 87"，
+      场景是把 Windows 10 映像用 /Apply-Image 应用出去。本清单 exitCodes 里 87 的 meaning 也参考了它。
+  - title: System Error Codes (0-499)（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows/win32/debug/system-error-codes--0-499-
+    retrieved: "2026-02-12"
+    appliesTo: Windows 10/11
+    note: >-
+      退出码 50 与 87 的标准语义出处：ERROR_NOT_SUPPORTED "50 (0x32) The request is not supported."；
+      ERROR_INVALID_PARAMETER "87 (0x57) The parameter is incorrect."。
+  - title: System Error Codes (500-999)（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows/win32/debug/system-error-codes--500-999-
+    retrieved: "2026-02-12"
+    appliesTo: Windows 10/11
+    note: >-
+      退出码 740 的出处：ERROR_ELEVATION_REQUIRED "740 (0x2E4) The requested operation requires elevation."。
+      本机实测非管理员跑任何 dism 命令都得到这个码（见 NOTES.md §3/§6）。
+  - title: 本机 Dism.exe 的本地化资源与文件版本（本机实测）
+    url: file:///C:/Windows/System32/zh-CN/Dism.exe.mui
+    retrieved: "2026-02-12"
+    appliesTo: Windows 11 26200 / Dism.exe 文件版本 10.0.26100.8875 (WinBuild.160101.0800)
+    note: >-
+      **本机 non-admin 下 `dism /?` 与 `dism /Online /?` 都只打印 Error: 740（实测），拿不到帮助文本。**
+      替代证据：微软随系统分发的 zh-CN 资源里有完整中文帮助串，包括全局选项表
+      （/Image /Online /LogPath /LogLevel /ScratchDir /WinDir /SysDriveDir /Quiet /NoRestart /English /Format）、
+      顶层帮助（DISM.exe [dism_options] {Imaging_command} [<Imaging_arguments>]）、
+      「操作成功完成。」（退出码 0 时的提示）与「错误: %1!d!」/「错误: 0x%1!x!」（报错形态）。
+      **本清单没有从该资源里收录任何官方页面没有的开关**（R1）。
+
+locate:
+  executable: dism.exe
+  searchPaths:
+    - "%SystemRoot%\\System32"
+  notFoundHint: dism.exe 是 Windows 自带命令，正常情况下都在 C:\Windows\System32 下（SysWOW64 下也有一份 32 位副本，用哪个都可以）。
+
+runtime:
+  encoding: oem
+  useShell: false
+  requiresAdmin: true
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  usePseudoConsole: false
+
+# 退出码：微软的 DISM 各主题页**都没有退出码章节**（已逐页核对）。下面四条各有出处，见 NOTES.md §6。
+# **本机只实测到 740 这一条**（非管理员，DISM 在解析参数之前就拒了），其余三条的语义来自官方页面。
+exitCodes:
+  # 块式写法，理由见 plugins/ping/manifest.yaml 的同一处注释。
+  - code: 0
+    meaning: 成功。中文系统上 DISM 的收尾提示是「操作成功完成。」（该字符串取自本机 zh-CN 资源）
+    severity: ok
+  - code: 50
+    meaning: >-
+      ERROR_NOT_SUPPORTED —— 这个请求不受支持。官方定义见 System Error Codes (0-499)；
+      在 DISM 上常见于「在不支持的目标上做这个操作」（例如对 Windows PE 用 /Online）
+    severity: error
+  - code: 87
+    meaning: >-
+      ERROR_INVALID_PARAMETER —— 参数不正确。官方在 KB3082581 里把 /Apply-Image 失败报 87 当作已知现象；
+      常见诱因是命令行写法不被接受、或用了版本不匹配的 DISM
+    severity: error
+  - code: 740
+    meaning: >-
+      ERROR_ELEVATION_REQUIRED —— 需要提权。**本机实测：非管理员跑任何 dism 命令（连 /?）都返回它**，
+      输出是 English 的 `Error: 740 / Elevated permissions are required to run DISM.`
+    severity: error
+
+quickActions:
+  - title: 检查组件存储是否有损坏（只读、很快）
+    action: cleanup-image
+  - title: 查看已安装的更新包
+    action: get-packages
+  - title: 查看 Windows 功能状态
+    action: get-features
+
+actions:
+
+  # ============================================================ 组件存储与修复
+  - id: cleanup-image
+    category: 组件存储与修复
+    title: 组件存储检查与清理（/Cleanup-Image）
+    command: /Cleanup-Image
+    danger: overwrite
+    confirmText: >-
+      这会按你选的模式对运行中系统的组件存储做事：/CheckHealth 只读；/ScanHealth 只扫不改但要好几分钟；
+      /RestoreHealth 会真的修复（联网从 Windows Update 取文件）；/StartComponentCleanup /ResetBase
+      会清掉被取代的旧组件并重置基线，**此后已装的更新无法卸载**。请确认模式选对了。
+    requiresAdmin: true
+    description: >-
+      对映像做清理或恢复操作。四个常用模式：/CheckHealth 只查「是否已被标记为损坏、能不能修」（秒级、只读）；
+      /ScanHealth 全盘扫描组件存储（官方说 "will take several minutes"）；/RestoreHealth 扫描并自动修复
+      （官方说同样要几分钟，实际常见 10 分钟以上）；/StartComponentCleanup 清理被取代的组件以缩小 WinSxS。
+    sources:
+      - title: DISM OS 包服务 —— /Cleanup-Image 的语法与参数表
+        url: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/dism-operating-system-package-servicing-command-line-options
+        retrieved: "2026-02-12"
+        appliesTo: Windows 10/11
+        note: >-
+          官方语法 /Cleanup-Image {/RevertPendingActions | /SPSuperseded [/HideSP] |
+          /StartComponentCleanup [/ResetBase [/Defer]] | /AnalyzeComponentStore | /CheckHealth | /ScanHealth |
+          /RestoreHealth [/Source: <filepath>] [/LimitAccess]}；参数表逐条解释五个模式。
+          /CheckHealth 的官方原文是 "Checks whether the image has been flagged as corrupted by a failed process
+          and whether the corruption can be repaired."；/StartComponentCleanup 官方原文特别提示
+          "Installed Windows updates can't be uninstalled after running /StartComponentCleanup with the /ResetBase option."
+      - title: Repair a Windows Image —— 官方推荐的三段式流程
+        url: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/repair-a-windows-image
+        retrieved: "2026-02-12"
+        appliesTo: Windows 10/11
+        note: >-
+          官方流程：先 ScanHealth 扫，再 CheckHealth 看结果（会报 healthy / repairable / non-repairable），
+          可修复才 RestoreHealth。本动作的 nextSteps 就是照这个顺序写的。
+    fields:
+      - id: mode
+        label: 做什么
+        type: enum
+        style: literal
+        switchBase: "/CheckHealth"
+        default: checkhealth
+        help: >-
+          四种常用模式。**/RestoreHealth 与 /StartComponentCleanup /ResetBase 属于「不可逆地改动系统」那一档**，
+          在界面上是 execution: info：宿主不替你执行，只把完整命令行摊开给你看、可复制、可在终端里自己跑。
+          /RevertPendingActions 与 /SPSuperseded 不在本清单里 —— 前者只该用在开不了机的映像上、
+          后者是已废弃的 Service Pack 时代的操作，官方都写明了限制。
+        doc: 'official #/Cleanup-Image（官方语法行逐字，含 /ResetBase 的「此后无法卸载更新」提示）'
+        values:
+          - value: checkhealth
+            label: 只检查是否已损坏（/CheckHealth，只读、很快）
+            args: ["/CheckHealth"]
+            isDefault: true
+          - value: scanhealth
+            label: 全盘扫描组件存储（/ScanHealth，只读、好几分钟）
+            args: ["/ScanHealth"]
+          - value: restorehealth
+            label: 扫描并自动修复（/RestoreHealth，改系统、很久）
+            args: ["/RestoreHealth"]
+          - value: startcomponentcleanup
+            label: 清理被取代的组件（/StartComponentCleanup，改系统）
+            args: ["/StartComponentCleanup"]
+          - value: resetbase
+            label: 清理并重置基线（/StartComponentCleanup /ResetBase，更新将无法卸载）
+            args: ["/StartComponentCleanup", "/ResetBase"]
+      - id: resetBase
+        label: 清理时同时重置更新基线（/ResetBase）
+        type: bool
+        style: flag
+        prefix: "/ResetBase"
+        group: 高级
+        advanced: true
+        default: false
+        help: >-
+          与上面选「清理被取代的组件」配合使用：官方原文 "Use /ResetBase to reset the base of superseded components,
+          which can further reduce the component store size. Installed Windows updates can't be uninstalled after
+          running /StartComponentCleanup with the /ResetBase option."。选上面那个模式时也会自动带上它。
+        doc: official #/Cleanup-Image 的 /StartComponentCleanup [/ResetBase [/Defer]]
+      - id: source
+        label: 修复源目录（/Source，留空 = 用默认修复源）
+        type: directory
+        style: attached
+        prefix: "/Source:"
+        group: 高级
+        advanced: true
+        placeholder: 例 C:\test\mount\windows
+        help: >-
+          只在 /RestoreHealth 下有意义。官方原文：/Source "Used with /RestoreHealth to specify the location of
+          known good versions of files that can be used for the repair, such as a path to the Windows directory of
+          a mounted image."。给了多个 /Source 时只从第一个找得到的地方取文件。不填就用默认修复源
+          （联网时通常是 Windows Update）。
+        doc: official #/Cleanup-Image 参数表的 /Source（配 /RestoreHealth 使用）
+      - id: limitAccess
+        label: 不联系 Windows Update（/LimitAccess）
+        type: bool
+        style: flag
+        prefix: "/LimitAccess"
+        group: 高级
+        advanced: true
+        default: false
+        help: >-
+          官方原文：/LimitAccess "Prevents DISM from contacting Windows Update for repair of online images."。
+          想只用你自己的修复源、不许它联网，就勾上它并填 /Source。
+        doc: official #/Cleanup-Image 参数表的 /LimitAccess
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测本机非管理员跑这条直接得到 exit=740（stdout 122 字节英文提权提示，stderr 0 字节），
+        **成功路径未验证**。耗时预期（官方说法 + 常见经验）：CheckHealth 几秒；ScanHealth 数分钟；
+        RestoreHealth 十分钟到一小时以上；StartComponentCleanup 视 WinSxS 大小可能几十分钟。
+        **不要中途杀进程**：DISM 的组件存储操作被打断会留下 pending 状态。
+    nextSteps:
+      - title: 扫描组件存储（/ScanHealth）
+        action: cleanup-image
+        when: '(?m)(组件存储|component store)'
+        reason: 输出里提到了组件存储，可以进一步做完整扫描
+        values: { mode: scanhealth }
+      - title: 扫描并修复（/RestoreHealth）
+        action: cleanup-image
+        when: '(?m)(可以修复|repairable)'
+        reason: 官方流程：CheckHealth 报「可修复」时才做 RestoreHealth
+        values: { mode: restorehealth }
+    examples:
+      - title: 只检查是否已损坏（官方文档里的推荐起点）
+        args: ["/Online", "/Cleanup-Image", "/CheckHealth"]
+      - title: 全盘扫描（官方示例形态，要几分钟）
+        args: ["/Online", "/Cleanup-Image", "/ScanHealth"]
+      - title: 用自备修复源修复且不联网（官方示例形态）
+        args: ["/Online", "/Cleanup-Image", "/RestoreHealth", "/Source:c:\\test\\mount\\windows", "/LimitAccess"]
+
+  # ============================================================ 包与更新
+  - id: get-packages
+    category: 包与更新
+    title: 查看已安装的更新包（/Get-Packages）
+    command: /Get-Packages
+    requiresAdmin: true
+    description: >-
+      列出映像里所有包的基本信息（包名、状态、发布时间之类），例如 Microsoft-Windows-* 系列更新与语言包。
+      想看某个包的细节就带着包名去用「查看包详细信息」。输出很大，用表格格式更容易读。
+    sources:
+      - title: DISM OS 包服务 —— /Get-Packages
+        url: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/dism-operating-system-package-servicing-command-line-options
+        retrieved: "2026-02-12"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/Get-Packages "Displays basic information about all packages in the image. Use the /Format:Table
+          or /Format:List argument to display the output as a table or a list."；语法行
+          Dism /Get-Packages [/Format:{Table | List}]；官方示例 Dism /Online /Get-Packages。
+    fields:
+      - id: format
+        label: 输出格式（/Format）
+        type: enum
+        style: attached
+        prefix: "/Format:"
+        group: 输出
+        advanced: true
+        help: 官方说明：/Format 只接受 Table 或 List。留空 = 不指定（用 DISM 自己的默认格式）。
+        doc: official #/Get-Packages 的 [/Format:{Table | List}]
+        values:
+          - value: ""
+            label: 不指定
+            isDefault: true
+          - value: Table
+            label: Table —— 表格
+          - value: List
+            label: List —— 名称/值对列表
+    output:
+      mode: capture
+      showCommandLine: true
+      resultNote: 实测本机非管理员跑这条得到 exit=740（英文提权提示），**成功路径未验证**；输出体积未实测。
+    nextSteps:
+      - title: 查看某个包的详细信息（/Get-PackageInfo）
+        action: get-package-info
+        reason: 列表里挑一个包名，切过去填进「包名」就能看它的详细状态
+    examples:
+      - title: 列出全部包（官方示例）
+        args: ["/Online", "/Get-Packages"]
+      - title: 以表格格式列出（官方示例）
+        args: ["/Online", "/Get-Packages", "/Format:Table"]
+
+  # ============================================================ 包与更新
+  - id: get-package-info
+    category: 包与更新
+    title: 查看包详细信息（/Get-PackageInfo）
+    command: /Get-PackageInfo
+    requiresAdmin: true
+    description: >-
+      看某个 .cab 包的详细信息。官方说明：只能用 .cab，不能用它查 .msu 包的信息。
+      包名用「查看已安装的更新包」拿到；/PackagePath 也可以直接指向 CAB 文件或文件夹。
+    sources:
+      - title: DISM OS 包服务 —— /Get-PackageInfo
+        url: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/dism-operating-system-package-servicing-command-line-options
+        retrieved: "2026-02-12"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文："/Get-PackageInfo Displays detailed information about a package provided as a .cab file.
+          Only .cab files can be specified. You cannot use this command to obtain package information for .msu
+          files."；语法行 Dism /Get-PackageInfo {/PackageName:<name_in_image> | /PackagePath:<path_to_cabfile>}。
+          两个参数二选一，本清单按官方示例分别做成两个可选字段（都不填的话 DISM 会报缺参数）。
+    fields:
+      - id: packageName
+        label: 包名（/PackageName）
+        type: text
+        style: attached
+        prefix: "/PackageName:"
+        save: true
+        placeholder: 例 Microsoft.Windows.Calc.Demo~6595b6144ccf1df~x86~en~1.0.0.0
+        help: 官方示例里就是这种 `名称~哈希~架构~语言~版本` 的形态，用「查看已安装的更新包」原样复制即可。
+        doc: official #/Get-PackageInfo 的 /PackageName:<name_in_image>（官方示例给的就是完整包名）
+      - id: packagePath
+        label: CAB 文件或文件夹（/PackagePath）
+        type: text
+        style: attached
+        prefix: "/PackagePath:"
+        group: 高级
+        advanced: true
+        placeholder: 例 C:\packages\package.cab
+        help: >-
+          官方说明：可以指向 .cab 文件或文件夹，且应当指向**包的原始来源**（而不是它在离线映像里的安装位置）；
+          文件名里带空格不用手动加引号（宿主按 argv 数组传参，不经过 shell）。
+        doc: official #/Get-PackageInfo 的 /PackagePath:<path_to_cabfile>（"should point to the original source of the package"）
+    output:
+      mode: capture
+      showCommandLine: true
+      resultNote: 实测本机非管理员跑这条得到 exit=740（英文提权提示），**成功路径未验证**。
+    examples:
+      - title: 用包名查看（官方示例形态）
+        args: ["/Online", "/Get-PackageInfo", "/PackageName:Microsoft.Windows.Calc.Demo~6595b6144ccf1df~x86~en~1.0.0.0"]
+      - title: 用 CAB 文件查看（官方示例形态，离线映像）
+        args: ["/Image:C:\\test\\offline", "/Get-PackageInfo", "/PackagePath:C:\\packages\\package.cab"]
+
+  # ============================================================ 包与更新
+  - id: add-package
+    category: 包与更新
+    title: 添加包（/Add-Package）
+    execution: info
+    command: /Add-Package
+    danger: overwrite
+    requiresAdmin: true
+    description: >-
+      把指定的 .cab 或 .msu 包安装进映像。官方提示：/Add-Package **不做完整的适用性与依赖检查** ——
+      带依赖的包要自己保证依赖已装好；装 .msu 前先看对应 KB 的说明。Windows 11 21H2 起可以往在线映像加 .msu。
+      这条标记为 execution: info：宿主**不替你执行**，只把命令摊开、可复制、可在终端里自己跑。
+    sources:
+      - title: DISM OS 包服务 —— /Add-Package
+        url: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/dism-operating-system-package-servicing-command-line-options
+        retrieved: "2026-02-12"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文与语法 Dism /Add-Package /PackagePath:<path_to_cabfile> [/IgnoreCheck] [/PreventPending]；
+          /PackagePath 可以指向单个 .cab/.msu、含单个展开 cab 的文件夹、含单个 .msu 的文件夹、
+          或含多个 .cab/.msu 的文件夹（根下的子文件夹会被递归查找）；同页还写了
+          "/Add-Package doesn't run a full check for a package's applicability and dependencies"。
+    fields:
+      - id: packagePath
+        label: 包文件或文件夹（/PackagePath）
+        type: text
+        style: attached
+        prefix: "/PackagePath:"
+        required: true
+        save: true
+        placeholder: 例 C:\packages\package.msu
+        help: >-
+          官方说明可以指向单个 .cab/.msu、也可以指向文件夹（多包按命令行顺序安装、根下子文件夹会被递归查找）。
+          多个包就用多行 —— 官方示例里同一个 /PackagePath 出现了多次。
+        doc: official #/Add-Package 的 /PackagePath:<path_to_cabfile>（可指向文件或文件夹；多包可重复给）
+        repeatable: true
+      - id: ignoreCheck
+        label: 跳过适用性检查（/IgnoreCheck）
+        type: bool
+        style: flag
+        prefix: "/IgnoreCheck"
+        group: 高级
+        advanced: true
+        default: false
+        help: 官方原文：/IgnoreCheck "if you want the command to process without checking the applicability of each package."。跳过检查意味着不合适的包也会被硬装进去。
+        doc: official #/Add-Package 的 [/IgnoreCheck]
+      - id: preventPending
+        label: 有挂起操作时不安装（/PreventPending）
+        type: bool
+        style: flag
+        prefix: "/PreventPending"
+        group: 高级
+        advanced: true
+        default: false
+        help: 官方原文：/PreventPending "skip the installation of the package if the package or Windows image has pending online actions."。
+        doc: official #/Add-Package 的 [/PreventPending]
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        标了 execution: info，宿主不执行。耗时预期：装累积更新常见十几分钟到一小时以上，且可能需要重启。
+        实测本机非管理员跑 /Add-Package 的任意形态都只得到 exit=740。
+    examples:
+      - title: 安装一个 .msu（官方示例形态，离线映像）
+        args: ["/Image:C:\\test\\offline", "/Add-Package", "/PackagePath:C:\\packages\\package.msu"]
+      - title: 一次装两个 cab 并跳过适用性检查（官方示例形态）
+        args: ["/Image:C:\\test\\offline", "/Add-Package", "/PackagePath:C:\\packages\\package1.cab", "/PackagePath:C:\\packages\\package2.cab", "/IgnoreCheck"]
+
+  # ============================================================ 功能（可选组件）
+  - id: get-features
+    category: 功能（可选组件）
+    title: 查看 Windows 功能状态（/Get-Features）
+    command: /Get-Features
+    requiresAdmin: true
+    description: >-
+      列出映像里的功能（可选组件）及其状态：已启用 / 已禁用 / 已删除（Removed）之类。
+      不指定包名时列出映像里的全部功能。官方用它来找功能的准确名字，再去启用或禁用。
+    sources:
+      - title: DISM OS 包服务 —— /Get-Features
+        url: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/dism-operating-system-package-servicing-command-line-options
+        retrieved: "2026-02-12"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文："/Get-Features Displays basic information about all features (operating system components that
+          include optional Windows foundation features) in a package."；"If you don't specify a package name or path,
+          all features in the image will be listed."；语法行
+          /Get-Features {/PackageName:<name_in_image> | /PackagePath:<path_to_cabfile>} [/Format:{Table | List}]。
+      - title: Enable or Disable Windows Features Using DISM —— 官方建议先 Get-Features 找名字
+        url: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/enable-or-disable-windows-features-using-dism
+        retrieved: "2026-02-12"
+        appliesTo: Windows 10/11
+        note: 官方步骤页给出的用法与「先查后改」的建议（本动作的 nextSteps 依据）。
+    fields:
+      - id: packageName
+        label: 只列某个包里的功能（/PackageName，留空 = 全部）
+        type: text
+        style: attached
+        prefix: "/PackageName:"
+        group: 筛选
+        advanced: true
+        placeholder: 例 Microsoft-Windows-...~...~...~...~...
+        help: 官方说明：/PackageName 是映像里的包名，用「查看已安装的更新包」能看到这些名字。
+        doc: official #/Get-Features 的 {/PackageName:<name_in_image> | /PackagePath:<path_to_cabfile>}
+      - id: format
+        label: 输出格式（/Format）
+        type: enum
+        style: attached
+        prefix: "/Format:"
+        group: 输出
+        advanced: true
+        help: 官方说明：/Format 只接受 Table 或 List。留空 = 不指定。
+        doc: official #/Get-Features 的 [/Format:{Table | List}]
+        values:
+          - value: ""
+            label: 不指定
+            isDefault: true
+          - value: Table
+            label: Table —— 表格
+          - value: List
+            label: List —— 名称/值对列表
+    output:
+      mode: capture
+      showCommandLine: true
+      resultNote: >-
+        实测本机非管理员跑这条得到 exit=740（英文提权提示），**成功路径未验证**。
+        官方在「限制」一节还提到：用 DISM 列 Windows PE 映像的可选组件时，即使操作成功它们也总是显示为 pending，这是设计如此。
+    nextSteps:
+      - title: 启用这个功能（/Enable-Feature）
+        action: enable-feature
+        reason: 查到功能名之后，官方步骤就是带着同一个名字去 Enable-Feature
+      - title: 禁用这个功能（/Disable-Feature）
+        action: disable-feature
+        reason: 也可以反过来禁用它（Disabled 或直接 Removed）
+    examples:
+      - title: 列出全部功能（官方示例）
+        args: ["/Online", "/Get-Features"]
+      - title: 以列表格式列出（官方示例）
+        args: ["/Online", "/Get-Features", "/Format:List"]
+
+  # ============================================================ 功能（可选组件）
+  - id: enable-feature
+    category: 功能（可选组件）
+    title: 启用功能（/Enable-Feature）
+    command: /Enable-Feature
+    danger: overwrite
+    requiresAdmin: true
+    confirmText: >-
+      这会真的改动运行中系统的 Windows 功能：DISM 会装上该功能需要的组件。功能名请先用
+      「查看 Windows 功能状态」核对（官方明确要求用 /FeatureName，写错就会失败）。确定继续？
+    description: >-
+      启用或更新映像里指定的功能。官方说明：功能名必须用 /FeatureName 给，名字用「查看 Windows 功能状态」拿；
+      已经从这个映像里删掉的功能可以用 /Source 指回安装源来恢复启用；不指定 /Source 时对在线映像会去 Windows Update 取文件。
+    sources:
+      - title: DISM OS 包服务 —— /Enable-Feature
+        url: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/dism-operating-system-package-servicing-command-line-options
+        retrieved: "2026-02-12"
+        appliesTo: Windows 10/11
+        note: >-
+          官方语法 /Enable-Feature /FeatureName:<name_in_image> [/PackageName:<name_in_image>] [/Source: <source>]
+          [/LimitAccess] [/All]；原文包括「You can specify the /FeatureName option multiple times in one command
+          line for features that share the same parent package.」、「Use /LimitAccess to prevent DISM from
+          contacting WU for online images.」、「Use /All to enable all parent features of the specified feature.」。
+          注意官方语法行里 /Source: 后面**有一个空格**，官方示例却是 /Source:c:\test\mount\Windows —— 见 NOTES.md §7。
+      - title: Enable or Disable Windows Features Using DISM
+        url: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/enable-or-disable-windows-features-using-dism
+        retrieved: "2026-02-12"
+        appliesTo: Windows 10/11
+        note: 官方步骤页的用法 Dism /online /Enable-Feature /FeatureName:<name>，并强调要先以管理员身份打开命令提示符。
+    fields:
+      - id: featureName
+        label: 功能名（/FeatureName）
+        type: text
+        style: attached
+        prefix: "/FeatureName:"
+        required: true
+        save: true
+        repeatable: true
+        placeholder: 例 IIS-WebServerRole
+        help: >-
+          官方要求必须给。同一个父包下的多个功能可以一行给多次（本字段可多行输入）。
+          名字用「查看 Windows 功能状态」拿到，不要凭印象写。
+        doc: official #/Enable-Feature 的 /FeatureName:<name_in_image>（必需的；可在一行里重复给）
+      - id: packageName
+        label: 父包名（/PackageName，一般不用填）
+        type: text
+        style: attached
+        prefix: "/PackageName:"
+        group: 高级
+        advanced: true
+        placeholder: 例 Microsoft-Windows-...~...~...~...~...
+        help: >-
+          官方说明：如果这个功能属于 Windows Foundation Package 就不必给；否则要用 /PackageName 指定它所属的父包。
+        doc: official #/Enable-Feature 的 [/PackageName:<name_in_image>]
+      - id: source
+        label: 恢复源（/Source，留空 = 用注册表里的默认位置或 Windows Update）
+        type: directory
+        style: attached
+        prefix: "/Source:"
+        group: 恢复源
+        advanced: true
+        placeholder: 例 z:\sources\SxS
+        help: >-
+          官方说明：用它指定恢复该功能所需的文件位置 —— 可以是已装载映像里的 Windows 文件夹
+          （例如 c:\test\mount\Windows），也可以是并列（side-by-side）文件夹（例如 z:\sources\SxS）。
+          给多个 /Source 时只从第一个找到文件的地方取。
+        doc: 'official #/Enable-Feature 的 [/Source: <source>]（官方示例 /Source:c:\test\mount\Windows 与 z:\sources\SxS）'
+      - id: limitAccess
+        label: 不联系 Windows Update（/LimitAccess）
+        type: bool
+        style: flag
+        prefix: "/LimitAccess"
+        group: 恢复源
+        advanced: true
+        default: false
+        help: 官方原文：/LimitAccess "Use /LimitAccess to prevent DISM from contacting WU for online images."。
+        doc: official #/Enable-Feature 的 [/LimitAccess]
+      - id: all
+        label: 连同所有父功能一起启用（/All）
+        type: bool
+        style: flag
+        prefix: "/All"
+        group: 高级
+        advanced: true
+        default: false
+        help: 官方原文：/All "Use /All to enable all parent features of the specified feature."。
+        doc: official #/Enable-Feature 的 [/All]
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测本机非管理员跑这条得到 exit=740（英文提权提示），**成功路径未验证**。
+        功能名写错时 DISM 会报错（官方要求必须用 /FeatureName）；耗时视功能大小与是否联网取文件而定。
+    nextSteps:
+      - title: 核对功能现在的状态
+        action: get-features
+        reason: 改完回到列表确认它已经变成 Enabled
+    examples:
+      - title: 启用功能并带上所有父功能（官方示例）
+        args: ["/Online", "/Enable-Feature", "/FeatureName:Hearts", "/All"]
+      - title: 从自备源恢复启用且不联网（官方示例）
+        args: ["/Online", "/Enable-Feature", "/FeatureName:Calc", "/Source:c:\\test\\mount\\Windows", "/LimitAccess"]
+
+  # ============================================================ 功能（可选组件）
+  - id: disable-feature
+    category: 功能（可选组件）
+    title: 禁用功能（/Disable-Feature）
+    execution: info
+    command: /Disable-Feature
+    danger: destructive
+    requiresAdmin: true
+    description: >-
+      禁用映像里指定的功能。带 /Remove 时会把功能**从映像里移除**（官方原文：不删功能清单，
+      但状态会变成 "Removed"），而且**删除本身无法撤回** —— 要恢复必须用 /Enable-Feature /Source 指向安装源重新装回来。
+      基于这个不可逆性，本条标为 execution: info：宿主不替你执行，只给完整命令 + 解释。
+    sources:
+      - title: DISM OS 包服务 —— /Disable-Feature
+        url: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/dism-operating-system-package-servicing-command-line-options
+        retrieved: "2026-02-12"
+        appliesTo: Windows 10/11
+        note: >-
+          官方语法 /Disable-Feature /FeatureName:<name_in_image> [/PackageName:<name_in_image>] [/Remove]；
+          官方原文："/Remove to remove a feature without removing the feature's manifest from the image. The feature
+          will be listed as "Removed" when you use /Get-FeatureInfo to display feature details and can be restored
+          and enabled using /Enable-Feature with the /Source option."；另注 /FeatureName 可在同一父包下多次给。
+    fields:
+      - id: featureName
+        label: 功能名（/FeatureName）
+        type: text
+        style: attached
+        prefix: "/FeatureName:"
+        required: true
+        save: true
+        repeatable: true
+        placeholder: 例 Hearts
+        help: 官方要求必须给；同一个父包下的多个功能可以一行给多次（本字段可多行输入）。
+        doc: official #/Disable-Feature 的 /FeatureName:<name_in_image>（必需的；可在一行里重复给）
+      - id: packageName
+        label: 父包名（/PackageName，一般不用填）
+        type: text
+        style: attached
+        prefix: "/PackageName:"
+        group: 高级
+        advanced: true
+        placeholder: 例 Microsoft-Windows-...~...~...~...~...
+        help: 官方说明：功能属于 Windows Foundation Package 时可以不给；否则用它指定所属父包。
+        doc: official #/Disable-Feature 的 [/PackageName:<name_in_image>]
+      - id: remove
+        label: 同时从映像里移除（/Remove，不可逆）
+        type: bool
+        style: flag
+        prefix: "/Remove"
+        default: false
+        help: >-
+          **这是本动作里唯一不可逆的一步**：官方原文说移除后用 /Get-FeatureInfo 会看到 "Removed"，
+          想恢复只能用 /Enable-Feature 配 /Source 重新装。
+          （字段按官方语法行 /FeatureName → /PackageName → /Remove 的顺序声明，所以它排在父包名之后。）
+        doc: official #/Disable-Feature 的 [/Remove]（含「可用 /Enable-Feature /Source 恢复」的原文）
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        标了 execution: info，宿主不执行。实测本机非管理员跑这条得到 exit=740。
+        带 /Remove 之后**没有界面上的撤销入口**，恢复要自己准备安装源，见字段说明。
+    examples:
+      - title: 禁用一个功能（官方示例）
+        args: ["/Online", "/Disable-Feature", "/FeatureName:Hearts"]
+      - title: 禁用并移除（官方示例形态，不可逆）
+        args: ["/Online", "/Disable-Feature", "/FeatureName:Hearts", "/Remove"]
+
+  # ============================================================ 驱动
+  - id: get-drivers
+    category: 驱动
+    title: 查看驱动包（/Get-Drivers）
+    command: /Get-Drivers
+    requiresAdmin: true
+    description: >-
+      列出在线或离线映像里的驱动包。官方说明：默认只列第三方驱动，加 /all 才会连 Windows 自带的默认驱动一起列。
+      第三方驱动在驱动库里的名字是 Oem0.inf、Oem1.inf 这样排下来的「发布名」。
+    sources:
+      - title: DISM 驱动服务 —— /Get-Drivers
+        url: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/dism-driver-servicing-command-line-options-s14
+        retrieved: "2026-02-12"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文："/Get-Drivers Displays basic information about driver packages in the online or offline image.
+          By default, only third-party drivers will be listed. Use the /all argument to display information about
+          default drivers and third-party drivers. Use the /Format:Table or /Format:List argument to display the
+          output as a table or a list."；官方给运行中系统列的可选项是 /Get-Drivers | /Get-DriverInfo | /Export-Driver。
+    fields:
+      - id: all
+        label: 连自带驱动一起列（/all）
+        type: bool
+        style: flag
+        prefix: "/all"
+        default: false
+        help: 官方原文：默认只列第三方驱动，/all 才把默认驱动与第三方驱动都列出来。加了之后输出会大很多。
+        doc: official #/Get-Drivers 的 /all
+      - id: format
+        label: 输出格式（/Format）
+        type: enum
+        style: attached
+        prefix: "/Format:"
+        group: 输出
+        advanced: true
+        help: 官方说明：/Format 只接受 Table 或 List。留空 = 不指定。
+        doc: official #/Get-Drivers 的 /Format:Table 或 /Format:List
+        values:
+          - value: ""
+            label: 不指定
+            isDefault: true
+          - value: Table
+            label: Table —— 表格
+          - value: List
+            label: List —— 名称/值对列表
+    output:
+      mode: capture
+      showCommandLine: true
+      resultNote: >-
+        实测本机非管理员跑这条得到 exit=740（英文提权提示），**成功路径未验证**；官方另提到点向映像时
+        还能看到驱动的状态（已安装还是已暂存）。
+    nextSteps:
+      - title: 查看某个驱动的详细信息（/Get-DriverInfo）
+        action: get-driver-info
+        reason: 列表里有 Oem0.inf 这类发布名，直接拿去查它的详细信息
+      - title: 查看某个映像里的驱动（/Get-ImageInfo）
+        action: get-image-info
+        reason: 想先确认手工准备的映像里有哪些索引/版本，再决定装载哪一份
+    examples:
+      - title: 列出在线系统的第三方驱动（官方示例）
+        args: ["/Online", "/Get-Drivers"]
+      - title: 连自带驱动一起列（官方 /all 说明的用法）
+        args: ["/Online", "/Get-Drivers", "/all"]
+
+  # ============================================================ 驱动
+  - id: get-driver-info
+    category: 驱动
+    title: 查看驱动详细信息（/Get-DriverInfo）
+    command: /Get-DriverInfo
+    requiresAdmin: true
+    description: >-
+      看某个驱动包的详细信息。官方说明：可以指向已装进映像的 INF，也可以指向还没装的 INF；
+      已装的第三方驱动在驱动库里的名字是 Oem0.inf、Oem1.inf 这样的「发布名」，也可以直接给 .inf 的路径。
+    sources:
+      - title: DISM 驱动服务 —— /Get-DriverInfo
+        url: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/dism-driver-servicing-command-line-options-s14
+        retrieved: "2026-02-12"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文与语法：/Get-DriverInfo /Driver:{<installed_INF_FileName>|<path_to_driver.inf>}；
+          "Installed third-party drivers in the driver store will be named Oem0.inf, Oem1.inf, and so on.
+          This is referred to as the published name."；"You can specify multiple drivers on the command line by
+          using the /driver option multiple times."。
+    fields:
+      - id: driver
+        label: 驱动（/Driver）
+        type: text
+        style: attached
+        prefix: "/Driver:"
+        required: true
+        save: true
+        repeatable: true
+        placeholder: 例 oem0.inf 或 C:\test\drivers\usb\usb.inf
+        help: >-
+          官方说明：给已装的发布名（Oem0.inf…）或任意 .inf 的路径；同一个命令行上可以给多次（本字段支持多行）。
+          注意官方页面正文用的是小写 /driver，开关本身不区分大小写。
+        doc: official #/Get-DriverInfo 的 /Driver:{<installed_INF_FileName>|<path_to_driver.inf>}（可重复给）
+    output:
+      mode: capture
+      showCommandLine: true
+      resultNote: 实测本机非管理员跑这条得到 exit=740（英文提权提示），**成功路径未验证**。
+    examples:
+      - title: 查已装的第三方驱动（官方形态）
+        args: ["/Online", "/Get-DriverInfo", "/driver:oem0.inf"]
+      - title: 查一个还没装的 INF（官方示例，离线映像）
+        args: ["/Image:C:\\test\\offline", "/Get-DriverInfo", "/driver:C:\\Drivers\\usb.inf"]
+
+  # ============================================================ 映像文件
+  - id: get-image-info
+    category: 映像文件
+    title: 查看映像里的版本索引（/Get-ImageInfo）
+    command: /Get-ImageInfo
+    requiresAdmin: true
+    description: >-
+      查看 .wim / .ffu / .vhd / .vhdx 文件里包含哪些映像以及它们的索引号、名称、版本、大小、体系结构。
+      这是「要往哪个索引应用/装载」的前置查询。官方说明：/Name 对 VHD 文件不适用；FFU 与 VHDX 必须用 /Index:1。
+    sources:
+      - title: DISM 映像管理 —— /Get-ImageInfo
+        url: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/dism-image-management-command-line-options-s14
+        retrieved: "2026-02-12"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文与语法：Dism /Get-ImageInfo /ImageFile:<path_to_image.wim> [{/Index:<Image_index> |
+          /Name:<Image_name>}]；"Displays information about the images that are contained in a .wim, .ffu, .vhd or
+          .vhdx file."、"The /Name argument does not apply to VHD files. You must specify /Index:1 for FFU and
+          VHDX files."。官方示例 Dism /Get-ImageInfo /ImageFile:C:\test\offline\install.wim 与
+          Dism /Get-ImageInfo /ImageFile:C:\test\images\myimage.vhd /Index:1。
+    fields:
+      - id: imageFile
+        label: 映像文件（/ImageFile）
+        type: file
+        style: attached
+        prefix: "/ImageFile:"
+        required: true
+        save: true
+        accept: [".wim", ".ffu", ".vhd", ".vhdx"]
+        placeholder: 例 D:\images\install.wim
+        help: 官方只允许四种容器：.wim / .ffu / .vhd / .vhdx。文件必须存在，否则 DISM 报错。
+        doc: official #/Get-ImageInfo 的 /ImageFile:<path_to_image.wim>
+      - id: index
+        label: 只查某个索引（/Index，留空 = 列出全部）
+        type: number
+        style: attached
+        prefix: "/Index:"
+        group: 筛选
+        advanced: true
+        placeholder: 例 1
+        help: 官方说明：FFU 与 VHDX 文件必须写 /Index:1；/Index 与 /Name 二选一。
+        doc: official #/Get-ImageInfo 的 {/Index:<Image_index> | /Name:<Image_name>}（FFU/VHDX 必须为 1）
+      - id: name
+        label: 只查某个名称（/Name，留空 = 列出全部）
+        type: text
+        style: attached
+        prefix: "/Name:"
+        group: 筛选
+        advanced: true
+        placeholder: 例 Windows 11 Pro
+        help: 官方说明：/Name 对 VHD 文件不适用；且 /Index 与 /Name 只能二选一（本清单按官方示例给两个可选字段，都填会被 DISM 拒绝）。
+        doc: official #/Get-ImageInfo 的 /Name:<Image_name>（"does not apply to VHD files"）
+    output:
+      mode: capture
+      showCommandLine: true
+      resultNote: >-
+        实测本机非管理员跑这条得到 exit=740（英文提权提示，连 /WimFile:Z:\nope.wim 这种不存在的文件也是 740 ——
+        说明 DISM 在检查参数之前就先做提权判断），**成功路径未验证**。
+    nextSteps:
+      - title: 把这个映像装载起来看内容（/Mount-Image）
+        action: get-mounted-image
+        reason: 拿到索引号之后，官方流程的下一步通常是挂载它
+    examples:
+      - title: 列出 install.wim 里的全部映像（官方示例）
+        args: ["/Get-ImageInfo", "/ImageFile:C:\\test\\offline\\install.wim"]
+      - title: 只看某个 VHD 的索引 1（官方示例）
+        args: ["/Get-ImageInfo", "/ImageFile:C:\\test\\images\\myimage.vhd", "/Index:1"]
+
+  # ============================================================ 映像文件
+  - id: get-mounted-image
+    category: 映像文件
+    title: 查看已装载的映像（/Get-MountedImageInfo）
+    command: /Get-MountedImageInfo
+    requiresAdmin: true
+    description: >-
+      列出当前已装载的 .wim / .ffu / .vhd / .vhdx 映像，以及它们的装载目录、映像文件路径、索引、
+      是否有读写权限、映像是否有效。卸载前先看这条，避免忘了自己挂过什么。
+    sources:
+      - title: DISM 映像管理 —— /Get-MountedImageInfo
+        url: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/dism-image-management-command-line-options-s14
+        retrieved: "2026-02-12"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文："/Get-MountedImageInfo Returns a list of .ffu, .vhd, .vhdx, and .wim images that are currently
+          mounted, as well as information about the mounted image such as whether the image is valid, read/write
+          permissions, mount location, mounted file path, and mounted image index."；官方示例 Dism /Get-MountedImageInfo（无参数）。
+      - title: Repair a Windows Image —— /Cleanup-Mountpoints 的用途
+        url: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/repair-a-windows-image
+        retrieved: "2026-02-12"
+        appliesTo: Windows 10/11
+        note: 同页的「Repairing images during servicing」一节说明装载点残留要用 /Cleanup-Mountpoints 收拾，是这条动作的下文。
+    fields: []
+    output:
+      mode: capture
+      showCommandLine: true
+      resultNote: 实测本机非管理员跑这条得到 exit=740（英文提权提示），**成功路径未验证**（所以本机有没有挂着的映像也不知道）。
+    examples:
+      - title: 列出已装载的映像（官方示例）
+        args: ["/Get-MountedImageInfo"]
+
+  # ============================================================ 映像文件
+  - id: apply-image
+    category: 映像文件
+    title: 应用映像到目录（/Apply-Image）
+    execution: info
+    command: /Apply-Image
+    danger: destructive
+    requiresAdmin: true
+    description: >-
+      把映像文件里的指定索引展开到目标位置。**这条会往目标位置写整套文件系统内容**：
+      官方在同一个语法里给了 /ApplyDir 与 /ApplyDrive 两种去向，指向已有分区时已有文件可能被覆盖。
+      基于「不可逆地覆盖目标数据」这个口径，本条标为 execution: info —— 宿主不替你按回车，
+      只把完整命令摆出来、可复制、可在终端里自己跑。
+    sources:
+      - title: DISM 映像管理 —— /Apply-Image
+        url: https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/dism-image-management-command-line-options-s14
+        retrieved: "2026-02-12"
+        appliesTo: Windows 10/11
+        note: >-
+          官方语法 DISM.exe /Apply-Image /ImageFile:<path_to_image_file> [/Index:<image_index> | /Name:<image_name>]
+          /ApplyDir:<target_location> [/CheckIntegrity] [/Verify] ...；官方示例
+          Dism /apply-image /imagefile:install.wim /index:1 /ApplyDir:D:\ 与
+          Dism /apply-image /imagefile:install.swm /swmfile:install*.swm /index:1 /applydir:D:。
+          参数表里 /CheckIntegrity 的说明是"stops the operation if DISM detects that the .wim file is corrupted
+          when used with apply and mount operations"。
+    fields:
+      - id: imageFile
+        label: 映像文件（/ImageFile）
+        type: file
+        style: attached
+        prefix: "/ImageFile:"
+        required: true
+        save: true
+        accept: [".wim", ".swm", ".ffu", ".vhd", ".vhdx"]
+        placeholder: 例 D:\images\install.wim
+        help: >-
+          .swm 分卷映像要配 /SWMFile 一起用（官方示例 /imagefile:install.swm /swmfile:install*.swm）。
+          本清单没有收录 /SWMFile 等全部可选参数，需要时用界面上的自定义参数输入框补。
+        doc: official #/Apply-Image 的 /ImageFile:<path_to_image_file>
+      - id: index
+        label: 映像索引（/Index）
+        type: number
+        style: attached
+        prefix: "/Index:"
+        required: false
+        placeholder: 例 1
+        help: 官方语法里 /Index 与 /Name 二选一（官方示例用 /index:1）；索引号先用「查看映像里的版本索引」确认。
+        doc: official #/Apply-Image 的 [/Index:<image_index> | /Name:<image_name>]（官方示例 /index:1）
+      - id: applyDir
+        label: 应用到哪个目录（/ApplyDir）
+        type: directory
+        style: attached
+        prefix: "/ApplyDir:"
+        required: true
+        save: true
+        placeholder: 例 D:\
+        help: >-
+          **这是会被写入的目标**。官方示例直接给盘根（/ApplyDir:D:\），意味着该位置原有的内容可能被整套覆盖。
+          填之前请自己确认目标目录是空的、或者你确实要覆盖它。
+        doc: official #/Apply-Image 的 /ApplyDir:<target_location>（官方示例 /ApplyDir:D:\）
+      - id: checkIntegrity
+        label: 先校验映像完整性（/CheckIntegrity）
+        type: bool
+        style: flag
+        prefix: "/CheckIntegrity"
+        group: 高级
+        advanced: true
+        default: false
+        help: 官方原文：用在 apply / mount 上时，一旦发现 .wim 文件损坏就停止操作。花时间换一点确定性，值得勾。
+        doc: official #/Apply-Image 参数表的 /CheckIntegrity
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        标了 execution: info，宿主不执行。实测本机非管理员跑这条（含 /ImageFile:Z:\nope.wim 这种明显不存在的路径）
+        都只得到 exit=740。耗时：展开一个完整 Windows 映像通常十几分钟到半小时以上。
+    examples:
+      - title: 把 install.wim 的索引 1 展开到 D 盘（官方示例）
+        args: ["/apply-image", "/imagefile:install.wim", "/index:1", "/ApplyDir:D:\\"]
+      - title: 应用分卷映像（官方示例形态）
+        args: ["/apply-image", "/imagefile:install.swm", "/swmfile:install*.swm", "/index:1", "/applydir:D:"]
