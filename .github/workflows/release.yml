@@ -65,7 +65,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $version = if (startsWith($env:GITHUB_REF, 'refs/tags/')) { $env:GITHUB_REF_NAME.TrimStart('v') } else { 'dev' }
+          $version = if ($env:GITHUB_REF -like 'refs/tags/*') { $env:GITHUB_REF_NAME.TrimStart('v') } else { 'dev' }
           $zipName = "AllTool-v$version-win-x64.zip"
           $zipPath = Join-Path 'dist' $zipName
           Compress-Archive -Path 'dist/AllTool/*' -DestinationPath $zipPath -CompressionLevel Optimal
