@@ -1,0 +1,1814 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# netsh —— Windows 自带的网络配置外壳（C:\Windows\System32\netsh.exe）。
+#
+# 参数知识来源（只有三类算数，见 playbook §0.2）：
+#   1) 官方文档（Microsoft Learn，逐个 URL 都实际请求确认过 HTTP 200）：
+#      · .../windows-commands/netsh                  → 总览：用法、`-c <Context>`、上下文/子上下文清单
+#      · .../windows-commands/netsh-interface        → interface / ipv4 / ipv6 / portproxy 全部 `<show ...>` 语法
+#      · .../windows-commands/netsh-wlan             → wlan 的 `show <...>` 清单与语法
+#      · .../windows-commands/netsh-advfirewall      → advfirewall 的 `show <...>` 语法
+#      · .../windows-commands/netsh-winhttp          → winhttp 的 `show <proxy|advproxy|tracing>`
+#      · .../windows-commands/netsh-http             → http 的 `show <...>` 语法
+#      · .../windows-commands/netsh-dnsclient        → dnsclient 的 `show <global|state|encryption>`
+#   2) 本机 `netsh <上下文> ?` / `<上下文> show ?` 的真实输出（快照**不入库**，入 .gitignore）：
+#      · `netsh ?`（2258 B，exit 1）、`netsh help`（2088 B，exit 0）、`netsh interface ?`（1241 B）
+#      · `netsh interface ipv4 show ?`（1268 B）、`netsh interface ipv4 show config ?`（415 B）…
+#   3) 官方文档与本机帮助**冲突时以官方为准**，差异逐条记进 NOTES.md §7。
+#
+# **这个包最关键的三条环境事实（全部实测，不是抄的）**：
+#   ① 输出编码是 UTF-8，**不是** OEM/GBK。证据：`netsh interface ipv4 show config` 输出的原始字节里
+#      中文接口名「以太网」是 e4 bb a5 e5 a4 aa e7 bd 91（合法 UTF-8）；同一串字节按 cp936 解出来是
+#      「浠ュお缃?」乱码。本机控制台代码页是 936，所以这是**与其它 Windows 自带命令相反**的一例。
+#   ② 退出码不是「0 = 成功」：`netsh ?` 退出码 1（而 `netsh help` 是 0）、
+#      任何未知命令 1、接口名不存在 1、防火墙规则零命中 1、无线网卡被关闭时 1。
+#   ③ `netsh interface ipv6 show config` **不存在**（本机实测 `The following command was not found`，退出码 1），
+#      官方 netsh-interface 页的 ipv6 语法行里也确实没有它 —— 所以本包不收录（差分见 NOTES §7）。
+#
+# **多词子命令的表达方式（本包的核心规范用法，实测见 NOTES §3）**：
+#   netsh 的上下文是**多级子命令**（`netsh interface ipv4 show config`），因此统一用
+#   `command: <第一级>` + `commandArgs: [<第二级>, <第三级>, ...]`，即
+#   一级一个 argv token，**不用** `-c` 把整条上下文塞进一个 token。
+#   实测两条等价：`netsh -c interface ipv4 show config` 与 `netsh interface ipv4 show config`
+#   输出都是 3084 B、退出码 0（前者多一个 `netsh>` 提示符，且会停在交互模式等输入）。
+#
+# 版本：netsh **没有**版本开关（实测 `netsh ?` / `netsh help` 都不打印版本），故不写
+#       versionArgs / versionPattern / minVersion（R1）。exe 文件版本见 NOTES §1。
+#
+# 安全边界：本包 **39 个动作全部是只读查询**（覆盖 34 条不同的 netsh 命令）。`set` / `add` / `delete` /
+#   `reset` / `winsock reset` / `interface ip reset` / `advfirewall reset` 等会改网络配置的动作
+#   **一律不收录**（理由见 NOTES §8）——
+#   这既是任务红线，也符合规范 §2.9「再危险也要留一条」的取舍：netsh 的写动作不是「风险大」，
+#   而是「一次误点就会断网、且常常无法在非管理员账号下验证成功路径」，本包选择只做查询。
+
+spec: 1
+id: netsh
+name: netsh
+manifestVersion: 0.1.0
+appVersion: Windows 10/11 自带（随系统版本发布；本机 netsh.exe 文件版本 10.0.26100.8328）
+kind: system
+summary: 查网络配置与状态
+description: >-
+  Windows 自带的网络配置外壳。本工具包只覆盖**只读查询**那一批：网卡列表与状态、
+  IPv4/IPv6 地址与 DNS 服务器、路由表、邻居（ARP）缓存、无线接口与配置文件与可见网络、
+  WinHTTP 与 Winsock 代理、防火墙配置与规则**查询**，以及 netsh 自身的帮助与上下文切换。
+  会修改网络配置的 set / add / delete / reset 类动作刻意不收录。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 网络, 适配器, 路由, DNS, 无线, 防火墙, 代理]
+
+sources:
+  - title: netsh（Network shell）官方总览 —— Microsoft Learn
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh
+    retrieved: "2026-09-30"
+    appliesTo: Windows 10/11（页面标注 Windows 10 / 11 / Server 2016-2025）
+    note: >-
+      用法行 `netsh [-a <Aliasfile>] [-c <Context>] [-r <RemoteMachine>] [-u ...] [-p ...] [<Command> | -f <ScriptFile>]`；
+      含上下文清单（interface / wlan / advfirewall / winhttp / http / dnsclient / winsock / …）与
+      「子上下文」概念（interface 下有 ipv4 / ipv6 / tcp / udp / portproxy …）。本包用 ipv4 与 ipv6 的**全路径**写法，不用 `-c`。
+  - title: netsh interface 官方参考（含 ipv4 / ipv6 / portproxy 的全部 `<show ...>` 语法）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-interface
+    retrieved: "2026-09-30"
+    appliesTo: Windows 10/11
+    note: >-
+      本包 ipv4 / ipv6 / portproxy 的每个动作都在这一页的语法行里逐条核对过（例如
+      `netsh interface ipv4 show config [name=]<string>`、`netsh interface ipv4 show neighbors [interface=]<string> ...`）。
+      **该页 ipv6 段没有 `show config`** —— 与本机实测一致（见 NOTES §7 第 1 条）。
+  - title: netsh wlan 官方参考（全部 `show ...` 子命令）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-wlan
+    retrieved: "2026-09-30"
+    appliesTo: Windows 10/11
+    note: >-
+      语法块列出 `netsh wlan show all|drivers|filters|interfaces|networks|profiles|settings|tracing|wlanreport|...`。
+      本包取 interfaces / profiles / networks / settings / drivers 五条只读项。
+  - title: netsh advfirewall 官方参考
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-advfirewall
+    retrieved: "2026-09-30"
+    appliesTo: Windows 10/11
+    note: >-
+      `netsh advfirewall show [allprofiles|currentprofile|domainprofile|privateprofile|publicprofile] <state|firewallpolicy|settings|logging>`、
+      `netsh advfirewall show global <ipsec|statefulftp|statefulpptp|mainmode|categories>`；
+      `firewall show rule name=<string>` 在该页的例子段出现（`netsh advfirewall firewall show rule name=all`）。
+  - title: netsh winhttp 官方参考
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-winhttp
+    retrieved: "2026-09-30"
+    appliesTo: Windows 10/11
+    note: "`netsh winhttp show <advproxy|proxy|tracing>`；页面明确给了 `netsh winhttp show proxy` 这个例子。"
+  - title: netsh http 官方参考
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-http
+    retrieved: "2026-09-30"
+    appliesTo: Windows 10/11
+    note: >-
+      `netsh http show <cacheparam|iplisten|setting|timeout>` 与
+      `netsh http show cachestate [url=]`、`servicestate [view=session|requestq|client] [verbose=yes|no]`、`urlacl [url=<string>]`。
+  - title: netsh dnsclient 官方参考
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-dnsclient
+    retrieved: "2026-09-30"
+    appliesTo: Windows 10/11
+    note: "`netsh dnsclient show encryption [[server=]<IP address>]` 与 `netsh dnsclient show <global|state>`。"
+  - title: 本机 `netsh ?` / `netsh help` / `netsh <上下文> [show] ?` 的真实输出快照
+    url: file:///<仓库目录>/netsh 帮助快照（**未入库**，见 .gitignore；用 NOTES §10 的命令重新抓取）
+    retrieved: "2026-09-30"
+    appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328（账号 kangmori\steve，**非管理员**）
+    note: >-
+      共 60+ 份快照，覆盖根上下文与 interface / interface ipv4 / interface ipv6 / interface tcp / interface udp /
+      interface portproxy / wlan / advfirewall / winhttp / winsock / http / dnsclient 的 `?` 与 `show ?`。
+      本包每个动作的 `doc` 都指向其中具体某一份。
+
+locate:
+  executable: netsh.exe
+  searchPaths:
+    - "%SystemRoot%\\System32"
+  notFoundHint: netsh.exe 是 Windows 自带命令，正常情况下都在 C:\Windows\System32 下。
+
+runtime:
+  # 实测：输出是 UTF-8（证据见文件头注释 ① 与 NOTES §4）。**不是** oem/gbk ——
+  # 本机控制台代码页是 936，所以写 oem 会让中文接口名全部乱码。
+  encoding: utf-8
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  # 防火墙规则全量查询实测输出 412 KB、`wlan show all` 实测 34 KB，都不快但也不会卡死，故不设超时上限。
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  usePseudoConsole: false
+
+# 退出码：微软的 netsh 文档**没有**退出码章节（已逐个页面核对）。下面来自实测，见 NOTES §5。
+exitCodes:
+  - code: 0
+    meaning: >-
+      查询完成。注意：**「0」只代表命令被识别并执行了**，不代表有结果 ——
+      `interface ipv6 show neighbors` 在本机输出 11737 B、退出码 0；
+      而 `interface portproxy show all` 没有任何端口代理时输出 2 B（空）、退出码同样是 0。
+    severity: ok
+  - code: 1
+    meaning: >-
+      命令没跑成，或查询目标不存在。实测触发场景：未知上下文/子命令
+      （`The following command was not found: ...`）、接口名不存在
+      （`The filename, directory name, or volume label syntax is incorrect.`）、
+      防火墙规则零命中（`No rules match the specified criteria.`）、
+      无线网卡被关闭时 `wlan show networks`、以及根帮助 `netsh ?`。
+    severity: error
+
+actions:
+
+  # ===================================================== 帮助与上下文
+  - id: help
+    category: 帮助与上下文
+    title: 列出全部上下文（help）
+    description: >-
+      显示 netsh 根上下文里的命令与全部一级上下文（interface / wlan / advfirewall / winhttp / http /
+      dnsclient / winsock / ipsec / trace …）。主窗口标题栏里那条总览命令。
+    command: "help"
+    sources:
+      - title: netsh 官方总览 —— 上下文与子上下文
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: 页面写着「You can obtain a list of netsh contexts by running `netsh ?` or `netsh help`」。
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测本机输出 2088 B、退出码 0。（同一份内容用 `netsh ?` 取，退出码是 1。）
+    examples:
+      - title: 列出全部上下文
+        args: ["help"]
+        expectExitCode: 0
+
+  - id: context-help
+    category: 帮助与上下文
+    title: 查看某个上下文的命令
+    description: >-
+      进入指定上下文并列出它的命令与子上下文。等价于在 netsh 里敲 `interface ?` 或 `interface help`。
+      参数是**一级上下文名**，可以带通配写法（本机实测 `int` 与 `interface` 等价）。
+    command: "help"
+    commandArgs: ["{context}"]
+    sources:
+      - title: netsh 官方总览 —— 上下文
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          页面：「To view help for a command, type the command, followed by a space, and then type ?」，
+          并给出 `netsh> interface help` 的完整示例输出。
+    fields:
+      - id: context
+        label: 上下文
+        type: text
+        style: positional
+        required: true
+        default: interface
+        placeholder: 例 interface / wlan / advfirewall / winhttp / http / dnsclient / winsock
+        help: 只写一级上下文名，不要写子上下文（子上下文请用「查看某个子上下文的命令」）。
+        doc: 'official 总览页的「Command contexts」一节（列出全部一级上下文）与本机 `netsh ?` 快照的命令清单'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 `interface help` 1241 B、`wlan help` 898 B、`advfirewall help` 980 B，退出码都是 0。
+    examples:
+      - title: interface 上下文的命令
+        args: ["interface", "help"]
+        expectExitCode: 0
+      - title: wlan 上下文的命令
+        args: ["wlan", "help"]
+        expectExitCode: 0
+
+  - id: subcontext-help
+    category: 帮助与上下文
+    title: 查看某个子上下文的命令
+    description: >-
+      两级上下文一起查，例如 `interface ipv4 ?`（本机实测输出 650 B）、
+      `interface ipv4 show ?`（1268 B，列出全部 `show` 子命令）。
+      想确认「这个子上下文里到底有什么能查」时用它。
+    command: "help"
+    commandArgs: ["{parent}", "{child}"]
+    sources:
+      - title: netsh interface 官方参考 —— ipv4 / ipv6 / portproxy 子上下文
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-interface
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: 页面的语法块按 `netsh interface ipv4 ...` / `netsh interface ipv6 ...` / `netsh interface portproxy ...` 分节。
+    fields:
+      - id: parent
+        label: 一级上下文
+        type: text
+        style: positional
+        required: true
+        default: interface
+        placeholder: 例 interface
+        doc: 'official 总览页的子上下文清单；本机 `netsh interface ?` 快照（1241 B）'
+      - id: child
+        label: 子上下文
+        type: text
+        style: positional
+        required: true
+        default: ipv4
+        placeholder: 例 ipv4 / ipv6 / tcp / udp / portproxy / firewall
+        doc: 'official netsh-interface 页语法块的 ipv4 / ipv6 / portproxy；本机 `netsh interface ?` 快照里列的 6to4/ipv4/ipv6/tcp/udp/portproxy'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 `interface ipv4 help` 650 B、`interface ipv4 show ?` 1268 B、`interface ipv6 help` 763 B，退出码都是 0。
+    examples:
+      - title: ipv4 子上下文的命令
+        args: ["interface", "ipv4", "help"]
+        expectExitCode: 0
+      - title: ipv4 里全部 show 子命令
+        args: ["interface", "ipv4", "show", "?"]
+        expectExitCode: 0
+
+  # ===================================================== 网卡与接口
+  - id: show-interfaces
+    category: 网卡与接口
+    title: 列出网卡与状态
+    description: >-
+      一条一行列出全部接口：管理状态（Enabled/Disabled）、连接状态
+      （Connected/Disconnected）、类型（Dedicated）与接口名。
+      带接口名时改为显示该接口的类型、管理状态与连接状态。**排查网络问题的第一条命令。**
+    command: "interface"
+    commandArgs: ["show", "interface"]
+    sources:
+      - title: netsh interface 官方参考 —— `netsh interface show ...`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-interface
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          语法块首行 `netsh interface [6to4 | ... | set | show | tcp | ...]`；
+          `show interface [name=]<string>` 的用法与例子来自本机 `netsh interface show interface ?` 快照（929 B，
+          例子是 `show interface name="Wired Ethernet Connection"`）。
+      - title: 本机 `netsh interface show interface ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/interface-show-interface-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: '参数一节只有一行：`name - Name of a specific interface to show current parameter settings.`'
+    fields:
+      - id: ifName
+        label: 接口名（留空 = 全部接口）
+        type: text
+        style: positional
+        placeholder: 例 以太网 / WLAN（也可用索引 18）
+        group: 高级
+        advanced: true
+        help: >-
+          留空列出全部接口。填名字时**只写名字**，不要写 `name=`（本机实测 `name=以太网` 与裸写 `以太网`
+          输出都是 198 B、退出码 0）。名字含空格时宿主会自动加引号。
+        doc: >-
+          official netsh-interface 页的 `netsh interface show ...` 行 + 本机 `netsh interface show interface ?` 快照的 `name` 参数行
+          （本机实测裸值与 `name=` 两种写法等价，见 NOTES §3）
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测「全部接口」409 B、退出码 0（本机 4 个接口，含 2 个 VMware 虚拟网卡）。
+    examples:
+      - title: 列出全部网卡
+        args: ["interface", "show", "interface"]
+        expectExitCode: 0
+
+  - id: ipv4-show-config
+    category: 网卡与接口
+    title: 查看 IPv4 地址配置
+    description: >-
+      显示接口的 IPv4 配置：是否启用 DHCP、IP 地址、子网前缀与掩码、默认网关、网关与接口跃点、
+      以及 DHCP 或静态配置的 DNS / WINS 服务器。**替代「网络和共享中心 → 详细信息」的那一屏。**
+    command: "interface"
+    commandArgs: ["ipv4", "show", "config"]
+    sources:
+      - title: netsh interface 官方参考 —— `ipv4 show config`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-interface
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          语法行 `netsh interface ipv4 show config [name=]<string>`；参数表写着
+          「`name` - Specifies the interface name or index」，且该节列出了输出字段
+          （DHCP enabled / IP Address / Subnet Mask / Default Gateway / Gateway Metric / Interface Metric）。
+      - title: 本机 `netsh interface ipv4 show config ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/interface-ipv4-show-config-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: '用法行 `Usage: show config [[name=]<string>]`，例子 `show config "Wired Ethernet Connection"`（说明名字含空格即可，无需写 name=）。'
+    fields:
+      - id: ifName
+        label: 接口名或索引（留空 = 全部接口）
+        type: text
+        style: positional
+        placeholder: 例 以太网 / 18
+        help: >-
+          只写名字或索引，不要写 `name=`。实测三种写法都可用且结果一致：
+          留空（3084 B，全部接口）、`以太网`（531 B）、`name=以太网`（531 B）、`name=18`（531 B，按索引）。
+        doc: >-
+          official netsh-interface 页的 `ipv4 show config [name=]<string>` + 本机
+          `netsh interface ipv4 show config ?` 快照的 `name` 参数行（多写法实测见 NOTES §3）
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测不带参数 3084 B、退出码 0；带接口名 531 B、退出码 0。
+    examples:
+      - title: 查看全部接口的 IPv4 配置
+        args: ["interface", "ipv4", "show", "config"]
+        expectExitCode: 0
+      - title: 只看某个接口（按名字）
+        args: ["interface", "ipv4", "show", "config", "以太网"]
+        expectExitCode: 0
+
+  - id: ipv6-show-addresses
+    category: 网卡与接口
+    title: 查看 IPv6 地址
+    description: >-
+      按接口列出 IPv6 地址，每条带地址类型（Dhcp / Public / Temporary / Other）、
+      DAD 状态与有效/首选生存期。**注意：IPv6 没有 `show config`**（本机实测不是有效命令），
+      所以这一条只能看地址，DNS 服务器用单独的动作。
+    command: "interface"
+    commandArgs: ["ipv6", "show", "addresses"]
+    sources:
+      - title: netsh interface 官方参考 —— `ipv6 show addresses`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-interface
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: '语法行 `netsh interface ipv6 show addresses [interface=]<string> [level=]normal|verbose [store=]active|persistent`。'
+      - title: 本机 `netsh interface ipv6 show addresses ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/interface-ipv6-show-addresses-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: '参数一节：`interface - Interface name or index.`；`level` / `store` 的默认值与官方一致。'
+    fields:
+      - id: ifTag
+        label: 接口名或索引（留空 = 全部接口）
+        type: text
+        style: positional
+        placeholder: 例 以太网 / 18
+        help: 只写名字或索引，不要写 `interface=`。本机实测裸值 `以太网` 与 `interface=以太网` 都可用。
+        doc: >-
+          official netsh-interface 页的 `ipv6 show addresses [interface=]<string>` + 本机
+          `netsh interface ipv6 show addresses ?` 快照的 `interface` 参数行
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 1881 B、退出码 0（本机 8 个接口，含 VMware 虚拟网卡与蓝牙）。
+    examples:
+      - title: 查看全部 IPv6 地址
+        args: ["interface", "ipv6", "show", "addresses"]
+        expectExitCode: 0
+
+  - id: ipv4-show-addresses
+    category: 网卡与接口
+    title: 查看 IPv4 地址（简洁版）
+    description: 只列 IP 地址与子网掩码，不带 DHCP / DNS / WINS 那些行。比「查看 IPv4 地址配置」短。
+    command: "interface"
+    commandArgs: ["ipv4", "show", "addresses"]
+    sources:
+      - title: netsh interface 官方参考 —— `ipv4 show addresses`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-interface
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          语法行 `netsh interface ipv4 show addresses [name=]<string>`；参数表列出输出字段
+          （DHCP enabled / IP Address / Subnet Mask / Default Gateway / Gateway Metric / Interface Metric）。
+      - title: 本机 `netsh interface ipv4 show addresses ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/interface-ipv4-show-addresses-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: '用法行 `Usage: show addresses  [[name=]<string>]`。'
+    fields:
+      - id: ifName
+        label: 接口名或索引（留空 = 全部接口）
+        type: text
+        style: positional
+        placeholder: 例 以太网 / 18
+        help: 只写名字或索引。本机实测裸值、`name=以太网`、`interface=以太网` 三种写法都可用。
+        doc: >-
+          official netsh-interface 页的 `ipv4 show addresses [name=]<string>` + 本机
+          `netsh interface ipv4 show addresses ?` 快照的 `name` 参数行
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 1796 B、退出码 0。
+    examples:
+      - title: 查看全部 IPv4 地址
+        args: ["interface", "ipv4", "show", "addresses"]
+        expectExitCode: 0
+
+  - id: ipv4-show-interfaces
+    category: 网卡与接口
+    title: 列出 IPv4 接口（含索引与 MTU）
+    description: >-
+      带索引（Idx）、跃点（Met）、MTU、状态与名字的接口表。
+      别的 netsh 动作要填接口索引时，就是从这里拿（本机实测 `以太网` 的索引是 18）。
+      加 `level=verbose` 会展开每个接口的全部参数（本机实测 11765 B）。
+    command: "interface"
+    commandArgs: ["ipv4", "show", "interfaces"]
+    sources:
+      - title: netsh interface 官方参考 —— `ipv4 show interfaces`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-interface
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          语法行 `netsh interface ipv4 show interfaces [interface=]<string> [rr=]<integer> [level=]normal|verbose [store=]active|persistent`；
+          页面还给了 `interface - Specifies the name or index of the network interface`。
+      - title: 本机 `netsh interface ipv4 show interfaces ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/interface-ipv4-show-interfaces-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: '参数一节含 interface / rr / level / store 四项与它们的默认值说明（level 默认给接口时是 verbose）。'
+    fields:
+      - id: ifTag
+        label: 接口名或索引（留空 = 全部接口）
+        type: text
+        style: positional
+        placeholder: 例 18 / 以太网
+        group: 高级
+        advanced: true
+        help: >-
+          留空列出全部接口。给了名字/索引时 netsh 默认改用 verbose 明细（本机实测
+          `interface=18` 输出 1461 B 的 `Interface 以太网 Parameters` 明细）。
+        doc: >-
+          official netsh-interface 页的 `ipv4 show interfaces [interface=]<string>` + 本机
+          `netsh interface ipv4 show interfaces ?` 快照的 `interface` 参数行
+      - id: level
+        label: 详细程度
+        type: enum
+        style: literal
+        group: 高级
+        advanced: true
+        help: >-
+          对应文档里的 `level=normal|verbose`。不选则不产生参数（netsh 自己的默认是：
+          不给接口时 normal、给了接口时 verbose）。本机实测 `level=verbose` → 11765 B。
+        doc: 'official netsh-interface 页的 `[level=]normal|verbose`（含两者各自的默认时机）；本机 `netsh interface ipv4 show interfaces ?` 快照的 level 一节'
+        values:
+          - value: ""
+            label: 不指定（用 netsh 的默认）
+            isDefault: true
+            args: []
+          - value: normal
+            label: normal —— 一个接口一行
+            args: ["level=normal"]
+          - value: verbose
+            label: verbose —— 每个接口展开全部参数
+            args: ["level=verbose"]
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测不带参数 645 B、退出码 0；`level=verbose` 11765 B、退出码 0。
+    examples:
+      - title: 列出 IPv4 接口
+        args: ["interface", "ipv4", "show", "interfaces"]
+        expectExitCode: 0
+
+  - id: ipv6-show-interfaces
+    category: 网卡与接口
+    title: 列出 IPv6 接口（含索引与 MTU）
+    description: 与「列出 IPv4 接口」同表结构，用于拿 IPv6 侧的接口索引与 MTU。
+    command: "interface"
+    commandArgs: ["ipv6", "show", "interfaces"]
+    sources:
+      - title: netsh interface 官方参考 —— `ipv6 show interfaces`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-interface
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: '语法行 `netsh interface ipv6 show interfaces [interface=]<string> [rr=]<integer> [level=]normal|verbose [store=]active|persistent`。'
+      - title: 本机 `netsh interface ipv6 show interfaces ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/interface-ipv6-show-interfaces-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: 与 ipv4 版本的帮助文本一致（同一份 usage）。
+    fields:
+      - id: ifTag
+        label: 接口名或索引（留空 = 全部接口）
+        type: text
+        style: positional
+        placeholder: 例 18 / 以太网
+        group: 高级
+        advanced: true
+        help: 留空列出全部接口；给了接口会改成 verbose 明细。
+        doc: 'official netsh-interface 页的 `ipv6 show interfaces [interface=]<string>` + 本机 `netsh interface ipv6 show interfaces ?` 快照的 interface 参数行'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 580 B、退出码 0（比 IPv4 少一个蓝牙接口，因为本机蓝牙没有 IPv6 栈）。
+    examples:
+      - title: 列出 IPv6 接口
+        args: ["interface", "ipv6", "show", "interfaces"]
+        expectExitCode: 0
+
+  - id: ipv4-show-dnsservers
+    category: DNS 与解析
+    title: 查看 IPv4 DNS 服务器
+    description: 列出各接口正在使用的 IPv4 DNS 服务器，并标明来源是 DHCP 还是静态配置。
+    command: "interface"
+    commandArgs: ["ipv4", "show", "dnsservers"]
+    sources:
+      - title: netsh interface 官方参考 —— `ipv4 show dnsservers`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-interface
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: '语法行 `netsh interface ipv4 show dnsservers [name=]string`；页面：「Displays the DNS server settings for one or more specified network interfaces.」'
+      - title: 本机 `netsh interface ipv4 show dnsservers ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/interface-ipv4-show-dnsservers-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: '用法行 `Usage: show dnsservers [[name=]string]`，例子 `show dnsservers "Wired Ethernet Connection"`。'
+    fields:
+      - id: ifName
+        label: 接口名或索引（留空 = 全部接口）
+        type: text
+        style: positional
+        placeholder: 例 以太网
+        group: 高级
+        advanced: true
+        help: 只写名字或索引。本机实测裸值 `以太网` → 156 B、`name=以太网` → 156 B，等价。
+        doc: 'official netsh-interface 页的 `ipv4 show dnsservers [name=]string` + 本机 `netsh interface ipv4 show dnsservers ?` 快照的 name 参数行'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测全部接口 1327 B、退出码 0。
+    examples:
+      - title: 查看全部接口的 DNS 服务器
+        args: ["interface", "ipv4", "show", "dnsservers"]
+        expectExitCode: 0
+
+  - id: ipv6-show-dnsservers
+    category: DNS 与解析
+    title: 查看 IPv6 DNS 服务器
+    description: 列出各接口正在使用的 IPv6 DNS 服务器（含 `fec0:0:0:ffff::1%1` 这类 IPv6 站点本地默认值）。
+    command: "interface"
+    commandArgs: ["ipv6", "show", "dnsservers"]
+    sources:
+      - title: netsh interface 官方参考 —— `ipv6 show dnsservers`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-interface
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: '语法行 `netsh interface ipv6 show dnsservers [name=]string`。'
+      - title: 本机 `netsh interface ipv6 show dnsservers ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/interface-ipv6-show-dnsservers-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: 与 ipv4 版本共用同一份 usage 文本。
+    fields:
+      - id: ifName
+        label: 接口名或索引（留空 = 全部接口）
+        type: text
+        style: positional
+        placeholder: 例 以太网
+        group: 高级
+        advanced: true
+        help: 只写名字或索引。
+        doc: 'official netsh-interface 页的 `ipv6 show dnsservers [name=]string` + 本机 `netsh interface ipv6 show dnsservers ?` 快照'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 1869 B、退出码 0。
+    examples:
+      - title: 查看全部接口的 IPv6 DNS 服务器
+        args: ["interface", "ipv6", "show", "dnsservers"]
+        expectExitCode: 0
+
+  # ===================================================== 路由与邻居
+  - id: ipv4-show-route
+    category: 路由与邻居
+    title: 查看 IPv4 路由表
+    description: >-
+      显示 IPv4 路由表（发布、类型、跃点、前缀、索引、网关/接口）。
+      等价于 `route print -4` 的 netsh 版本；加 `level=verbose` 还会列出环回用的路由（本机实测 9787 B）。
+    command: "interface"
+    commandArgs: ["ipv4", "show", "route"]
+    sources:
+      - title: netsh interface 官方参考 —— `ipv4 show route`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-interface
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: '语法行 `netsh interface ipv4 show route [level=]normal|verbose [store=]active|persistent`。'
+      - title: 本机 `netsh interface ipv4 show route ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/interface-ipv4-show-route-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: '用法行给了 level（normal 默认 / verbose 含环回）与 store（active 默认 / persistent）及各自默认值。'
+    fields:
+      - id: level
+        label: 详细程度
+        type: enum
+        style: literal
+        help: '对应文档里的 `level=normal|verbose`；verbose = 额外显示环回用的路由。不选则用 netsh 默认（normal）。'
+        doc: 'official netsh-interface 页的 `ipv4 show route [level=]normal|verbose`；本机 `netsh interface ipv4 show route ?` 快照的 level 一节'
+        values:
+          - value: ""
+            label: 不指定（normal）
+            isDefault: true
+            args: []
+          - value: normal
+            label: normal —— 只显示正常路由
+            args: ["level=normal"]
+          - value: verbose
+            label: verbose —— 连同环回路由一起显示
+            args: ["level=verbose"]
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测不带参数 2408 B、退出码 0；`level=verbose` 9787 B、退出码 0。
+    examples:
+      - title: 查看 IPv4 路由表
+        args: ["interface", "ipv4", "show", "route"]
+        expectExitCode: 0
+
+  - id: ipv6-show-route
+    category: 路由与邻居
+    title: 查看 IPv6 路由表
+    description: 显示 IPv6 路由表（发布、类型、跃点、前缀、索引、网关/接口名）。
+    command: "interface"
+    commandArgs: ["ipv6", "show", "route"]
+    sources:
+      - title: netsh interface 官方参考 —— `ipv6 show route`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-interface
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: '语法行 `netsh interface ipv6 show route [level=]normal|verbose [store=]active|persistent`。'
+      - title: 本机 `netsh interface ipv6 show route ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/interface-ipv6-show-route-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: 与 ipv4 版本共用同一份 usage 文本。
+    fields:
+      - id: level
+        label: 详细程度
+        type: enum
+        style: literal
+        help: 同 IPv4 版本；verbose = 额外显示环回用路由。
+        doc: 'official netsh-interface 页的 `ipv6 show route [level=]normal|verbose`；本机 `netsh interface ipv6 show route ?` 快照'
+        values:
+          - value: ""
+            label: 不指定（normal）
+            isDefault: true
+            args: []
+          - value: normal
+            label: normal —— 只显示正常路由
+            args: ["level=normal"]
+          - value: verbose
+            label: verbose —— 连同环回路由一起显示
+            args: ["level=verbose"]
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 2059 B、退出码 0。
+    examples:
+      - title: 查看 IPv6 路由表
+        args: ["interface", "ipv6", "show", "route"]
+        expectExitCode: 0
+
+  - id: ipv4-show-neighbors
+    category: 路由与邻居
+    title: 查看 IPv4 邻居缓存（ARP）
+    description: >-
+      显示 IPv4 邻居（ARP）缓存：Internet 地址、物理地址（MAC）与类型（Reachable / Stale / Permanent）。
+      **注意：`interface ipv4 show arp` 这种写法不存在**，邻居缓存就是本命令。
+    command: "interface"
+    commandArgs: ["ipv4", "show", "neighbors"]
+    sources:
+      - title: netsh interface 官方参考 —— `ipv4 show neighbors`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-interface
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          语法行 `netsh interface ipv4 show neighbors [interface=]<string> [address=]<IP address> [subinterface=]<string> [level=]normal|verbose [store=]active|persistent`。
+      - title: 本机 `netsh interface ipv4 show neighbors ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/interface-ipv4-show-neighbors-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: '参数一节含 interface / address / subinterface / level / store 五项。'
+    fields:
+      - id: ifTag
+        label: 接口名或索引（留空 = 全部接口）
+        type: text
+        style: positional
+        placeholder: 例 以太网 / 18
+        group: 高级
+        advanced: true
+        help: 留空显示全部接口的邻居缓存；本机实测 `interface=以太网` → 1400 B、退出码 0。
+        doc: 'official netsh-interface 页的 `ipv4 show neighbors [interface=]<string>` + 本机 `netsh interface ipv4 show neighbors ?` 快照的 interface 参数行'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 4198 B、退出码 0。
+    examples:
+      - title: 查看 IPv4 邻居缓存
+        args: ["interface", "ipv4", "show", "neighbors"]
+        expectExitCode: 0
+
+  - id: ipv6-show-neighbors
+    category: 路由与邻居
+    title: 查看 IPv6 邻居缓存
+    description: >-
+      显示 IPv6 邻居缓存。本机输出很大（11737 B），因为里面包含大量 `ff02::` 多播与 `Permanent` 条目 ——
+      这是正常的（IPv6 的邻居缓存包含多播地址注册），不是异常。
+    command: "interface"
+    commandArgs: ["ipv6", "show", "neighbors"]
+    sources:
+      - title: netsh interface 官方参考 —— `ipv6 show neighbors`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-interface
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: '语法行 `netsh interface ipv6 show neighbors [interface=]<string> [address=]<IP address> [subinterface=]<string> [level=]normal|verbose [store=]active|persistent`。'
+      - title: 本机 `netsh interface ipv6 show neighbors ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/interface-ipv6-show-neighbors-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: 与 ipv4 版本共用同一份 usage 文本。
+    fields:
+      - id: ifTag
+        label: 接口名或索引（留空 = 全部接口）
+        type: text
+        style: positional
+        placeholder: 例 以太网 / 18
+        group: 高级
+        advanced: true
+        help: 留空显示全部接口；输出条目多时建议指定接口。
+        doc: 'official netsh-interface 页的 `ipv6 show neighbors [interface=]<string>` + 本机 `netsh interface ipv6 show neighbors ?` 快照'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测约 11.7 KB（两轮 11737 / 11733 B，邻居缓存会变）、退出码 0。输出大是因为 IPv6 邻居缓存含多播注册条目。
+    examples:
+      - title: 查看 IPv6 邻居缓存
+        args: ["interface", "ipv6", "show", "neighbors"]
+        expectExitCode: 0
+
+  # ===================================================== 协议与端口
+  - id: ipv4-show-global
+    category: 协议与端口
+    title: 查看 IPv4 全局参数
+    description: >-
+      显示 IPv4 协议栈的全局参数：默认跃点上限、邻居/路由缓存上限、重组上限、ICMP 重定向、
+      源路由行为、任务卸载、DHCP 媒体感知、MLD 等级与版本、多播转发、标识符随机化等。
+    command: "interface"
+    commandArgs: ["ipv4", "show", "global"]
+    sources:
+      - title: netsh interface 官方参考 —— `ipv4 show global`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-interface
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: '语法行 `netsh interface ipv4 show global [store=]active|persistent`。'
+      - title: 本机 `netsh interface ipv4 show global ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/interface-ipv4-show-global-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: '用法行 `Usage: show global [[store=]active|persistent]`，active 是默认。'
+    fields:
+      - id: store
+        label: 参数来源
+        type: enum
+        style: literal
+        group: 高级
+        advanced: true
+        help: >-
+          对应文档里的 `store=active|persistent`。active = 当前协议栈里的设置（默认），
+          persistent = 另存的一份持久设置。**本机实测 `store=persistent` 输出 1490 B、退出码 0**，
+          说明这台机器确实有一份持久设置。
+        doc: 'official netsh-interface 页的 `ipv4 show global [store=]active|persistent`；本机 `netsh interface ipv4 show global ?` 快照的 store 一节'
+        values:
+          - value: ""
+            label: 不指定（active）
+            isDefault: true
+            args: []
+          - value: active
+            label: active —— 当前协议栈里的设置
+            args: ["store=active"]
+          - value: persistent
+            label: persistent —— 持久保存的设置
+            args: ["store=persistent"]
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 1667 B、退出码 0。
+    examples:
+      - title: 查看 IPv4 全局参数
+        args: ["interface", "ipv4", "show", "global"]
+        expectExitCode: 0
+
+  - id: ipv6-show-global
+    category: 协议与端口
+    title: 查看 IPv6 全局参数
+    description: 显示 IPv6 协议栈的全局参数（与 IPv4 版本字段类似，另含 MLD 版本、随机化标识符等）。
+    command: "interface"
+    commandArgs: ["ipv6", "show", "global"]
+    sources:
+      - title: netsh interface 官方参考 —— `ipv6 show global`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-interface
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: '语法行 `netsh interface ipv6 show global [store=]active|persistent`。'
+      - title: 本机 `netsh interface ipv6 show global` 实测输出
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/interface-ipv6-show-global.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: 实测输出首行是 `Querying active state...`，然后是 `General Global Parameters` 表。
+    fields:
+      - id: store
+        label: 参数来源
+        type: enum
+        style: literal
+        group: 高级
+        advanced: true
+        help: 同 IPv4 版本。
+        doc: 'official netsh-interface 页的 `ipv6 show global [store=]active|persistent`'
+        values:
+          - value: ""
+            label: 不指定（active）
+            isDefault: true
+            args: []
+          - value: active
+            label: active —— 当前协议栈里的设置
+            args: ["store=active"]
+          - value: persistent
+            label: persistent —— 持久保存的设置
+            args: ["store=persistent"]
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 1659 B、退出码 0。
+    examples:
+      - title: 查看 IPv6 全局参数
+        args: ["interface", "ipv6", "show", "global"]
+        expectExitCode: 0
+
+  - id: ipv4-show-dynamicportrange
+    category: 协议与端口
+    title: 查看动态端口范围
+    description: >-
+      显示为「通配端口分配」保留的临时端口区间（TCP 或 UDP）。
+      服务报「端口耗尽」或防火墙规则算端口时要用它。
+    command: "interface"
+    commandArgs: ["ipv4", "show", "dynamicportrange"]
+    sources:
+      - title: netsh interface 官方参考 —— `ipv4 show dynamicportrange`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-interface
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: '语法行 `netsh interface ipv4 show dynamicportrange [protocol=]tcp|udp [store=]active|persistent`。'
+      - title: 本机 `netsh interface ipv4 show dynamicportrange ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/interface-ipv4-show-dynamicportrange-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: '用法行 `Usage: show dynamicportrange [protocol=]tcp|udp [[store=]active|persistent]`，protocol 是必需项。'
+    fields:
+      - id: protocol
+        label: 协议
+        type: enum
+        style: literal
+        required: true
+        help: >-
+          文档把 protocol 列为该项的必需参数（`[protocol=]tcp|udp`）。本机实测两种取值都可跑：
+          tcp → 121 B、udp → 122 B，退出码都是 0。
+        doc: 'official netsh-interface 页的 `ipv4 show dynamicportrange [protocol=]tcp|udp`；本机 `netsh interface ipv4 show dynamicportrange ?` 快照的 protocol 一节'
+        values:
+          - value: tcp
+            label: tcp —— TCP 动态端口范围
+            isDefault: true
+            args: ["protocol=tcp"]
+          - value: udp
+            label: udp —— UDP 动态端口范围
+            args: ["protocol=udp"]
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 `protocol=tcp` 121 B、退出码 0。
+    examples:
+      - title: 查看 TCP 动态端口范围
+        args: ["interface", "ipv4", "show", "dynamicportrange", "protocol=tcp"]
+        expectExitCode: 0
+
+  - id: ipv4-show-excludedportrange
+    category: 协议与端口
+    title: 查看被排除的端口范围
+    description: >-
+      列出被排除（保留）的 TCP 或 UDP 端口区间。Hyper-V / WSL / Docker 之类的组件会预留端口段，
+      服务「明明没人占用却启动不了」时用它确认。带 `*` 标记的是管理员手工排除的。
+    command: "interface"
+    commandArgs: ["ipv4", "show", "excludedportrange"]
+    sources:
+      - title: netsh interface 官方参考 —— `ipv4 show excludedportrange`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-interface
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: '语法行 `netsh interface ipv4 show excludedportrange [protocol=]tcp|udp [store=]active|persistent`；页面：「Shows all excluded port ranges.」'
+      - title: 本机 `netsh interface ipv4 show excludedportrange tcp` 实测输出
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/interface-ipv4-show-excludedportrange.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: 实测输出 229 B、退出码 0，末尾有一行 `* - Administered port exclusions.`。
+    fields:
+      - id: protocol
+        label: 协议
+        type: enum
+        style: literal
+        required: true
+        help: 文档把 protocol 列为必需参数；本机实测 `protocol=tcp` → 229 B、退出码 0。
+        doc: 'official netsh-interface 页的 `ipv4 show excludedportrange [protocol=]tcp|udp`'
+        values:
+          - value: tcp
+            label: tcp —— TCP 被排除的端口范围
+            isDefault: true
+            args: ["protocol=tcp"]
+          - value: udp
+            label: udp —— UDP 被排除的端口范围
+            args: ["protocol=udp"]
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 `protocol=tcp` 229 B、退出码 0（本机排除 5357、28385、28390 三个单端口）。
+    examples:
+      - title: 查看被排除的 TCP 端口
+        args: ["interface", "ipv4", "show", "excludedportrange", "protocol=tcp"]
+        expectExitCode: 0
+
+  - id: ipv6-show-privacy
+    category: 协议与端口
+    title: 查看 IPv6 临时地址参数
+    description: >-
+      显示 IPv6 临时地址（隐私扩展）的参数：是否使用临时地址、重复地址检测次数、
+      最大有效/首选生存期、重新生成时间与随机时间。
+    command: "interface"
+    commandArgs: ["ipv6", "show", "privacy"]
+    sources:
+      - title: netsh interface 官方参考 —— `ipv6 show privacy`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-interface
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: '语法行 `netsh interface ipv6 show privacy [store=]active|persistent`。'
+      - title: 本机 `netsh interface ipv6 show privacy ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/interface-ipv6-show-privacy-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: '用法行 `Usage: show privacy [[store=]active|persistent]`，active 是默认。'
+    fields:
+      - id: store
+        label: 参数来源
+        type: enum
+        style: literal
+        group: 高级
+        advanced: true
+        help: 同 IPv4 全局参数的 store。
+        doc: 'official netsh-interface 页的 `ipv6 show privacy [store=]active|persistent`；本机 `netsh interface ipv6 show privacy ?` 快照'
+        values:
+          - value: ""
+            label: 不指定（active）
+            isDefault: true
+            args: []
+          - value: active
+            label: active —— 当前协议栈里的设置
+            args: ["store=active"]
+          - value: persistent
+            label: persistent —— 持久保存的设置
+            args: ["store=persistent"]
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 409 B、退出码 0。
+    examples:
+      - title: 查看 IPv6 临时地址参数
+        args: ["interface", "ipv6", "show", "privacy"]
+        expectExitCode: 0
+
+  - id: portproxy-show-all
+    category: 协议与端口
+    title: 查看全部端口代理（portproxy）
+    description: >-
+      显示 `netsh interface portproxy` 配置的全部端口转发条目（v4tov4 / v4tov6 / v6tov4 / v6tov6）。
+      **本机没有配置任何条目时输出是空的（2 B）、退出码仍是 0** —— 空输出不等于命令失败。
+    command: "interface"
+    commandArgs: ["portproxy", "show", "all"]
+    sources:
+      - title: netsh interface 官方参考 —— `portproxy show`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-interface
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          语法块里 `netsh interface portproxy add|delete v4tov4|v4tov6|v6tov4|v6tov6 ...`；
+          `show all` 的用法与说明来自本机 `netsh interface portproxy show ?` 快照（443 B，
+          列出 `show all` / `v4tov4` / `v4tov6` / `v6tov4` / `v6tov6`）。
+      - title: 本机 `netsh interface portproxy show ?` 与 `show all` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/interface-portproxy-show-all-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: '帮助只有一条：`Usage: show all` / `Remarks: Shows all port proxy parameters.`；实测输出 2 B、退出码 0。'
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测输出 2 B（空）、退出码 0 —— 本机没有端口代理条目。空输出是正常结果，不是错误。
+    examples:
+      - title: 查看全部端口代理
+        args: ["interface", "portproxy", "show", "all"]
+        expectExitCode: 0
+
+  # ===================================================== 无线（WLAN）
+  - id: wlan-show-interfaces
+    category: 无线（WLAN）
+    title: 查看无线接口状态
+    description: >-
+      显示无线网卡的名称、描述、GUID、物理地址、接口类型、连接状态与无线电状态。
+      **没有参数**（官方与 `?` 都写着 no parameters）。
+    command: "wlan"
+    commandArgs: ["show", "interfaces"]
+    sources:
+      - title: netsh wlan 官方参考 —— `show interfaces`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-wlan
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: '语法块含 `netsh wlan show interfaces`；参数表：「`interfaces` - Lists all wireless LAN interfaces detected on the system.」'
+      - title: 本机 `netsh wlan show interfaces ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/wlan-show-interfaces-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: '帮助明确写「There are no parameters for this command.」'
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 420 B、退出码 0（本机 1 个无线接口 WLAN，State=disconnected，无线电状态为 Hardware On / Software Off）。
+    examples:
+      - title: 查看无线接口
+        args: ["wlan", "show", "interfaces"]
+        expectExitCode: 0
+
+  - id: wlan-show-profiles
+    category: 无线（WLAN）
+    title: 查看无线配置文件
+    description: >-
+      列出本机保存的无线配置文件（每条带 SSID 与描述）。留空 = 只列清单；
+      填了名字 = 显示该配置文件的完整内容（XML 式的键值）。
+    command: "wlan"
+    commandArgs: ["show", "profiles"]
+    sources:
+      - title: netsh wlan 官方参考 —— `show profiles`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-wlan
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          语法块含 `netsh wlan show profiles`；参数表：「`profiles` - Lists all configured wireless network profiles.」。
+          本机 `netsh wlan show profiles ?` 快照（1228 B）给出完整参数：`name`（配置文件名的子串匹配）、
+          `interface`、`key`（只有写 `key=clear` 且调用者是**本地管理员**时才显示明文密钥）。
+      - title: 本机 `netsh wlan show profiles ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/wlan-show-profiles-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: >-
+          帮助里的例子 `show profiles name="profile 1" interface="Wireless Network Connection"`。
+          另注意：`key=clear` **本包不收录**（需要管理员，且属于「读取已保存的 Wi-Fi 明文密码」，
+          不适合做成一个点的动作；见 NOTES §8）。
+    fields:
+      - id: profileName
+        label: 配置文件名（留空 = 只列清单）
+        type: text
+        style: separate
+        prefix: "name"
+        placeholder: 例 王のWIFI
+        help: >-
+          留空只列配置文件名与描述；填了名字则打印该配置文件的完整内容（可用通配符，
+          本机实测 `name=*` → 23667 B，把 17 个配置文件全展开）。
+          本机的配置文件是按 **SSID** 命名的（例如 `王のWIFI`、`上海未知生物研究所_5G`），
+          所以 `name=WLAN`（拿无线接口名去查）会报 `Profile "WLAN" is not found on the system.`、退出码 1 ——
+          那**不是**命令写错，而是接口名与配置文件名的概念不同（见 NOTES §7）。
+        doc: 'official netsh-wlan 页的 `netsh wlan show profiles` + 本机 `netsh wlan show profiles ?` 快照的 name 参数行与例子 `show profiles name="profile 1"`'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测不带参数 906 B、退出码 0。
+    examples:
+      - title: 列出全部无线配置文件
+        args: ["wlan", "show", "profiles"]
+        expectExitCode: 0
+
+  - id: wlan-show-networks
+    category: 无线（WLAN）
+    title: 查看可见无线网络
+    description: >-
+      列出当前可见的无线网络（SSID、信号、认证与加密方式）。
+      加 `mode=bssid` 时再展开每个 SSID 下可见的 BSSID 明细。
+      **本机实测退出码 1**：无线网卡无线电被关（Radio: Software Off）时 netsh 报
+      `The wireless local area network interface is powered down and doesn't support the requested operation.`。
+    command: "wlan"
+    commandArgs: ["show", "networks"]
+    sources:
+      - title: netsh wlan 官方参考 —— `show networks`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-wlan
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: '语法块含 `netsh wlan show networks`；参数表：「`networks` - Displays all visible wireless networks in range.」'
+      - title: 本机 `netsh wlan show networks ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/wlan-show-networks-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: '参数：`interface`（无线接口名）与 `mode`（`ssid` / `bssid`，例子写 `show networks mode=Bssid`）。'
+    fields:
+      - id: interface
+        label: 无线接口名（留空 = 全部）
+        type: text
+        style: attached
+        prefix: "interface="
+        placeholder: 例 WLAN
+        group: 高级
+        advanced: true
+        help: >-
+          留空列出所有接口可见的网络。本机只有一个名为 WLAN 的无线接口。
+          **这里是 `attached` 而不是 `positional`**：本机实测裸写 `show networks WLAN` 会被当成非法参数
+          （`One or more parameters for the command are not correct or missing.`、退出码 1），
+          必须写 `interface=WLAN` —— 与 `wlan show drivers` 正相反（见 NOTES §3）。
+        doc: 'official netsh-wlan 页的 `netsh wlan show networks` + 本机 `netsh wlan show networks ?` 快照的 interface 参数行（两种写法实测见 NOTES §3）'
+      - id: mode
+        label: 明细模式
+        type: enum
+        style: literal
+        group: 高级
+        advanced: true
+        help: >-
+          对应帮助里的 `mode=ssid/bssid`。不选 = 只列 SSID；bssid = 额外列出每个 SSID 的可见 BSSID。
+          **本机没法验证 bssid 的差异**：无线关着，两种写法都返回同一个错误（见 NOTES §9）。
+        doc: '本机 `netsh wlan show networks ?` 快照的参数节（`mode - Get detailed bssid information.`）与例子 `show networks mode=Bssid`'
+        values:
+          - value: ""
+            label: 不指定（只列 SSID）
+            isDefault: true
+            args: []
+          - value: bssid
+            label: bssid —— 展开 BSSID 明细
+            args: ["mode=bssid"]
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测退出码 **1**：本机无线网卡无线电处于 Software Off（`wlan show interfaces` 可见），
+        netsh 直接报 wired-down 错误、输出 135 B。这不是本工具包的问题，是环境状态。
+    examples:
+      - title: 列出可见无线网络
+        args: ["wlan", "show", "networks"]
+
+  - id: wlan-show-settings
+    category: 无线（WLAN）
+    title: 查看无线全局设置
+    description: >-
+      显示 Wireless AutoConfig 服务的全局设置：是否在可见列表里显示被阻止的网络、
+      是否只在 GP 配置的网络上使用 GP 配置文件、是否允许承载网络、是否允许共享用户凭据、
+      阻止时长，以及每个接口上自动配置逻辑与 MAC 随机化是否开启。
+    command: "wlan"
+    commandArgs: ["show", "settings"]
+    sources:
+      - title: netsh wlan 官方参考 —— `show settings`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-wlan
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: '参数表：「`settings` - Displays global configuration settings for wireless LAN.」'
+      - title: 本机 `netsh wlan show settings ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/wlan-show-settings-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: '帮助写明「There are no parameters」性质的内容，并提示允许/阻止清单用 `show filters` 看。'
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 434 B、退出码 0。
+    examples:
+      - title: 查看无线全局设置
+        args: ["wlan", "show", "settings"]
+        expectExitCode: 0
+
+  - id: wlan-show-drivers
+    category: 无线（WLAN）
+    title: 查看无线驱动信息
+    description: >-
+      显示无线网卡的驱动信息与硬件能力（驱动版本/日期/提供商、支持的无线电类型、
+      认证与加密能力、是否支持承载网络等）。判断「这块网卡到底支持什么」时用它。
+    command: "wlan"
+    commandArgs: ["show", "drivers"]
+    sources:
+      - title: netsh wlan 官方参考 —— `show drivers`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-wlan
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: '参数表：「`drivers` - Lists properties and details of installed wireless LAN drivers.」'
+      - title: 本机 `netsh wlan show drivers ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/wlan-show-drivers-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: '参数只有 `interface - Name of the interface for which to show driver information.`，可留空。'
+    fields:
+      - id: interface
+        label: 无线接口名（留空 = 全部）
+        type: text
+        style: positional
+        placeholder: 例 WLAN
+        group: 高级
+        advanced: true
+        help: >-
+          留空显示系统上全部无线接口的驱动信息。**这里是 `positional`**：本机实测裸写
+          `show drivers WLAN` 与 `show drivers interface=WLAN` 输出完全等价（都是 2212 B、退出码 0），
+          所以取更短的裸值写法。
+        doc: 'official netsh-wlan 页的 `show drivers` + 本机 `netsh wlan show drivers ?` 快照的 interface 参数行（两种写法实测见 NOTES §3）'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 2212 B、退出码 0。
+    examples:
+      - title: 查看无线驱动信息
+        args: ["wlan", "show", "drivers"]
+        expectExitCode: 0
+
+  # ===================================================== 防火墙
+  - id: advfirewall-show-allprofiles
+    category: 防火墙
+    title: 查看全部配置文件的防火墙状态
+    description: >-
+      显示域 / 专用 / 公用三个网络配置文件的 Windows Defender 防火墙属性。
+      不带参数时打印全部属性；填了参数只打印那一项。
+      **本机（非管理员）实测全部可用、退出码 0** —— 查询防火墙**不需要**提权。
+    command: "advfirewall"
+    commandArgs: ["show", "allprofiles"]
+    sources:
+      - title: netsh advfirewall 官方参考 —— `show allprofiles`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-advfirewall
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          `netsh advfirewall show [allprofiles | currentprofile | domainprofile | privateprofile | publicprofile] <state> <firewallpolicy> <settings> <logging>`；
+          参数表列出 state / firewallpolicy / settings / logging 各自含义。
+      - title: 本机 `netsh advfirewall show allprofiles ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/advfirewall-show-allprofiles-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: '用法行 `Usage: show allprofiles [parameter]`，例子 `netsh advfirewall show allprofiles state`。'
+    fields:
+      - id: parameter
+        label: 只看某一项（留空 = 全部属性）
+        type: enum
+        style: literal
+        group: 高级
+        advanced: true
+        help: >-
+          文档把四个参数列在 `show` 的说明里；**它们不是 `xxx=` 形式**，所以这里用 literal 原样输出。
+          本机实测不带参数 2147 B、`state` 437 B，退出码都是 0。
+        doc: 'official netsh-advfirewall 页 `show allprofiles <state|firewallpolicy|settings|logging>`；本机 `netsh advfirewall show allprofiles ?` 快照的 Parameters 一节'
+        values:
+          - value: ""
+            label: 不指定（显示全部属性）
+            isDefault: true
+            args: []
+          - value: state
+            label: state —— 防火墙开/关
+            args: ["state"]
+          - value: firewallpolicy
+            label: firewallpolicy —— 默认入站/出站行为
+            args: ["firewallpolicy"]
+          - value: settings
+            label: settings —— 防火墙属性
+            args: ["settings"]
+          - value: logging
+            label: logging —— 日志设置
+            args: ["logging"]
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测不带参数 2147 B、退出码 0；`state` 437 B、退出码 0。查询不需要管理员。
+    examples:
+      - title: 查看三个配置文件的全部防火墙属性
+        args: ["advfirewall", "show", "allprofiles"]
+        expectExitCode: 0
+      - title: 只看防火墙开关
+        args: ["advfirewall", "show", "allprofiles", "state"]
+        expectExitCode: 0
+
+  - id: advfirewall-show-currentprofile
+    category: 防火墙
+    title: 查看当前配置文件的防火墙属性
+    description: 只打印**当前生效**那个网络配置文件的防火墙属性（比三个都看更聚焦）。
+    command: "advfirewall"
+    commandArgs: ["show", "currentprofile"]
+    sources:
+      - title: netsh advfirewall 官方参考 —— `show currentprofile`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-advfirewall
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: '参数表：「`currentprofile` - Displays the properties for the active profile.」'
+      - title: 本机 `netsh advfirewall show currentprofile ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/advfirewall-show-currentprofile-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: '用法行 `Usage: show currentprofile [parameter]`，四个参数与 allprofiles 版本一致。'
+    fields:
+      - id: parameter
+        label: 只看某一项（留空 = 全部属性）
+        type: enum
+        style: literal
+        group: 高级
+        advanced: true
+        help: 与「查看全部配置文件的防火墙状态」相同的四个参数（literal 原样输出）。
+        doc: 'official netsh-advfirewall 页 `show currentprofile <state|firewallpolicy|settings|logging>`；本机快照 advfirewall-show-currentprofile-q.txt'
+        values:
+          - value: ""
+            label: 不指定（显示全部属性）
+            isDefault: true
+            args: []
+          - value: state
+            label: state —— 防火墙开/关
+            args: ["state"]
+          - value: firewallpolicy
+            label: firewallpolicy —— 默认入站/出站行为
+            args: ["firewallpolicy"]
+          - value: settings
+            label: settings —— 防火墙属性
+            args: ["settings"]
+          - value: logging
+            label: logging —— 日志设置
+            args: ["logging"]
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测不带参数 721 B、退出码 0；`firewallpolicy` 175 B、退出码 0。
+    examples:
+      - title: 查看当前配置文件
+        args: ["advfirewall", "show", "currentprofile"]
+        expectExitCode: 0
+
+  - id: advfirewall-show-global
+    category: 防火墙
+    title: 查看防火墙全局设置
+    description: >-
+      显示 IPsec 全局项、StatefulFTP / StatefulPPTP 与 Main Mode 设置。
+      **注意：本机非管理员实测「Main Mode」段的 KeyLifetime / SecMethods / ForceDH 显示 `Access Denied`**
+      —— 官方文档说 `show global` 不需要提权，但**这一段的具体值确实读不到**（见 NOTES §6）。
+    command: "advfirewall"
+    commandArgs: ["show", "global"]
+    sources:
+      - title: netsh advfirewall 官方参考 —— `show global`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-advfirewall
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          `netsh advfirewall show global <ipsec> <statefulftp> <statefulpptp> <mainmode> <categories>`；
+          参数表：「`show global parameter` - Displays the global settings ... `ipsec` / `statefulftp` / `statefulpptp` / `mainmode` / `categories`。」
+      - title: 本机 `netsh advfirewall show global` 实测输出
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/advfirewall-show-global.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: 实测 1029 B、退出码 0；`Main Mode:` 段的三行值都是 `Access Denied`。
+    fields:
+      - id: parameter
+        label: 只看某一类（留空 = 全部）
+        type: enum
+        style: literal
+        group: 高级
+        advanced: true
+        help: 文档列出的五类；literal 原样输出（无 `xxx=` 形式）。
+        doc: 'official netsh-advfirewall 页 `show global <ipsec|statefulftp|statefulpptp|mainmode|categories>`'
+        values:
+          - value: ""
+            label: 不指定（显示全部）
+            isDefault: true
+            args: []
+          - value: ipsec
+            label: ipsec —— IPsec 全局设置
+            args: ["ipsec"]
+          - value: statefulftp
+            label: statefulftp —— Stateful FTP 支持
+            args: ["statefulftp"]
+          - value: statefulpptp
+            label: statefulpptp —— Stateful PPTP 支持
+            args: ["statefulpptp"]
+          - value: mainmode
+            label: mainmode —— 主模式设置
+            args: ["mainmode"]
+          - value: categories
+            label: categories —— 防火墙分类
+            args: ["categories"]
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 1029 B、退出码 0；Main Mode 段的值在本机非管理员下显示 `Access Denied`（不是本包的错误）。
+    examples:
+      - title: 查看防火墙全局设置
+        args: ["advfirewall", "show", "global"]
+        expectExitCode: 0
+
+  - id: advfirewall-firewall-show-rule
+    category: 防火墙
+    title: 查询防火墙规则
+    description: >-
+      按名字查询防火墙规则。`name=all` 会列出**全部**入站与出站规则
+      （本机实测输出 **412866 B ≈ 403 KB**，会刷很久）。
+      零命中时 netsh 打印 `No rules match the specified criteria.` 并返回**退出码 1**。
+    command: "advfirewall"
+    commandArgs: ["firewall", "show", "rule"]
+    sources:
+      - title: netsh advfirewall 官方参考 —— `firewall show rule`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-advfirewall
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          页面：`firewall <show> rule name=<string>`，例子 `netsh advfirewall firewall show rule name=all`
+          与 `netsh advfirewall firewall show rule name="MyRuleName" verbose`。
+      - title: 本机 `netsh advfirewall firewall show rule` 实测输出
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/advfirewall-firewall-show-rule-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: >-
+          不带 `name=` 直接跑会打印用法与退出码 1：
+          `Usage: show rule name=<string> [profile=...] [type=static|dynamic] [verbose]`。
+          本包只暴露 `name=`（其他可选参数见 NOTES §8「故意没做」）。
+    fields:
+      - id: ruleName
+        label: 规则名（name=）
+        type: text
+        style: attached
+        prefix: "name="
+        required: true
+        default: all
+        placeholder: 例 all / Allow8080
+        help: >-
+          `all` = 全部规则（输出极大）；也可以用规则名或它的前缀。规则名含空格时必须带引号
+          （官方例子 `name="allow browser"`），本字段生成的是**一个** token `name=<值>`，
+          值里含空格时宿主会给整个 token 加引号。
+          实测：`name=all` → 412866 B、退出码 0；`name=zzz__NoSuchRule__` →
+          `No rules match the specified criteria.`、退出码 1。
+        doc: 'official netsh-advfirewall 页的 `firewall show rule name=<string>` 与两个例子（`name=all`、`name="MyRuleName" verbose`）；本机 advfirewall-firewall-show-rule-q.txt 给出的 usage 行 `Usage: show rule name=<string>`'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测 `name=all` 输出 412866 B（≈403 KB）、退出码 0；`name=<不存在的名字>` 输出
+        `No rules match the specified criteria.`、退出码 1。被规则名过滤时输出会小很多。
+    examples:
+      - title: 列出全部防火墙规则（输出很大）
+        args: ["advfirewall", "firewall", "show", "rule", "name=all"]
+        expectExitCode: 0
+
+  # ===================================================== 代理与 Winsock
+  - id: winhttp-show-proxy
+    category: 代理与 Winsock
+    title: 查看 WinHTTP 代理
+    description: >-
+      显示 WinHTTP（Windows HTTP 服务，许多系统组件与安装程序用它）的代理设置。
+      本机实测是 `Direct access (no proxy server).`。
+      **注意：这与 Internet 选项里的代理是两套设置**，浏览器能上网不代表 WinHTTP 没被代理挡住。
+    command: "winhttp"
+    commandArgs: ["show", "proxy"]
+    sources:
+      - title: netsh winhttp 官方参考 —— `show proxy`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-winhttp
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          页面 `netsh winhttp show <advproxy> <proxy> <tracing>`，参数表说明 `proxy` =
+          「Displays the current basic proxy settings for WinHTTP」，并给了 `netsh winhttp show proxy` 的例子。
+      - title: 本机 `netsh winhttp show proxy` 实测输出
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/winhttp-show-proxy-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: '帮助只有 `Usage: show proxy` / `Remarks: Displays current WinHTTP proxy setting.`；实测输出 77 B、退出码 0。'
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 77 B、退出码 0（本机为 `Direct access (no proxy server).`）。
+    examples:
+      - title: 查看 WinHTTP 代理
+        args: ["winhttp", "show", "proxy"]
+        expectExitCode: 0
+
+  - id: winsock-show-catalog
+    category: 代理与 Winsock
+    title: 查看 Winsock 目录
+    description: >-
+      列出 Winsock 目录（LSP 分层服务提供商与命名空间提供程序）的全部条目，
+      含每个条目的 GUID、描述、提供程序路径与类型。装过网络过滤/代理/加速类软件之后，
+      这里是「谁往网络栈里插了一手」的现场。本机实测输出约 27 KB。
+    command: "winsock"
+    commandArgs: ["show", "catalog"]
+    sources:
+      - title: netsh winsock 官方参考 —— `show catalog`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-winsock
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          本机 `netsh winsock ?` 快照（594 B）列出 `audit` / `dump` / `help` / `remove` / `reset` / `set` / `show`；
+          `show catalog` 的说明「Displays contents of Winsock Catalog.」来自 `netsh winsock show ?` 快照（198 B）。
+          **官方 winsock 页面未能取到正文**（两个候选 URL 都失败），故此处依据只有内置帮助 —— 见 NOTES §7 第 4 条。
+      - title: 本机 `netsh winsock ?` 与 `netsh winsock show ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/winsock-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: '`show catalog - Displays contents of Winsock Catalog.`；`show autotuning` 本包不收录（见 NOTES §8）。'
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 27072 B（≈26 KB）、退出码 0。
+    examples:
+      - title: 查看 Winsock 目录
+        args: ["winsock", "show", "catalog"]
+        expectExitCode: 0
+
+  # ===================================================== DNS 客户端与其他
+  - id: dnsclient-show-global
+    category: DNS 与解析
+    title: 查看 DNS 客户端全局设置
+    description: >-
+      显示 DNS 客户端的全局加密设置：DoH（DNS over HTTPS）与 DoT（DNS over TLS）是否启用。
+      排查「浏览器能上网但某些程序解析不了」时看它。
+    command: "dnsclient"
+    commandArgs: ["show", "global"]
+    sources:
+      - title: netsh dnsclient 官方参考 —— `show global`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-dnsclient
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          语法行 `netsh dnsclient show [global | state]`；参数表：「`show <global>` - Displays all configured DNS global settings.」，
+          例子 `netsh dnsclient show global`。
+      - title: 本机 `netsh dnsclient show global` 实测输出
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/dnsclient-show-global-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: '帮助只有两行：`Usage: show global` / `Remarks: Displays all configured DNS global settings.`；实测 84 B、退出码 0。'
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 84 B、退出码 0（本机 DoH 与 DoT 都是 enabled）。
+    examples:
+      - title: 查看 DNS 客户端全局设置
+        args: ["dnsclient", "show", "global"]
+        expectExitCode: 0
+
+  - id: http-show-iplisten
+    category: 代理与 Winsock
+    title: 查看 HTTP 服务的 IP 监听表
+    description: >-
+      列出 HTTP.sys（HTTP 服务）绑定用的 IP 监听列表。
+      `0.0.0.0` = 任意 IPv4 地址，`::` = 任意 IPv6 地址。
+      列表为空时 HTTP 服务会绑定全部地址。本机实测列表为空（只打印标题行）。
+    command: "http"
+    commandArgs: ["show", "iplisten"]
+    sources:
+      - title: netsh http 官方参考 —— `show iplisten`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-http
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: '`netsh http show <cacheparam> <iplisten> <setting> <timeout>`；参数表：「Lists all IP addresses currently included in the IP listen list (`iplisten`).」'
+      - title: 本机 `netsh http show iplisten ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/http-show-iplisten-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: '帮助解释 `0.0.0.0` 与 `::` 的含义；无参数。实测输出 98 B、退出码 0。'
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 98 B、退出码 0；本机监听表为空（只有标题行与分隔线）。
+    examples:
+      - title: 查看 HTTP IP 监听表
+        args: ["http", "show", "iplisten"]
+        expectExitCode: 0
+
+  - id: http-show-urlacl
+    category: 代理与 Winsock
+    title: 查看 URL 保留（urlacl）
+    description: >-
+      列出 HTTP.sys 的 URL 命名空间保留及其 DACL（哪些账号可以监听哪个 URL）。
+      服务报「拒绝访问 / Access is denied」又确认端口没问题时，通常就是这里缺一条保留。
+      留空 = 全部保留；填 URL = 只看那一条。
+    command: "http"
+    commandArgs: ["show", "urlacl"]
+    sources:
+      - title: netsh http 官方参考 —— `show urlacl`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-http
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          语法行 `netsh http show urlacl [url=<string>]`；参数表：「Displays the DACLs for a specified reserved URL or for all reserved URLs」；
+          例子 `netsh http show urlacl url=http://+:80/MyApp`。
+      - title: 本机 `netsh http show urlacl ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/http-show-urlacl-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: '用法行 `Usage: show urlacl [url=]<string>`；`url=(null)` 省略时表示全部 URL。'
+    fields:
+      - id: url
+        label: 保留的 URL（留空 = 全部）
+        type: text
+        style: separate
+        prefix: "url"
+        placeholder: 例 http://+:80/MyUri
+        help: >-
+          留空列出全部保留项（本机实测 3848 B）。填 URL 时**只写 URL 本身，不要写 `url=`** ——
+          本字段会生成 `url` 与值两个 token，对应帮助里的 `[url=]<string>` 写法。
+          本机两条实测：`url http://+:80/MyUri`（两个 token）输出 937 B 的该条保留项、退出码 0；
+          `url=http://+:80/MyUri`（粘成一个 token）输出 46 B 的空标题 —— 两者都能跑但结果不同，
+          本清单取**两个 token**那种（与文档的 `[url=]<string>` 一致，且真的查到了那条保留项）。
+          宿主对含 `:` 与 `/` 的值会加引号。
+        doc: 'official netsh-http 页的 `http show urlacl [url=<string>]` 与例子 `netsh http show urlacl url=http://+:80/MyApp`；本机 `netsh http show urlacl ?` 快照的 url 参数行（两种写法实测见 NOTES §3）'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测留空 3848 B、退出码 0；指定一个不存在的 URL 时输出只有标题行（46 B）、退出码仍是 0。
+    examples:
+      - title: 列出全部 URL 保留
+        args: ["http", "show", "urlacl"]
+        expectExitCode: 0
+      - title: 只看某一条 URL 保留
+        args: ["http", "show", "urlacl", "http://+:80/Temporary_Listen_Addresses/"]
+        expectExitCode: 0
+
+  - id: http-show-cacheparam
+    category: 代理与 Winsock
+    title: 查看 HTTP 缓存参数
+    description: 显示 HTTP.sys 响应缓存的参数：单个 URI 的缓存上限与 range 分块大小。
+    command: "http"
+    commandArgs: ["show", "cacheparam"]
+    sources:
+      - title: netsh http 官方参考 —— `show cacheparam`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-http
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: '参数表：「Displays the cache parameters of the HTTP Service measured in bytes (`cacheparam`).」'
+      - title: 本机 `netsh http show cacheparam` 实测输出
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/http-show-cacheparam.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: 实测 172 B、退出码 0（maxcacheresponsesize 262144 B、cacherangechunksize 65536 B）。
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 172 B、退出码 0。
+    examples:
+      - title: 查看 HTTP 缓存参数
+        args: ["http", "show", "cacheparam"]
+        expectExitCode: 0
+
+  - id: http-show-timeout
+    category: 代理与 Winsock
+    title: 查看 HTTP 服务超时
+    description: 显示 HTTP.sys 的空闲连接超时与请求头等待超时（秒）。
+    command: "http"
+    commandArgs: ["show", "timeout"]
+    sources:
+      - title: netsh http 官方参考 —— `show timeout`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-http
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: '参数表：「Displays the timeout values set for the HTTP Service in seconds (`timeout`).」'
+      - title: 本机 `netsh http show timeout` 实测输出
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/http-show-timeout.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: 实测 126 B、退出码 0（两个超时都是 120 秒）。
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 126 B、退出码 0。
+    examples:
+      - title: 查看 HTTP 服务超时
+        args: ["http", "show", "timeout"]
+        expectExitCode: 0
+
+  - id: http-show-setting
+    category: 代理与 Winsock
+    title: 查看 HTTP 服务设置
+    description: 显示 HTTP.sys 的全局设置（本机只有 SSL 节流一项）。
+    command: "http"
+    commandArgs: ["show", "setting"]
+    sources:
+      - title: netsh http 官方参考 —— `show setting`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-http
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: '参数表：「Displays the current configuration settings of the HTTP Service in seconds (`setting`).」'
+      - title: 本机 `netsh http show setting` 实测输出
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/http-show-setting.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: 实测 74 B、退出码 0（输出为 `Ssl Throttle` 等于 0）。
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测 74 B、退出码 0。
+    examples:
+      - title: 查看 HTTP 服务设置
+        args: ["http", "show", "setting"]
+        expectExitCode: 0
+
+  - id: http-show-servicestate
+    category: 代理与 Winsock
+    title: 查看 HTTP 服务状态快照
+    description: >-
+      显示 HTTP.sys 当前状态的快照：活动会话、请求队列或客户端连接。
+      判断「谁在占着 80/443、请求排在哪个队列里」时用它。
+    command: "http"
+    commandArgs: ["show", "servicestate"]
+    sources:
+      - title: netsh http 官方参考 —— `show servicestate`
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-http
+        retrieved: "2026-09-30"
+        appliesTo: Windows 10/11
+        note: >-
+          语法行 `netsh http show servicestate [view=session|requestq|client] [verbose=yes|no]`；
+          参数表说明 view 的三个取值，例子 `show servicestate view="session"`。
+      - title: 本机 `netsh http show servicestate ?` 快照
+        url: file:///<仓库目录>/netsh 帮助快照（**未入库**）/http-show-servicestate-q.txt
+        retrieved: "2026-09-30"
+        appliesTo: Windows 11 26200 / netsh.exe 10.0.26100.8328
+        note: '用法行 `Usage: show servicestate [[view=]session|requestq|client] [[verbose=]yes|no]`；实测不带参数 4526 B、退出码 0。'
+    fields:
+      - id: view
+        label: 查看角度
+        type: enum
+        style: literal
+        group: 高级
+        advanced: true
+        help: >-
+          对应文档里的 `view=session|requestq|client`。不选时 netsh 自己给默认视图
+          （本机实测不带参数 4526 B、退出码 0；`view=session` 也是 4526 B）。
+        doc: 'official netsh-http 页的 `http show servicestate [view=session|requestq|client] [verbose=yes|no]`；本机 `netsh http show servicestate ?` 快照的 view 参数行'
+        values:
+          - value: ""
+            label: 不指定（netsh 默认视图）
+            isDefault: true
+            args: []
+          - value: session
+            label: session —— 活动会话
+            args: ["view=session"]
+          - value: requestq
+            label: requestq —— 请求队列状态
+            args: ["view=requestq"]
+          - value: client
+            label: client —— 客户端连接
+            args: ["view=client"]
+      - id: verbose
+        label: 详细输出
+        type: enum
+        style: literal
+        group: 高级
+        advanced: true
+        help: '对应文档里的 `verbose=yes|no`。yes 会连属性信息一起打印。'
+        doc: 'official netsh-http 页的 `http show servicestate ... [verbose=yes|no]`；本机 `netsh http show servicestate ?` 快照的 verbose 参数行'
+        values:
+          - value: ""
+            label: 不指定
+            isDefault: true
+            args: []
+          - value: "yes"
+            label: "yes —— 打印属性明细"
+            args: ["verbose=yes"]
+          - value: "no"
+            label: "no —— 简要"
+            args: ["verbose=no"]
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: 实测不带参数 4526 B、退出码 0。
+    examples:
+      - title: 查看 HTTP 服务状态快照
+        args: ["http", "show", "servicestate"]
+        expectExitCode: 0
+      - title: 只看活动会话
+        args: ["http", "show", "servicestate", "view=session"]
+        expectExitCode: 0
