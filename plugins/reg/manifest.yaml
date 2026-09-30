@@ -182,11 +182,6 @@ actions:
           - value: REG_BINARY
             label: REG_BINARY —— 二进制
           - value: REG_NONE
-          # 官方 reg-query 页只列 6 种，本机 reg query /? 多出 REG_QWORD；
-          # 实测 /t REG_QWORD 语法被接受（退出码 0）—— 故按 playbook §10.5 第 32 条收录并标注出处
-          - value: REG_QWORD
-            label: REG_QWORD（64 位整数）
-            doc: 本机 reg query /? 的取值表里有它；官方 reg-query 页只列 6 种（出处只有本机帮助一侧）
             label: REG_NONE —— 无类型
       - id: verbose
         label: 显示类型的数字等值（/z）
