@@ -1,0 +1,10 @@
+{
+  "command": "diskpart",
+  "capturedAt": "2026-10-01",
+  "source": "本机 /? 快照（快照本身不入库：它是微软的文本；本文件只保留派生出的开关名）",
+  "note": "diskpart 的 /? 需要提升，抓取时用了提权 + 临时 .cmd 重定向（见 scripts/capture-command-help.py 头注释）",
+  "switchCount": 1,
+  "switches": [
+    "/s"
+  ]
+}
