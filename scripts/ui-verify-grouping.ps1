@@ -10,7 +10,7 @@
 # 只是没法自动化，需要人工点一次。
 [CmdletBinding()]
 param(
-    [string]$Exe = (Join-Path $PSScriptRoot '..\src\AllTool.App\bin\Debug\net10.0-windows10.0.26100.0\AllTool.App.exe'),
+    [string]$Exe = (Join-Path $PSScriptRoot '..\src\AllTool.App\bin\Debug\net10.0-windows10.0.26100.0\AllTool.exe'),
     [string]$PackageId = 'ping',
     [string]$GroupName = '我的常用'
 )

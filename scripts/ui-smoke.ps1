@@ -9,7 +9,7 @@
 # 用法：pwsh -File scripts/ui-smoke.ps1
 [CmdletBinding()]
 param(
-    [string]$Exe = (Join-Path $PSScriptRoot '..\src\AllTool.App\bin\Debug\net10.0-windows10.0.26100.0\AllTool.App.exe'),
+    [string]$Exe = (Join-Path $PSScriptRoot '..\src\AllTool.App\bin\Debug\net10.0-windows10.0.26100.0\AllTool.exe'),
     [int]$ActionIndex = 1,
     [string]$Screenshot = (Join-Path $PSScriptRoot '..\spike\ui-smoke.png'),
     [int]$RunTimeoutSeconds = 60

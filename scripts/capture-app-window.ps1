@@ -10,7 +10,7 @@
 #   pwsh -File scripts/capture-app-window.ps1 -KeepRunning        # 截完不关，留着手动操作
 [CmdletBinding()]
 param(
-    [string]$Exe = (Join-Path $PSScriptRoot '..\src\AllTool.App\bin\Debug\net10.0-windows10.0.26100.0\AllTool.App.exe'),
+    [string]$Exe = (Join-Path $PSScriptRoot '..\src\AllTool.App\bin\Debug\net10.0-windows10.0.26100.0\AllTool.exe'),
     [string]$Out = (Join-Path $PSScriptRoot '..\spike\app-window.png'),
     [int]$ActionIndex = -1,
     [int]$WaitSeconds = 6,

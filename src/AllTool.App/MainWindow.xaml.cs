@@ -265,13 +265,21 @@ public sealed partial class MainWindow : Window
                 continue;
             }
 
-            FormPanel.Children.Add(new TextBlock
+            // 标题里的 emoji 拆出来画成圆点：emoji 字形会被裁（见 BuildKindDot 的说明）
+            var headerRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 0 };
+            var marker = title.Length > 0 && char.IsSurrogatePair(title, 0)
+                ? title.Substring(0, 2)
+                : title.Substring(0, Math.Min(1, title.Length));
+            headerRow.Children.Add(BuildKindDot(marker));
+            headerRow.Children.Add(new TextBlock
             {
-                Text = $"{title}（{members.Count}）",
+                Text = $"{title.Substring(marker.Length).TrimStart()}（{members.Count}）",
                 FontWeight = FontWeights.SemiBold,
                 Opacity = 0.75,
-                Margin = new Thickness(0, 8, 0, 2),
+                VerticalAlignment = VerticalAlignment.Center,
             });
+            headerRow.Margin = new Thickness(0, 8, 0, 2);
+            FormPanel.Children.Add(headerRow);
 
             // 用会换行的面板：工具包一多，横向 StackPanel 会一路往右溢出、被窗口裁掉
             var wrap = new WrapPanel { HorizontalSpacing = 6, VerticalSpacing = 6 };
@@ -602,14 +610,7 @@ public sealed partial class MainWindow : Window
 
             if (!string.IsNullOrEmpty(info.Marker))
             {
-                content.Children.Add(new TextBlock
-                {
-                    Text = info.Marker,
-                    // 图标永远是普通字重、不斜体：选中时不会位移或被裁
-                    FontWeight = FontWeights.Normal,
-                    FontStyle = Windows.UI.Text.FontStyle.Normal,
-                    VerticalAlignment = VerticalAlignment.Center,
-                });
+                content.Children.Add(BuildKindDot(info.Marker));
             }
 
             content.Children.Add(name);
@@ -2591,6 +2592,31 @@ public sealed partial class MainWindow : Window
         }
 
         return row;
+    }
+
+    /// <summary>
+    /// 工具包类型标记画成**圆点**（而不是用 emoji）。
+    /// 原因：emoji 由字体回退渲染，**墨迹宽度可能超过布局用的前进宽度**，于是图标右侧被裁掉一块
+    /// （🔵 实测显示成缺一块的圆）；Ellipse 的尺寸由我们给定，渲染完全可控。
+    /// </summary>
+    private static Microsoft.UI.Xaml.Shapes.Ellipse BuildKindDot(string marker)
+    {
+        var color = marker switch
+        {
+            "🔵" => Microsoft.UI.Colors.CornflowerBlue,
+            "🟡" => Microsoft.UI.Colors.Gold,
+            "🔴" => Microsoft.UI.Colors.Crimson,
+            _ => Microsoft.UI.Colors.Gainsboro,
+        };
+
+        return new Microsoft.UI.Xaml.Shapes.Ellipse
+        {
+            Width = 11,
+            Height = 11,
+            Fill = new SolidColorBrush(color),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 6, 0),
+        };
     }
 
     /// <summary>把一条"下一步"建议渲染成一行（按钮 + 理由）。</summary>
