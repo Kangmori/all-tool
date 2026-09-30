@@ -18,7 +18,6 @@ docs/reference/7zip-chm/
 # **这些是微软的文本**，本项目要转为公开仓库，不能把它们发布出去；
 # 而且任何一台 Windows 机器都能用一条命令重新抓到，属于可再生数据。
 # 代价：校验器的"开关溯源"启发式检查在干净克隆里看不到这批语料（只提示、不阻断）。
-# Windows 自带命令的 `/?` 帮助快照（由 scripts/fetch-win-help.ps1 生成）。
 # Python
 __pycache__/
 *.pyc

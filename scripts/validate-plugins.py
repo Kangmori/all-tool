@@ -309,7 +309,10 @@ def switch_source_report(manifest: dict) -> tuple[list[str], int, int]:
                 checked += 1
                 # 前后要求是非标识符字符，避免 "-n" 命中 "-no-progress" 这类误判
                 pattern = r"(?<![\w-])" + re.escape(sw) + r"(?![\w])"
-                if not re.search(pattern, corpus):
+                # Windows 命令的开关普遍大小写不敏感（/? 里常写 /FO，清单里写 /fo）。
+                # 这里是**非阻断的启发式**，忽略大小写能显著减少假告警。
+                ignore_case = re.IGNORECASE
+                if not re.search(pattern, corpus, ignore_case):
                     missing.append(f"动作 {action.get('id')} 字段 {field.get('id')}: 开关 {sw}")
 
     return missing, checked, files
