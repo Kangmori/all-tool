@@ -324,3 +324,10 @@ uv run --with pyyaml python -c "import yaml,pathlib; d=yaml.safe_load(pathlib.Pa
 ```
 
 （同一次运行的整体行：`40/40 个 manifest 通过`、`字段出处覆盖率: 1060/1060 (100%)`。）
+
+## 附：REG_QWORD 的取舍（2026-10-01 追加）
+
+官方 reg-query 页的 `/t` 只列 6 种类型，本机 `reg query /?` 列 7 种（多 `REG_QWORD`）。
+最初按「只写两边都能对应的」没有收录；后经实测 `/t REG_QWORD` 的**语法被接受**
+（退出码 0，而不是「无效语法」），故按 playbook §10.5 第 32 条的口径**收录**，
+并在枚举里标注「出处只有本机帮助一侧」。
