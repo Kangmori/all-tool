@@ -26,7 +26,7 @@ dotnet build src\AllTool.slnx
 pwsh -File scripts/publish-app.ps1
 ```
 
-## 已经带的工具包（23 个 / 282 个动作 / 761 个参数字段）
+## 已经带的工具包（27 个 / 385 个动作 / 918 个参数字段）
 
 | ⚪ 你自己装的工具 | 动作 | 字段 |
 |---|---|---|
@@ -40,10 +40,14 @@ pwsh -File scripts/publish-app.ps1
 | chkdsk | 5 | 11 |
 | cleanmgr | 7 | 7 |
 | curl | 14 | 50 |
+| DISM | 12 | 30 |
+| fsutil | 42 | 58 |
 | icacls | 16 | 57 |
 | ipconfig | 11 | 12 |
+| netsh | 39 | 32 |
 | netstat | 8 | 19 |
 | nslookup | 3 | 11 |
+| OpenSSH 客户端 | 10 | 37 |
 | ping | 3 | 13 |
 | powercfg | 14 | 23 |
 | robocopy | 4 | 20 |
