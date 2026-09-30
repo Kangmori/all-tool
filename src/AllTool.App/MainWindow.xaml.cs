@@ -1013,11 +1013,11 @@ public sealed partial class MainWindow : Window
         }
 
         StatusText.Text = "正在查找可执行文件…";
-        var location = await ToolLocator.LocateAsync(_manifest.Locate, _runner);
+        var location = await ToolLocator.LocateAsync(_manifest.Locate, _runner, _action?.Executable);
 
         if (location is null)
         {
-            StatusText.Text = $"找不到 {_manifest.Locate.Executable}。{_manifest.Locate.NotFoundHint}";
+            StatusText.Text = $"找不到 {_action?.Executable ?? _manifest.Locate.Executable}。{_manifest.Locate.NotFoundHint}";
             return;
         }
 
@@ -1600,11 +1600,11 @@ public sealed partial class MainWindow : Window
         }
 
         StatusText.Text = "正在定位…";
-        var location = await ToolLocator.LocateAsync(manifest.Locate, _runner);
+        var location = await ToolLocator.LocateAsync(manifest.Locate, _runner, _action?.Executable);
 
         if (location is null)
         {
-            StatusText.Text = $"找不到 {manifest.Locate.Executable}。{manifest.Locate.NotFoundHint}";
+            StatusText.Text = $"找不到 {_action?.Executable ?? manifest.Locate.Executable}。{manifest.Locate.NotFoundHint}";
             return;
         }
 
@@ -2973,7 +2973,7 @@ public sealed partial class MainWindow : Window
 
             if (location is null)
             {
-                StatusText.Text = $"找不到 {_manifest.Locate.Executable}。{_manifest.Locate.NotFoundHint}";
+                StatusText.Text = $"找不到 {_action?.Executable ?? _manifest.Locate.Executable}。{_manifest.Locate.NotFoundHint}";
                 return;
             }
 
