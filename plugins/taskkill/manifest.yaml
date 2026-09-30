@@ -1,0 +1,148 @@
+spec: 1
+id: taskkill
+name: 结束进程
+manifestVersion: 0.1.0
+kind: system
+summary: >-
+  按名字、PID 或筛选条件结束进程。**本包只收图形界面做不到的那部分**：
+  连子进程一起结束（/T）、强制结束卡死的进程（/F）、按条件一次结束一批（/FI）。
+  「列出进程再挑一个结束」那种任务管理器完全能做的事，本包不做（用「进程列表」包看进程）。
+appVersion: "10.0"
+runtime:
+  encoding: oem
+
+locate:
+  executable: taskkill.exe
+  alternativeNames: [taskkill.exe]
+  versionArgs: []
+  notFoundHint: >-
+    找不到 taskkill.exe。它随 Windows 提供，位于 C:\\Windows\\System32。
+
+actions:
+  - id: kill-by-name
+    category: 结束进程
+    title: 按名字结束
+    description: >-
+      结束所有指定映像名的进程（例如把所有 node.exe 一起结束）。这是任务管理器做不到的「一次结束一批」。
+      默认带 /F —— 实测：控制台程序不带 /F 会直接失败（"can only be terminated forcibly"）。
+    command: ""
+    danger: destructive
+    confirmText: "会立刻终止匹配的进程，未保存的数据会丢失。默认使用 /F（强制结束）。"
+    sources:
+      - title: "taskkill 官方文档"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/taskkill
+        retrieved: "2026-10-01"
+        appliesTo: "Windows 11 (build 26200)"
+        note: "/IM <imagename> 按映像名结束；/F 强制；/T 连同子进程。实测不带 /F 结束控制台程序会失败。"
+    fields:
+      - id: image
+        label: 映像名
+        type: text
+        style: attached
+        prefix: "/IM "
+        required: true
+        placeholder: "例如 node.exe"
+        help: "写映像名（可带通配符 *）。实测：名字不存在时退出码 128。"
+        doc: "taskkill /IM <imagename>"
+      - id: force
+        label: 强制结束（/F）
+        type: bool
+        style: flag
+        prefix: "/F"
+        default: true
+        help: "实测：不加 /F 时，控制台程序会报 could not be terminated（只能强制结束）。所以默认开启。"
+        doc: "taskkill /F"
+      - id: tree
+        label: 连同子进程（/T）
+        type: bool
+        style: flag
+        prefix: "/T"
+        help: "任务管理器一次只能结束一个进程，子进程会残留；这一项就是补这个缺口。"
+        doc: "taskkill /T"
+    examples:
+      - title: "结束所有 node.exe"
+        args: ["/IM node.exe /F"]
+        expectExitCode: 0
+
+  - id: kill-by-pid
+    category: 结束进程
+    title: 按 PID 结束
+    description: >-
+      按进程 ID 结束。适合进程在任务管理器里看不到、或要连同子进程一起结束的情况。
+    command: ""
+    danger: destructive
+    confirmText: "会立刻终止该 PID 的进程（可连同子进程），未保存的数据会丢失。"
+    sources:
+      - title: "taskkill 官方文档"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/taskkill
+        retrieved: "2026-10-01"
+        appliesTo: "Windows 11 (build 26200)"
+        note: "/PID <processid>；实测不存在的 PID 返回 128。"
+    fields:
+      - id: pid
+        label: 进程 ID
+        type: number
+        style: attached
+        prefix: "/PID "
+        required: true
+        help: "PID 可以在「进程列表」包里看到。实测：不存在时退出码 128。"
+        doc: "taskkill /PID <processid>"
+      - id: force
+        label: 强制结束（/F）
+        type: bool
+        style: flag
+        prefix: "/F"
+        default: true
+        help: "实测：不加 /F 时控制台程序无法结束（只能强制）。"
+        doc: "taskkill /F"
+      - id: tree
+        label: 连同子进程（/T）
+        type: bool
+        style: flag
+        prefix: "/T"
+        help: "把该进程启动的子进程一起结束——图形界面做不到这一点。"
+        doc: "taskkill /T"
+    examples:
+      - title: "强制结束 1234 及其子进程"
+        args: ["/F /T /PID 1234"]
+        expectExitCode: 0
+
+  - id: kill-by-filter
+    category: 结束进程
+    title: 按条件结束一批
+    description: >-
+      用筛选器一次结束一批进程（例如内存占用超过 500 MB 的、某个用户启动的）。
+      注意：**没有匹配项时退出码也是 0**（实测），别把它当成"杀成功了"。
+    command: ""
+    danger: destructive
+    confirmText: "会终止所有满足筛选条件的进程，未保存的数据会丢失。"
+    sources:
+      - title: "taskkill 官方文档"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/taskkill
+        retrieved: "2026-10-01"
+        appliesTo: "Windows 11 (build 26200)"
+        note: "/FI <filter>；实测无匹配时输出 INFO: No tasks running with the specified criteria 且退出码仍为 0。"
+    fields:
+      - id: filter
+        label: 筛选条件
+        type: text
+        style: attached
+        prefix: "/FI "
+        required: true
+        placeholder: "例如 IMAGENAME eq node.exe"
+        help: >-
+          运算符 eq / ne / gt / lt / ge / le；可用字段 IMAGENAME、PID、MEMUSAGE、STATUS、
+          USERNAME、WINDOWTITLE、SESSION 等。含空格时整个条件算一项。
+        doc: "taskkill /FI <filter>"
+      - id: force
+        label: 强制结束（/F）
+        type: bool
+        style: flag
+        prefix: "/F"
+        default: true
+        help: "实测：不加 /F 时控制台程序无法结束。"
+        doc: "taskkill /F"
+    examples:
+      - title: "结束所有 node.exe"
+        args: ["/FI IMAGENAME eq node.exe /F"]
+        expectExitCode: 0
