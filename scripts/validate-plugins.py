@@ -137,7 +137,7 @@ def doc_coverage(manifest: dict) -> tuple[int, int]:
     return documented, total
 
 
-def load_reference_corpus(plugin_id: str, manifest: dict) -> tuple[str, int]:
+def load_reference_corpus(plugin_id: str, manifest: dict) -> tuple[str, int, int]:
     """把该工具包的参考文档快照拼成一份语料（用于 R1 的启发式检查）。
 
     语料来源有三类，**都必须是仓库里真实存在的东西**：
@@ -153,10 +153,14 @@ def load_reference_corpus(plugin_id: str, manifest: dict) -> tuple[str, int]:
 
     第三方文档快照在转公开前会被清掉，那之后没有语料的包会直接跳过这层检查
     （它是启发式、不阻断构建），**不要**为了让报告好看而伪造语料。
+
+    返回 (语料文本, 自己语料的文件数, 共享语料的文件数)。
+    分开数是为了修掉一个"假完整"：只并共享 win-* 时，别的命令页面里的同名开关
+    会被算成"本命令的开关能溯源"（例如 whoami 的 /fo 命中 tasklist 的页面）。
     """
     reference = ROOT / "docs" / "reference"
     if not reference.exists():
-        return "", 0
+        return "", 0, 0
 
     # **本机专属库**（仓库之外，不入库）：第三方文档原文快照放那里。
     # 指针文件 `.local-vault` 在仓库根目录。CI / 干净机器上没有它 → 这里的语料为空，
@@ -180,9 +184,11 @@ def load_reference_corpus(plugin_id: str, manifest: dict) -> tuple[str, int]:
 
     chunks: list[str] = []
     files = 0
+    own_files = 0
+    shared_files = 0
 
-    def collect(path: pathlib.Path) -> None:
-        nonlocal files
+    def collect(path: pathlib.Path, shared: bool = False) -> None:
+        nonlocal files, shared_files, own_files
         if path.is_file():
             candidates = [path]
         else:
@@ -192,6 +198,10 @@ def load_reference_corpus(plugin_id: str, manifest: dict) -> tuple[str, int]:
                 try:
                     chunks.append(candidate.read_text(encoding="utf-8", errors="ignore"))
                     files += 1
+                    if shared:
+                        shared_files += 1
+                    else:
+                        own_files += 1
                 except OSError:
                     continue
 
@@ -202,8 +212,11 @@ def load_reference_corpus(plugin_id: str, manifest: dict) -> tuple[str, int]:
             name = entry.name.lower()
 
             if entry.is_dir():
-                if name.startswith(prefix) or (uses_learn and name.startswith("win-")):
+                if name.startswith(prefix):
                     collect(entry)
+                elif uses_learn and name.startswith("win-"):
+                    # 共享语料：只登记，不当作"这个包自己的语料"
+                    collect(entry, shared=True)
             elif name.startswith(prefix):
                 collect(entry)
 
@@ -212,7 +225,34 @@ def load_reference_corpus(plugin_id: str, manifest: dict) -> tuple[str, int]:
     if vault_snapshots is not None:
         scan(vault_snapshots)
 
-    return "\n".join(chunks), files
+    return "\n".join(chunks), own_files, shared_files
+
+
+
+def load_own_switch_entry(plugin_id: str) -> tuple[str, int]:
+    """从 docs/reference/win-switches/_switches.json 里取**该命令自己的**条目。
+
+    这个文件是按命令分键的（chkdsk / ipconfig / …）。取不到就返回空 —— 宁可报"未覆盖"，
+    也不要拿别的命令的页面冒充本命令的语料。
+    """
+    path = ROOT / "docs" / "reference" / "win-switches" / "_switches.json"
+    if not path.exists():
+        return "", 0
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "", 0
+    if not isinstance(data, dict):
+        return "", 0
+    entry = data.get(plugin_id)
+    if entry is None:
+        for key, value in data.items():
+            if key.lower() == plugin_id.lower():
+                entry = value
+                break
+    if entry is None:
+        return "", 0
+    return json.dumps(entry, ensure_ascii=False), 1
 
 
 def switch_source_report(manifest: dict) -> tuple[list[str], int, int]:
@@ -222,7 +262,21 @@ def switch_source_report(manifest: dict) -> tuple[list[str], int, int]:
     短开关（-n）也容易在正文里偶然命中。它的价值是"给审阅者一个信号"，
     而不是"自动判作者有罪"。真正的门禁是 7z 那种从官方文档逐命令提取出的白名单。
     """
-    corpus, files = load_reference_corpus(str(manifest.get("id", "")), manifest)
+    corpus, own_files, shared_files = load_reference_corpus(str(manifest.get("id", "")), manifest)
+    plugin_id = str(manifest.get("id", ""))
+
+    # 只并了共享语料时，不能拿别的命令的页面来证明本命令的开关——那是"假完整"。
+    # 改为查 _switches.json 里**本命令自己的条目**；没有条目就明确报未覆盖。
+    if own_files == 0:
+        entry, entry_files = load_own_switch_entry(plugin_id)
+        if entry:
+            corpus = entry
+            files = entry_files
+        else:
+            print(f"    [未覆盖] {plugin_id}: 本命令没有语料快照，开关溯源未做"
+                  f"（共享语料里有 {shared_files} 个文件，但不属于本命令）")
+            return [], 0, 0
+
     if not corpus:
         return [], 0, 0
 
