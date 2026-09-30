@@ -244,6 +244,15 @@ def load_own_switch_entry(plugin_id: str) -> tuple[str, int]:
         return "", 0
     if not isinstance(data, dict):
         return "", 0
+    # 优先用本项目自己抓的"每命令一份 /? 快照"——它是程序自己的输出，
+    # 不是我们的 NOTES，避免自证循环。
+    help_txt = ROOT / "docs" / "reference" / "win-help" / f"{plugin_id}.txt"
+    if help_txt.exists():
+        try:
+            return help_txt.read_text(encoding="utf-8"), 1
+        except OSError:
+            pass
+
     entry = data.get(plugin_id)
     if entry is None:
         for key, value in data.items():
