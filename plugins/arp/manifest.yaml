@@ -1,0 +1,253 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# arp —— Windows 自带的 ARP 缓存查看工具（C:\Windows\System32\arp.exe）。
+#
+# 参数知识来源：
+#   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/arp
+#   2) 本机 arp /? 的真实输出（快照不入库，抓取命令见 NOTES.md §1）
+#
+# **只做只读动作**：官方语法行里的写操作 `arp -s`（加静态项）与 `arp -d`（删项）
+# 本清单**刻意不收录**（见 NOTES.md §3）。它们需要管理员权限——本机实测（标准用户）
+# `arp -d <不存在的地址>` 的 stderr 是 "The ARP entry deletion failed: The requested
+# operation requires elevation."，而**退出码仍然是 0**（这一点很坑，见 exitCodes 与 NOTES.md §4）。
+#
+# 版本：Windows 自带命令没有 --version 开关，故不写 versionArgs/versionPattern（R1）。
+# 编码：实测为 OEM 代码页 936（用中文参数的回显字节判定），见 NOTES.md §5。
+
+spec: 1
+id: arp
+name: ARP 缓存
+manifestVersion: 0.1.0
+appVersion: Windows 10/11 自带（随系统版本发布）
+kind: system
+summary: 查看 ARP 缓存表
+description: >-
+  显示 IP 地址与物理地址（MAC）的解析缓存表。每个装了以太网或令牌环网卡的接口各有一张表，
+  条目分动态（自动学习）与静态。Windows 自带，无需安装。本工具包只收录只读动作。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/arp
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 网络, ARP, MAC, 诊断]
+
+sources:
+  - title: arp 命令官方参考（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/arp
+    retrieved: "2026-10-01"
+    appliesTo: Windows 10/11（本机 arp.exe 文件版本 10.0.26100.8875）
+    note: >-
+      语法行共三条：`arp -s [inet_addr] [eth_addr] [if_addr]`、`arp -d [inet_addr] [if_addr]`、
+      `arp -a [inet_addr] [-N if_addr] [-v]`；#parameters 表列 -a -g -v inet_addr -N -d -s
+      eth_addr if_addr /?。本包只覆盖 -a / -g / -v / inet_addr / -N 这五个只读要素。
+  - title: 本机 arp /? 的真实输出（标准用户实测，未入库）
+    url: file:///C:/Windows/System32/arp.exe
+    retrieved: "2026-10-01"
+    appliesTo: 本机 Windows 11 26200 / arp.exe 10.0.26100.8875
+    note: >-
+      与官方 #parameters 逐条核对一致（-a -g -v inet_addr -N -d -s 全部对得上，无多无少）。
+      帮助写 stdout（1744 字节），**退出码 1**（不是 0）；不带任何参数运行时也打印同一份帮助、退出码同样是 1。
+      帮助文本是微软文本，快照不入库，重新抓取命令见 NOTES.md §1。
+
+locate:
+  executable: arp.exe
+  searchPaths:
+    - "%SystemRoot%\\System32"
+  notFoundHint: arp.exe 是 Windows 自带命令，正常情况下都在 C:\Windows\System32 下。
+
+runtime:
+  encoding: oem
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  usePseudoConsole: false
+
+# 退出码：微软的 arp 文档**没有退出码章节**（已核对）。下面两条全部来自本机实测，见 NOTES.md §4。
+exitCodes:
+  # 块式写法，理由见 plugins/ping/manifest.yaml 的同一处注释。
+  - code: 0
+    meaning: >-
+      成功。也包括"没有找到该 IP 的 ARP 条目"（实测 arp -a 10.0.0.1 打印 No ARP Entries Found. 后仍返回 0）。
+      ⚠ 本机实测写操作失败（权限不足）时 arp 也返回 0 —— 所以 0 只表示"命令跑完了"，不表示"操作成功"。
+    severity: ok
+  - code: 1
+    meaning: >-
+      参数无效或用法错误：不认识的开关、格式非法的 IP（实测 arp -a 999.1.1.1、arp -a abc、
+      arp -a -N abc 都是 1，且错误写 stderr 的 ARP: bad argument: <原参数>）；/ ? 帮助与
+      不带参数运行也是 1。
+    severity: error
+
+actions:
+
+  # ================================================================= ARP 表
+  - id: show
+    category: ARP 表
+    title: 显示当前 ARP 表（-a）
+    description: 查询协议数据，列出每个网卡的 ARP 条目，含动态与静态项。最常用的排查入口。
+    command: ""
+    sources:
+      - title: arp 官方参考 —— -a 与 -v 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/arp#parameters
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: 官方语法行 arp -a [inet_addr] [-N if_addr] [-v]；本机 arp /? 输出的 -a、-v 两行逐字核对一致。
+    fields:
+      - id: a
+        label: 显示 ARP 条目（-a）
+        type: bool
+        style: flag
+        prefix: "-a"
+        default: true
+        help: >-
+          文档：显示当前 ARP 条目（查询协议数据）。不加它运行 arp 只会打印用法并以 1 退出，所以默认勾选。
+          实测这个开关还必须排在其它开关之前：arp -a -v 正常（退出码 0），而把 -a 放到后面写成 arp -v -a
+          会打印用法并以 1 退出 —— 所以本清单把 a 声明为每个动作的第一个字段。
+        doc: "official #parameters 的 -a（Displays the current ARP entries by querying the protocol data）；本机 arp /? 输出的 -a 一行"
+      - id: verbose
+        label: 详细模式（-v）
+        type: bool
+        style: flag
+        prefix: "-v"
+        default: false
+        help: >-
+          文档：显示 ARP 条目的详细模式，包括无效条目与环回接口上的条目。
+          本机实测 -a -v 从 2146 字节涨到 3166 字节，多出的就是 127.0.0.1 与 0.0.0.0 这类条目（它们的物理地址列为空）。
+        doc: "official #parameters 的 -v（Displays ARP entries in verbose mode, including invalid entries and entries on the loopback interface）；本机 arp /? 输出的 -v 一行"
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        输出按接口分段，每段以 Interface: <接口IP> --- 0x<索引> 开头，随后是
+        Internet Address / Physical Address / Type 三列表格；Type 只有 static 与 dynamic 两种。
+    examples:
+      - title: 显示全部 ARP 条目
+        args: ["-a"]
+        expectExitCode: 0
+      - title: 详细模式（含无效条目与环回接口）
+        args: ["-a", "-v"]
+        expectExitCode: 0
+
+  # ================================================================= 筛选
+  - id: show-interface
+    category: 筛选
+    title: 只看指定接口的表（-a -N if_addr）
+    description: 只显示某个网络接口的 ARP 表。接口用它的 IP 地址指定（不是接口名、不是索引）。
+    command: ""
+    sources:
+      - title: arp 官方参考 —— -N if_addr 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/arp#parameters
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方 -N 说明：Shows ARP entries for the network interface with the specified IP address (if_addr)，
+          并注明"This parameter is case-sensitive"。本机 arp /? 的 -N if_addr 一行措辞相同；
+          实测开关本身大小写不敏感（-n 与 -N 等价，退出码 0）。
+    fields:
+      - id: a
+        label: 显示 ARP 条目（-a）
+        type: bool
+        style: flag
+        prefix: "-a"
+        default: true
+        doc: "official #parameters 的 -a；本机 arp /? 输出的 -a 一行"
+      - id: ifAddr
+        label: 接口的 IP 地址（-N）
+        type: text
+        style: separate
+        prefix: "-N"
+        required: true
+        placeholder: 例 192.168.2.4
+        help: >-
+          必须是本机某个接口自己的 IP 地址。写成紧贴形式（-N192.168.2.4）或加冒号（-N:192.168.2.4）
+          都不被接受：本机实测两者都打印用法并以 1 退出，所以这里用两个 token 的写法。
+          地址不是本机接口时，stderr 打印 ARP: bad argument: <原参数> 并以 1 退出。
+        doc: "official #parameters 的 -N if_addr（Shows ARP entries for the network interface with the specified IP address）；本机 arp /? 输出的 -N if_addr 一行"
+      - id: verbose
+        label: 详细模式（-v）
+        type: bool
+        style: flag
+        prefix: "-v"
+        default: false
+        help: 与 -N 可以同时用；实测 -a -N <接口IP> -v 退出码 0。
+        doc: "official #parameters 的 -v；官方语法行 arp -a [inet_addr] [-N if_addr] [-v] 也把两者列在一起"
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - title: 只看 192.168.2.4 这个接口的表
+        args: ["-a", "-N", "192.168.2.4"]
+        expectExitCode: 0
+
+  # ================================================================= 筛选
+  - id: show-ip
+    category: 筛选
+    title: 按 IP 查 ARP 项（-a inet_addr）
+    description: 只显示某个 IP 地址对应的 ARP 条目（在所有接口里找）。
+    command: ""
+    sources:
+      - title: arp 官方参考 —— inet_addr 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/arp#parameters
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方 -a 说明：If inet_addr is specified, only the ARP entry for that IP address is shown；
+          inet_addr 单独一行：Specifies the IP address to display, delete, or add to the ARP cache。
+          本机 arp /? 的 inet_addr 一行措辞相同。
+    fields:
+      - id: a
+        label: 显示 ARP 条目（-a）
+        type: bool
+        style: flag
+        prefix: "-a"
+        default: true
+        doc: "official #parameters 的 -a；本机 arp /? 输出的 -a 一行"
+      - id: inetAddr
+        label: IP 地址
+        type: text
+        style: positional
+        required: true
+        placeholder: 例 192.168.2.1
+        help: >-
+          查不到时程序打印 No ARP Entries Found. 并**仍然返回 0**（实测），不要把它当失败。
+          格式非法的地址（如 999.1.1.1、abc）会以 1 退出并把错误写到 stderr。
+        doc: "official #parameters 的 inet_addr 与 -a（If inet_addr is specified, only the ARP entry for that IP address is shown）；本机 arp /? 输出的 inet_addr 一行"
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - title: 查 192.168.2.1 这一条
+        args: ["-a", "192.168.2.1"]
+        expectExitCode: 0
+      - title: 查一个不存在的地址（会打印 No ARP Entries Found.，退出码仍是 0）
+        args: ["-a", "10.0.0.1"]
+        expectExitCode: 0
+
+  # ================================================================= ARP 表
+  - id: show-g
+    category: ARP 表
+    title: 用 -g 显示 ARP 表（与 -a 等价）
+    description: >-
+      -g 是 -a 的等价写法。官方文档原文只有一句"Functions identically to -a"。
+      保留它是因为很多老资料里用的是 arp -g，界面上有一条能让用户知道这两个开关是一回事。
+    command: ""
+    sources:
+      - title: arp 官方参考 —— -g 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/arp#parameters
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: 官方 #parameters 的 -g 一行全文即 Functions identically to -a；本机 arp /? 输出的 -g 一行是 Same as -a。实测 arp -g 与 arp -a 输出字节数完全相同（2146 字节），退出码 0。
+    fields:
+      - id: g
+        label: 显示 ARP 条目（-g）
+        type: bool
+        style: flag
+        prefix: "-g"
+        default: true
+        help: 与 -a 完全等价（官方原文：Functions identically to -a）。
+        doc: "official #parameters 的 -g（Functions identically to -a）；本机 arp /? 输出的 -g 一行（Same as -a）"
+    output:
+      mode: stream
+      showCommandLine: true
+    examples:
+      - title: 用 -g 列出 ARP 表
+        args: ["-g"]
+        expectExitCode: 0

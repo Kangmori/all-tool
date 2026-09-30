@@ -1,0 +1,252 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# getmac —— Windows 自带的网卡 MAC 地址查看工具（C:\Windows\System32\getmac.exe）。
+#
+# 参数知识来源：
+#   1) 官方文档 https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/getmac
+#   2) 本机 getmac /? 的真实输出（快照不入库，抓取命令见 NOTES.md §1）
+#
+# **只做只读动作**：本清单只收录"查 MAC 列表"这一类动作，不含任何写操作（getmac 本来也没有写操作）。
+# 官方语法行里的 /u 与 /p（远程凭据）**刻意不收录**：/p 省略时 getmac 会交互式索要密码，
+# 宿主无法应答（会一直等），而带凭据的远程查询在本机没有第二台机器可实测——理由见 NOTES.md §3。
+#
+# 版本：Windows 自带命令没有 --version 开关，故不写 versionArgs/versionPattern（R1）。
+# 编码：**utf-8**（用 getmac /v 回显的中文适配器连接名判定，与同批的 ipconfig/netstat 等 oem 包不同），见 NOTES.md §5。
+
+spec: 1
+id: getmac
+name: MAC 地址
+manifestVersion: 0.1.0
+appVersion: Windows 10/11 自带（随系统版本发布）
+kind: system
+summary: 查看网卡 MAC 地址
+description: >-
+  显示本机（或指定远程计算机）每块网卡的 MAC 地址，以及与每个地址关联的网络协议列表；
+  -v 还会给出连接名与网卡名。Windows 自带，无需安装。本工具包只收录只读查询。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/getmac
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 网络, MAC, 网卡]
+
+sources:
+  - title: getmac 命令官方参考（Microsoft Learn）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/getmac
+    retrieved: "2026-10-01"
+    appliesTo: Windows 10/11（本机 getmac.exe 文件版本 10.0.26100.8875）
+    note: >-
+      语法行：`getmac[.exe][/s <computer> [/u <domain\user> [/p <password>]]][/fo {table | list | csv}][/nh][/v]`；
+      #parameters 表列 /s <computer>、/u、/p、/fo {table | list | csv}、/nh、/v、/?。
+      官方示例共 6 条，含 `getmac /fo table /nh /v` 与 `getmac /s srvmain /u maindom\hiropln /p p@ssW23 /fo list /v`。
+  - title: 本机 getmac /? 的真实输出（标准用户实测，未入库）
+    url: file:///C:/Windows/System32/getmac.exe
+    retrieved: "2026-10-01"
+    appliesTo: 本机 Windows 11 26200 / getmac.exe 10.0.26100.8875
+    note: >-
+      与官方 #parameters 逐条核对一致（/S /U /P /FO /NH /V 全部对得上，无多无少）。
+      帮助写 stdout（1329 字节）、**退出码 0**（与 arp 的 1 相反）；不带任何参数运行时直接列出 MAC 表、退出码 0。
+      帮助文本是微软文本，快照不入库，重新抓取命令见 NOTES.md §1。
+
+locate:
+  executable: getmac.exe
+  searchPaths:
+    - "%SystemRoot%\\System32"
+  notFoundHint: getmac.exe 是 Windows 自带命令，正常情况下都在 C:\Windows\System32 下。只想看本机网卡信息也可以用 ipconfig /all 或 PowerShell 的 Get-NetAdapter。
+
+runtime:
+  encoding: utf-8
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  usePseudoConsole: false
+
+# 退出码：微软的 getmac 文档**没有退出码章节**（已核对）。下面两条全部来自本机实测，见 NOTES.md §4。
+exitCodes:
+  # 块式写法，理由见 plugins/ping/manifest.yaml 的同一处注释。
+  - code: 0
+    meaning: 成功（包含 /? 帮助输出与不带参数运行）
+    severity: ok
+  - code: 1
+    meaning: >-
+      语法或取值错误（不认识的开关、/fo 给了非法值、/fo 或 /s 后面缺值、/nh 与 /fo list 同用），
+      或远程查询失败（实测 /s <不可达主机> 打印 ERROR: The RPC server is unavailable.）。
+      这些错误都写 stderr。
+    severity: error
+
+actions:
+
+  # ================================================================= 本地
+  - id: list
+    category: 本地
+    title: 本地 MAC 地址列表
+    description: >-
+      列出本机每块网卡的物理地址与传输名称。默认是表格形式（带表头）。
+      表格的列宽按内容对齐，过长的网卡名会被截断，需要完整值就用列表或 CSV 形式。
+    command: ""
+    sources:
+      - title: getmac 官方参考 —— /fo 与 /nh 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/getmac#parameters
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方 /fo 一行：Specifies the format to use for the query output. Valid values are table, list, and csv.
+          The default format for output is table；/nh 一行：Suppresses column header in output. Valid when the /fo
+          parameter is set to table or csv。本机 getmac /? 的 /FO、/NH 两段措辞相同。
+    fields:
+      - id: fo
+        label: 输出格式（/fo）
+        type: enum
+        style: separate
+        prefix: "/fo"
+        default: table
+        values:
+          - value: table
+            label: table —— 表格（程序默认）
+            isDefault: true
+            help: 文档：默认格式就是 table；多列对齐，过长的名称会被截断。
+          - value: list
+            label: list —— 逐字段列表
+            help: 每个地址一段，字段名与值各占一行，不截断内容。
+          - value: csv
+            label: csv —— 逗号分隔（带引号）
+            help: 第一行是 "Physical Address","Transport Name" 表头。
+        doc: "official #parameters 的 /fo {table | list | csv}；本机 getmac /? 的 /FO format 一段（Valid values: TABLE, LIST, CSV）"
+      - id: nh
+        label: 不显示表头（/nh）
+        type: bool
+        style: flag
+        prefix: "/nh"
+        default: false
+        help: >-
+          文档：只在输出格式为 table 或 csv 时有效。实测 /fo list /nh 会以 1 退出，
+          stderr 打印 ERROR: Invalid syntax. /NH option is allowed only for TABLE and CSV formats.
+        doc: "official #parameters 的 /nh（Suppresses column header in output. Valid when the /fo parameter is set to table or csv）；本机 getmac /? 的 /NH 一段"
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测本机每次调用约 1.9 秒（枚举网卡较慢，/fo 与 /nh 不影响耗时）。
+        表格形式会把过长的网卡连接名截断（本机 Bluetooth Device (Personal Area Network) #2 被截成 Bluetooth Devic），要完整值请用 /fo list。
+    examples:
+      - title: 表格形式（程序默认）
+        args: ["/fo", "table"]
+        expectExitCode: 0
+      - title: 列表形式（内容不截断）
+        args: ["/fo", "list"]
+        expectExitCode: 0
+      - title: CSV 形式
+        args: ["/fo", "csv"]
+        expectExitCode: 0
+      - title: 表格形式、不要表头
+        args: ["/fo", "table", "/nh"]
+        expectExitCode: 0
+
+  # ================================================================= 本地
+  - id: verbose
+    category: 本地
+    title: 详细信息（/v：连接名 + 网卡名）
+    description: >-
+      在物理地址与传输名称之外，再给出"连接名"（网络连接的名字，例如以太网、WLAN）与"网卡名"
+      （驱动报告的适配器型号）。想知道某块网卡到底叫什么，看这条。
+    command: ""
+    sources:
+      - title: getmac 官方参考 —— /v 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/getmac#parameters
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方 /v 一行：Specifies that the output display verbose information；官方示例第一条就是
+          `getmac /fo table /nh /v`，另一条是 `getmac /s srvmain /u maindom\hiropln /p p@ssW23 /fo list /v`。
+          本机 getmac /? 的 /V 一段措辞相同；实测 /v /fo list 与 /fo list /v 两种顺序都退出码 0、输出一致（顺序不敏感）。
+    fields:
+      - id: fo
+        label: 输出格式（/fo）
+        type: enum
+        style: separate
+        prefix: "/fo"
+        default: table
+        values:
+          - value: table
+            label: table —— 表格（程序默认）
+            isDefault: true
+            help: 四列：Connection Name / Network Adapter / Physical Address / Transport Name；列宽会截断长名称。
+          - value: list
+            label: list —— 逐字段列表
+            help: 四行一段，内容不截断，适合复制连接名或网卡名。
+          - value: csv
+            label: csv —— 逗号分隔（带引号）
+            help: 便于导入表格软件。
+        doc: "official #parameters 的 /fo {table | list | csv}；本机 getmac /? 的 /FO format 一段"
+      - id: nh
+        label: 不显示表头（/nh）
+        type: bool
+        style: flag
+        prefix: "/nh"
+        default: false
+        help: 只在 /fo 为 table 或 csv 时有效（文档明说）；与 list 同用会以 1 退出。
+        doc: "official #parameters 的 /nh；official 示例 getmac /fo table /nh /v"
+      - id: v
+        label: 详细模式（/v）
+        type: bool
+        style: flag
+        prefix: "/v"
+        default: true
+        help: >-
+          文档：显示详细输出。实测 /v 会多出 Connection Name 与 Network Adapter 两列。
+          连接名取自系统的网络连接名，中文系统上就是中文（本机实测为 蓝牙网络连接 2、以太网），
+          这也是本工具包 runtime.encoding 判为 utf-8 的依据。
+        doc: "official #parameters 的 /v（Specifies that the output display verbose information）；本机 getmac /? 的 /V 一段"
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测本机约 1.9 秒。表格形式会按列宽截断：本机 "Bluetooth Device (Personal Area Network) #2" 显示为
+        "Bluetooth Devic"、"Realtek PCIe GbE Family Controller" 显示为 "Realtek PCIe Gb"；要完整值请用 /fo list。
+    examples:
+      - title: 详细信息（表格）
+        args: ["/fo", "table", "/v"]
+        expectExitCode: 0
+      - title: 详细信息（列表，内容不截断）
+        args: ["/fo", "list", "/v"]
+        expectExitCode: 0
+
+  # ================================================================= 远程
+  - id: remote
+    category: 远程
+    title: 查询远程计算机的 MAC 列表（/s）
+    description: >-
+      查询指定远程计算机的网卡 MAC 地址。用的是当前登录用户的凭据；
+      目标机上权限不足时会失败。历史写法里这个功能也写成 nbtstat -A <计算机>。
+    command: ""
+    sources:
+      - title: getmac 官方参考 —— /s <computer> 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/getmac#parameters
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方 /s 一行：Specifies the name or IP address of a remote computer (do not use backslashes).
+          The default is the local computer；官方示例 `getmac /s srvmain`。
+          本机 getmac /? 的 /S system 一段措辞相同；实测 /s localhost 等价于查本机（退出码 0）。
+    fields:
+      - id: computer
+        label: 远程计算机名或 IP（/s）
+        type: text
+        style: separate
+        prefix: "/s"
+        required: true
+        placeholder: 例 srvmain 或 192.168.2.10
+        help: >-
+          文档要求不要带反斜杠（只写计算机名或 IP）。实测 /s localhost 返回本机列表（退出码 0），
+          指向无法连接的名称时以 1 退出并在 stderr 打印 ERROR: The RPC server is unavailable.
+          （该失败路径实测耗时约 5.5 秒，宿主界面上要有等待预期）。
+          带凭据的 /u 与 /p 本包不收录，原因见 NOTES.md §3。
+        doc: "official #parameters 的 /s <computer>（Specifies the name or IP address of a remote computer, do not use backslashes）；本机 getmac /? 的 /S system 一段"
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        远程查询走 RPC，目标机需要可达且当前账号在目标机上有权限；失败时只有 stderr 一行 ERROR 提示。
+    examples:
+      - title: 查询本机（把 /s 指到 localhost，实测退出码 0）
+        args: ["/s", "localhost"]
+        expectExitCode: 0
