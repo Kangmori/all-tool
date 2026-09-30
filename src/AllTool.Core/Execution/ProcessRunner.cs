@@ -101,6 +101,11 @@ public sealed class ProcessRunner : IProcessRunner
             FileName = request.Executable,
             UseShellExecute = false,
             CreateNoWindow = true,
+            // 子进程**不能继承父进程的 stdin**：GUI 应用从终端启动时那是控制台，
+            // 行输入型程序（实测 sqlite3）会因此卡在交互式 REPL 里不退出，
+            // 于是宿主的 RunAsync 永不返回——表现为「命令跑了，但状态永不写入」。
+            // 给它一个会 EOF 的空管道最稳；这也与 ConPTY 那条路的 NULL 句柄策略一致。
+            RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             StandardOutputEncoding = request.OutputEncoding,
