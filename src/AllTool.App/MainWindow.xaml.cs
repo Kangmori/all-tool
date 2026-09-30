@@ -970,6 +970,34 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        // 非会话的 info 动作：同样只能"摆命令"，不能替用户执行。
+        // 上面会话型分支的注释说得很清楚：把命令塞进 cmd /k 就等于我们替他执行了，与 info 语义相反。
+        // 这条路径原先漏了，于是 cipher /w、diskpart clean、dism /cleanup-image 这类不可逆命令
+        // 点一下「在终端中打开」就会真的开跑——对极高风险动作是实打实的安全问题。
+        if (_action.ExecutionOrDefault == "info")
+        {
+            try
+            {
+                var infoCommand = WindowsCommandLine.Build(_executablePath, argv);
+                CopyToClipboard(infoCommand, "命令");
+                Process.Start(new ProcessStartInfo("cmd.exe")
+                {
+                    UseShellExecute = true,
+                    WorkingDirectory = ResolveWorkingDirectory() ?? Environment.CurrentDirectory,
+                });
+
+                _logger.Info($"高危动作（只提供信息，未执行）：{infoCommand}");
+                StatusText.Text = "命令已复制。终端窗口里粘贴后回车即执行——是否执行由你决定";
+            }
+            catch (Exception ex)
+            {
+                _logger.Exception("打开终端时", ex);
+                StatusText.Text = "打不开终端：" + ex.Message;
+            }
+
+            return;
+        }
+
         // 复用执行层那条"CreateProcess 只接受一条命令行"的引号规则，避免自己拼错
         var commandLine = WindowsCommandLine.Build(_executablePath, argv);
 
