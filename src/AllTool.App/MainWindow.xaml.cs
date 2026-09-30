@@ -2875,7 +2875,7 @@ public sealed partial class MainWindow : Window
             }
 
             var argv = ArgvBuilder.Build(_action, _values);
-            var executable = _executablePath ?? _manifest.Locate?.Executable ?? "?";
+            var executable = _action?.Executable ?? _executablePath ?? _manifest.Locate?.Executable ?? "?";
             CommandLineBox.Text = ArgvBuilder.FormatForDisplay(executable, argv);
         }
         catch (Exception ex)
