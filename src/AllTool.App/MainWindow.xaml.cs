@@ -1084,7 +1084,7 @@ public sealed partial class MainWindow : Window
         var path = Path.Combine(Path.GetTempPath(), $"alltool-session-{Guid.NewGuid():N}{extension}");
 
         // diskpart 之类按 OEM 代码页读脚本，写无 BOM 的 UTF-8 最稳
-        File.WriteAllText(path, script, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        File.WriteAllText(path, EnsureTrailingNewLine(script), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
         return path;
     }
@@ -3299,6 +3299,17 @@ public sealed partial class MainWindow : Window
             FlushLogLines();
         }
     }
+
+    /// <summary>
+    /// 会话脚本必须以**换行**结尾。
+    ///
+    /// 为什么：有些程序（实测 sqlite3）**不执行没有换行结尾的尾行**，
+    /// 于是脚本里的 `.quit` 不会执行 → 进程进入交互式 REPL 等 stdin → 永久挂住
+    /// → 宿主的 RunAsync 永不返回 → 状态更新与刷新整段都不执行（表现为"动作跑了但门禁不解除"）。
+    /// DiskPart 的 `/s` 容忍缺尾换行，所以这个坑在第一个会话用例上一直没暴露。
+    /// </summary>
+    private static string EnsureTrailingNewLine(string script)
+        => script.EndsWith('\n') ? script : script + Environment.NewLine;
 }
 
 public sealed record PackageEntry(string Display, string Directory, ToolManifest Manifest);
