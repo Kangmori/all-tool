@@ -1,0 +1,13 @@
+# nslookup —— 本机 nslookup.exe 的 /? 原样输出（用于参数溯源；本文件由脚本抓取，勿手工编辑）
+# 命令: C:\Windows\System32\nslookup.exe /?
+# 可执行文件: C:\Windows\System32\nslookup.exe
+# 抓取日期: 2026-10-01
+# 原始代码页/编码: oem（已按该编码解码，存为 UTF-8）
+# 抓取条件: CreateNoWindow=true + 重定向 stdout/stderr + 启动后立刻关闭 stdin（与宿主一致）
+# 退出码: 1   原始字节数: 274
+
+用法:
+   nslookup [-opt ...]             # 使用默认服务器的交互模式
+   nslookup [-opt ...] - server    # 使用 "server" 的交互模式
+   nslookup [-opt ...] host        # 仅查找使用默认服务器的 "host"
+   nslookup [-opt ...] host server # 仅查找使用 "server" 的 "host"

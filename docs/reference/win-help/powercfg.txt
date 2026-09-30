@@ -1,0 +1,99 @@
+# powercfg —— 本机 powercfg.exe 的 /? 原样输出（用于参数溯源；本文件由脚本抓取，勿手工编辑）
+# 命令: C:\Windows\System32\powercfg.exe /?
+# 可执行文件: C:\Windows\System32\powercfg.exe
+# 抓取日期: 2026-10-01
+# 原始代码页/编码: oem（已按该编码解码，存为 UTF-8）
+# 抓取条件: CreateNoWindow=true + 重定向 stdout/stderr + 启动后立刻关闭 stdin（与宿主一致）
+# 退出码: 0   原始字节数: 2494
+
+POWERCFG /命令 [参数]
+
+描述:
+  使用户可以控制本地系统上的电源设置。
+
+  有关命令和选项的详细信息，请运行 "POWERCFG /? <COMMAND>"
+
+命令列表:
+  /LIST、/L          列出所有电源方案。
+
+  /QUERY、/Q         显示电源方案的内容。
+
+  /QUERYALTITUDES、/QA
+                     显示高度为.
+ 的电源方案的内容
+  /CHANGE、/X        修改当前电源方案中的设置值。
+
+  /CHANGENAME        修改电源方案的名称和描述。
+
+  /DUPLICATESCHEME   复制电源方案。
+
+  /DELETE, /D        删除电源方案。
+
+  /DELETESETTING     删除电源设置。
+
+  /SETACTIVE, /S     使系统上的电源方案处于活动状态。
+
+  /GETACTIVESCHEME   检索当前活动的电源方案。
+
+  /SETACVALUEINDEX   如果系统使用交流电源供电，
+                     则设置与电源设置相关联的值。
+
+  /SETDCVALUEINDEX   如果系统使用直流电源供电，
+                     则设置与电源设置相关联的值。
+
+  /IMPORT            从文件中导入所有电源设置。
+
+  /EXPORT            将电源方案导出到文件。
+
+  /ALIASES           显示所有别名及其相应的 GUID。
+
+  /GETSECURITYDESCRIPTOR
+                     获取与指定的
+                     电源设置、电源方案或操作相关联的安全描述符。
+
+  /SETSECURITYDESCRIPTOR
+                     设置与
+                     电源设置、电源方案或操作相关联的安全描述符。
+
+  /HIBERNATE、/H     启用或禁用休眠功能。
+
+  /AVAILABLESLEEPSTATES、/A
+                     报告系统上可用的睡眠状态。
+
+  /DEVICEQUERY      返回符合指定条件的设备列表。
+
+  /DEVICEENABLEWAKE  使设备从睡眠状态唤醒系统。
+
+  /DEVICEDISABLEWAKE 禁止设备从任何睡眠
+                     状态唤醒系统。
+
+  /LASTWAKE          报告有关从上次睡眠转换中
+                     唤醒系统的信息。
+
+  /WAKETIMERS        枚举活动的唤醒计时器。
+
+  /REQUESTS          枚举应用程序和驱动程序的电源请求。
+
+  /REQUESTSOVERRIDE  为特定进程、
+                     服务或驱动程序设置电源请求替代。
+
+  /ENERGY            分析系统中常见的能量效率和
+                     电池使用时间问题。
+
+  /BATTERYREPORT     生成电池使用情况的报告。
+
+  /SLEEPSTUDY        生成系统电源转换的诊断报告。
+
+  /SRUMUTIL          从系统资源使用状况监视器(SRUM)转储能量
+                     估算数据。
+
+  /SYSTEMSLEEPDIAGNOSTICS
+                     系统睡眠诊断报告已弃用且
+                     替换为系统电源报告。请使用命令
+                     改用 "powercfg /systempowerreport"。
+
+  /SYSTEMPOWERREPORT 生成系统电源转换的诊断报告。
+
+  /POWERTHROTTLING 为应用程序控制电源节流。
+
+  /PROVISIONINGXML, /PXML    生成包含电源设置覆盖项的 XML 文件。 

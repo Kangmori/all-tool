@@ -1,0 +1,51 @@
+# netsh —— 本机 netsh.exe 的 /? 原样输出（用于参数溯源；本文件由脚本抓取，勿手工编辑）
+# 命令: C:\Windows\System32\netsh.exe /?
+# 可执行文件: C:\Windows\System32\netsh.exe
+# 抓取日期: 2026-10-01
+# 原始代码页/编码: utf-8（已按该编码解码，存为 UTF-8）
+# 抓取条件: CreateNoWindow=true + 重定向 stdout/stderr + 启动后立刻关闭 stdin（与宿主一致）
+# 退出码: 1   原始字节数: 2173
+
+用法: C:\Windows\System32\netsh.exe [-a AliasFile] [-c Context] [-r RemoteMachine] [-u [DomainName\]UserName] [-p Password | *]
+             [Command | -f ScriptFile]
+
+下列指令有效:
+
+此上下文中的命令:
+?              - 显示命令列表。
+add            - 在项目列表上添加一个配置项目。
+advfirewall    - 更改到 `netsh advfirewall' 上下文。
+branchcache    - 更改到 `netsh branchcache' 上下文。
+bridge         - 更改到 `netsh bridge' 上下文。
+delete         - 在项目列表上删除一个配置项目。
+dhcpclient     - 更改到 `netsh dhcpclient' 上下文。
+dnsclient      - 更改到 `netsh dnsclient' 上下文。
+dump           - 显示一个配置脚本。
+exec           - 运行一个脚本文件。
+firewall       - 更改到 `netsh firewall' 上下文。
+help           - 显示命令列表。
+http           - 更改到 `netsh http' 上下文。
+interface      - 更改到 `netsh interface' 上下文。
+ipsec          - 更改到 `netsh ipsec' 上下文。
+lan            - 更改到 `netsh lan' 上下文。
+mbn            - 更改到 `netsh mbn' 上下文。
+namespace      - 更改到 `netsh namespace' 上下文。
+netio          - 更改到 `netsh netio' 上下文。
+nlm            - 更改到 `netsh nlm' 上下文。
+ras            - 更改到 `netsh ras' 上下文。
+rpc            - 更改到 `netsh rpc' 上下文。
+set            - 更新配置设置。
+show           - 显示信息。
+trace          - 更改到 `netsh trace' 上下文。
+wcn            - 更改到 `netsh wcn' 上下文。
+wfp            - 更改到 `netsh wfp' 上下文。
+winhttp        - 更改到 `netsh winhttp' 上下文。
+winsock        - 更改到 `netsh winsock' 上下文。
+wlan           - 更改到 `netsh wlan' 上下文。
+ztdns          - 更改到 `netsh ztdns' 上下文。
+
+下列的子上下文可用:
+ advfirewall branchcache bridge dhcpclient dnsclient firewall http interface ipsec lan mbn namespace netio nlm ras rpc trace wcn wfp winhttp winsock wlan ztdns
+
+若需要命令的更多帮助信息，请键入命令，接着是空格，
+后面跟 ?。

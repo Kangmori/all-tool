@@ -1,0 +1,62 @@
+# wevtutil —— 本机 wevtutil.exe 的 /? 原样输出（用于参数溯源；本文件由脚本抓取，勿手工编辑）
+# 命令: C:\Windows\System32\wevtutil.exe /?
+# 可执行文件: C:\Windows\System32\wevtutil.exe
+# 抓取日期: 2026-10-01
+# 原始代码页/编码: oem（已按该编码解码，存为 UTF-8）
+# 抓取条件: CreateNoWindow=true + 重定向 stdout/stderr + 启动后立刻关闭 stdin（与宿主一致）
+# 退出码: 0   原始字节数: 1587
+
+Windows 事件命令行实用程序。
+
+用于检索有关事件日志和发布者的信息，
+安装和卸载事件清单，运行查询以及导出、存档和清除日志。
+
+用法:
+
+你可以使用短(如 ep /uni)或长(如 
+enum-publishers /unicode)形式的命令和选项名称。
+命令、选项和选项值不区分大小写。
+
+变量均使用大写形式。
+
+wevtutil COMMAND [ARGUMENT [ARGUMENT] ...] [/OPTION:VALUE [/OPTION:VALUE] ...]
+
+命令:
+
+el | enum-logs          列出日志名称。
+gl | get-log            获取日志配置信息。
+sl | set-log            修改日志配置。
+ep | enum-publishers    列出事件发布者。
+gp | get-publisher      获取发布者配置信息。
+im | install-manifest   从清单中安装事件发布者和日志。
+um | uninstall-manifest 从清单中卸载事件发布者和日志。
+qe | query-events       从日志或日志文件中查询事件。
+gli | get-log-info      获取日志状态信息。
+epl | export-log        导出日志。
+al | archive-log        存档导出的日志。
+cl | clear-log          清除日志。
+
+常用选项:
+
+/{r | remote}:VALUE
+如果指定，则在远程计算机上运行该命令。VALUE 是远程计算机名称。
+/im 和 /um 选项不支持远程操作。
+
+/{u | username}:VALUE
+指定一个不同的用户以登录到远程计算机。
+VALUE 是 domain\user 或 user 形式的用户名。只有在指定 /r 选项时才适用。
+
+/{p | password}:VALUE
+指定的用户密码。如果未指定，
+或者 VALUE 为 "*"，则会提示用户输入密码。
+只有在指定 /u 选项时才适用。
+
+/{a | authentication}:[Default|Negotiate|Kerberos|NTLM]
+用于连接到远程计算机的身份验证类型。默认值为 Negotiate。
+
+/{uni | unicode}:[true|false]
+使用 Unicode 显示输出。如果为 true，则使用 Unicode 显示输出。
+
+要了解特定命令的详细信息，请键入以下命令:
+
+wevtutil COMMAND /?

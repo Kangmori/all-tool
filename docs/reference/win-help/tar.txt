@@ -1,0 +1,17 @@
+# tar —— 本机 tar.exe 的 /? 原样输出（用于参数溯源；本文件由脚本抓取，勿手工编辑）
+# 命令: C:\Windows\System32\tar.exe /?
+# 可执行文件: C:\Windows\System32\tar.exe
+# 抓取日期: 2026-10-01
+# 原始代码页/编码: oem（已按该编码解码，存为 UTF-8）
+# 抓取条件: CreateNoWindow=true + 重定向 stdout/stderr + 启动后立刻关闭 stdin（与宿主一致）
+# 退出码: 1   原始字节数: 179
+
+Usage:
+  List:    tar.exe -tf <archive-filename>
+  Extract: tar.exe -xf <archive-filename>
+  Create:  tar.exe -cf <archive-filename> [filenames...]
+  Help:    tar.exe --help
+
+# ---- 附加：C:\Windows\System32\tar.exe --version /?（退出码 0，118 字节）----
+
+bsdtar 3.8.4 - libarchive 3.8.4 zlib/1.2.13.1-motley liblzma/5.8.1 bz2lib/1.0.8 libzstd/1.5.7 cng/2.0 libb2/bundled 

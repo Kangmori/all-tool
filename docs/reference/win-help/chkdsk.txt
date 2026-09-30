@@ -1,0 +1,55 @@
+# chkdsk —— 本机 chkdsk.exe 的 /? 原样输出（用于参数溯源；本文件由脚本抓取，勿手工编辑）
+# 命令: C:\Windows\System32\chkdsk.exe /?
+# 可执行文件: C:\Windows\System32\chkdsk.exe
+# 抓取日期: 2026-10-01
+# 原始代码页/编码: oem（已按该编码解码，存为 UTF-8）
+# 抓取条件: CreateNoWindow=true + 重定向 stdout/stderr + 启动后立刻关闭 stdin（与宿主一致）
+# 退出码: 3   原始字节数: 2089
+
+检查磁盘并显示状态报告。
+
+
+CHKDSK [volume[[path]filename]]] [/F] [/V] [/R] [/X] [/I] [/C] [/L[:size]] [/B] [/scan] [/spotfix]
+
+
+  volume              指定驱动器号(后面跟一个冒号)、
+                      装入点或卷名。
+  filename            仅 FAT/FAT32: 指定要检查
+                      碎片的文件。
+  /F                  修复磁盘上的错误。
+  /V                  在 FAT/FAT32 上: 显示磁盘上每个文件的
+                      完整路径和名称。
+                  在 NTFS 上: 显示清理消息(如果有)。
+  /R                  查找坏扇区并恢复可读信息
+                      (未指定 /scan 时，隐含 /F)。
+  /L:size             仅 NTFS: 将日志文件大小更改为指定
+                      的 KB 数。如果未指定大小，则显示
+                      当前大小。
+  /X                  如果必要，则先强制卸除卷。
+                       该卷的所有打开的句柄都将无效
+                      (隐含 /F)。
+  /I                  仅 NTFS: 对索引项进行强度较小的
+                      检查。
+  /C                  仅 NTFS: 跳过文件夹结构内的
+                      循环检查。
+  /B                  仅 NTFS: 重新评估该卷上的坏簇
+                      (隐含 /R)
+  /scan               仅 NTFS: 在卷上运行联机扫描
+  /forceofflinefix    仅 NTFS: (必须与 "/scan" 一起使用)
+                      跳过所有联机修复；找到的所有故障都
+                      排队等待脱机修复(即 "chkdsk /spotfix")。
+  /perf               仅 NTFS: (必须与 "/scan" 一起使用)
+                      使用更多系统资源尽快完成
+                      扫描。这可能会对系统中运行的其他任务的性能
+                      造成负面影响。
+  /spotfix            仅 NTFS: 在卷上运行点修复
+  /sdcleanup          仅 NTFS: 回收不需要的安全描述符
+                      数据(隐含 /F)。
+  /offlinescanandfix  在卷上运行脱机扫描并进行修复。
+  /freeorphanedchains 仅 FAT/FAT32/exFAT: 释放所有孤立的簇链
+                      而不恢复其内容。
+  /markclean          仅 FAT/FAT32/exFAT: 如果未检测到损坏，则将卷
+                      标记为干净，即使未指定 /F 也是如此。
+
+/I 或 /C 开关通过跳过对卷的某些检查，
+来减少运行 Chkdsk 所需的时间。

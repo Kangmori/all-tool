@@ -1,0 +1,10 @@
+# sfc —— 本机 sfc.exe 的 /? 原样输出（用于参数溯源；本文件由脚本抓取，勿手工编辑）
+# 命令: C:\Windows\System32\sfc.exe /?
+# 可执行文件: C:\Windows\System32\sfc.exe
+# 抓取日期: 2026-10-01
+# 原始代码页/编码: utf-16le（已按该编码解码，存为 UTF-8）
+# 抓取条件: CreateNoWindow=true + 重定向 stdout/stderr + 启动后立刻关闭 stdin（与宿主一致）
+# 退出码: 1   原始字节数: 68
+
+
+为了使用 sfc 工具，你必须作为管理员运行控制台会话。
