@@ -1,0 +1,788 @@
+spec: 1
+id: systools
+name: 系统工具
+manifestVersion: 0.1.0
+kind: system
+summary: >-
+  Windows 自带工具的快捷入口（仿系统配置 msconfig 的「工具」选项卡）：任务管理器、设备管理器、
+  服务、事件查看器、磁盘管理、控制面板项、辅助工具等。每个动作都通过
+  `cmd /c start "" <工具>` 打开，**不捕获输出、不等待窗口关闭**，
+  工具独立运行——关掉本工具不会把它们一起带走。
+appVersion: "10.0"
+runtime:
+  encoding: oem
+
+locate:
+  executable: cmd.exe
+  alternativeNames: [cmd.exe]
+  versionArgs: ["/c", "ver"]
+  versionPattern: "(?m)Version\\s+([0-9.]+)"
+  minVersion: "6.1"
+  notFoundHint: >-
+    找不到 cmd.exe。Windows 一定自带它；如果出现这一条，请检查系统文件是否被改动。
+
+actions:
+  - id: taskmgr
+    category: 任务与进程
+    title: 任务管理器
+    description: >-
+      查看进程、性能、启动项、服务与用户会话。 通过 `cmd /c start "" taskmgr.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "taskmgr.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: resmon
+    category: 任务与进程
+    title: 资源监视器
+    description: >-
+      按 CPU/磁盘/网络/内存实时看是哪些进程在占用。 通过 `cmd /c start "" resmon.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "resmon.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: perfmon
+    category: 任务与进程
+    title: 性能监视器
+    description: >-
+      收集性能计数器与数据收集器集。 通过 `cmd /c start "" perfmon.msc` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "perfmon.msc"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: devmgmt
+    category: 设备与磁盘
+    title: 设备管理器
+    description: >-
+      查看与管理硬件设备与驱动。 通过 `cmd /c start "" devmgmt.msc` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "devmgmt.msc"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: diskmgmt
+    category: 设备与磁盘
+    title: 磁盘管理
+    description: >-
+      分区、卷、盘符与磁盘初始化。 通过 `cmd /c start "" diskmgmt.msc` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "diskmgmt.msc"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: dfrgui
+    category: 设备与磁盘
+    title: 驱动器优化（碎片整理）
+    description: >-
+      对驱动器做碎片整理或 TRIM 优化。 通过 `cmd /c start "" dfrgui.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "dfrgui.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: fsmgmt
+    category: 设备与磁盘
+    title: 共享文件夹
+    description: >-
+      查看共享、会话与打开的文件。 通过 `cmd /c start "" fsmgmt.msc` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "fsmgmt.msc"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: cleanmgr
+    category: 设备与磁盘
+    title: 磁盘清理（图形界面）
+    description: >-
+      清理临时文件与系统文件。 通过 `cmd /c start "" cleanmgr.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "cleanmgr.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: optionalfeatures
+    category: 设备与磁盘
+    title: 启用或关闭 Windows 功能
+    description: >-
+      安装/卸载可选功能（如 OpenSSH、WSL）。 通过 `cmd /c start "" optionalfeatures.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "optionalfeatures.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: services
+    category: 服务与计划
+    title: 服务
+    description: >-
+      查看、启动、停止服务及其启动类型。 通过 `cmd /c start "" services.msc` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "services.msc"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: taskschd
+    category: 服务与计划
+    title: 任务计划程序
+    description: >-
+      图形界面管理计划任务。 通过 `cmd /c start "" taskschd.msc` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "taskschd.msc"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: msconfig
+    category: 服务与计划
+    title: 系统配置
+    description: >-
+      启动项、服务、引导选项 —— 本包的分组思路就仿照它的「工具」选项卡。 通过 `cmd /c start "" msconfig.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "msconfig.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: eventvwr
+    category: 事件与日志
+    title: 事件查看器
+    description: >-
+      查看系统/应用/安全日志。 通过 `cmd /c start "" eventvwr.msc` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "eventvwr.msc"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: ncpa
+    category: 网络
+    title: 网络连接
+    description: >-
+      网卡状态、IP 与 DNS 设置。 通过 `cmd /c start "" ncpa.cpl` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "ncpa.cpl"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: wf
+    category: 网络
+    title: 高级安全 Windows Defender 防火墙
+    description: >-
+      入站/出站规则管理。 通过 `cmd /c start "" wf.msc` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "wf.msc"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: firewall
+    category: 网络
+    title: 防火墙（简单设置）
+    description: >-
+      开关防火墙与放行程序。 通过 `cmd /c start "" firewall.cpl` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "firewall.cpl"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: inetcpl
+    category: 网络
+    title: Internet 属性
+    description: >-
+      代理、连接与局域网设置。 通过 `cmd /c start "" inetcpl.cpl` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "inetcpl.cpl"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: mstsc
+    category: 网络
+    title: 远程桌面连接
+    description: >-
+      连接到远程 Windows 桌面。 通过 `cmd /c start "" mstsc.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "mstsc.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: rasphone
+    category: 网络
+    title: 拨号与 VPN
+    description: >-
+      管理 VPN 与拨号连接。 通过 `cmd /c start "" rasphone.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "rasphone.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: lusrmgr
+    category: 用户与安全
+    title: 本地用户和组
+    description: >-
+      管理本地账户与组（家庭版可能没有）。 通过 `cmd /c start "" lusrmgr.msc` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "lusrmgr.msc"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: secpol
+    category: 用户与安全
+    title: 本地安全策略
+    description: >-
+      密码策略、审核策略等（家庭版没有）。 通过 `cmd /c start "" secpol.msc` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "secpol.msc"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: gpedit
+    category: 用户与安全
+    title: 本地组策略编辑器
+    description: >-
+      编辑本地组策略（家庭版没有）。 通过 `cmd /c start "" gpedit.msc` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "gpedit.msc"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: certmgr
+    category: 用户与安全
+    title: 证书管理器
+    description: >-
+      查看与管理当前用户的证书。 通过 `cmd /c start "" certmgr.msc` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "certmgr.msc"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: wscui
+    category: 用户与安全
+    title: 安全与维护
+    description: >-
+      安全中心与维护状态。 通过 `cmd /c start "" wscui.cpl` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "wscui.cpl"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: credwiz
+    category: 用户与安全
+    title: 凭据备份与还原
+    description: >-
+      备份或还原保存的凭据。 通过 `cmd /c start "" credwiz.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "credwiz.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: msinfo32
+    category: 系统信息
+    title: 系统信息
+    description: >-
+      硬件、组件与软件环境的完整清单。 通过 `cmd /c start "" msinfo32.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "msinfo32.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: dxdiag
+    category: 系统信息
+    title: DirectX 诊断工具
+    description: >-
+      显卡、声音与输入设备诊断。 通过 `cmd /c start "" dxdiag.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "dxdiag.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: sysdm
+    category: 系统信息
+    title: 系统属性
+    description: >-
+      计算机名、性能、还原与远程设置。 通过 `cmd /c start "" sysdm.cpl` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "sysdm.cpl"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: winver
+    category: 系统信息
+    title: 关于 Windows
+    description: >-
+      查看 Windows 版本与内部版本号。 通过 `cmd /c start "" winver.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "winver.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: compmgmt
+    category: 系统信息
+    title: 计算机管理
+    description: >-
+      把事件查看器、磁盘管理、服务等收在一个控制台里。 通过 `cmd /c start "" compmgmt.msc` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "compmgmt.msc"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: regedit
+    category: 系统信息
+    title: 注册表编辑器
+    description: >-
+      图形界面查看与编辑注册表。 通过 `cmd /c start "" regedit.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "regedit.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: envvars
+    category: 系统信息
+    title: 环境变量（系统属性）
+    description: >-
+      编辑用户与系统环境变量。 通过 `cmd /c start "" SystemPropertiesAdvanced.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "SystemPropertiesAdvanced.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: control
+    category: 控制面板项
+    title: 控制面板（全部项）
+    description: >-
+      打开控制面板。 通过 `cmd /c start "" control.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "control.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: appwiz
+    category: 控制面板项
+    title: 程序和功能
+    description: >-
+      卸载程序、启用 Windows 功能。 通过 `cmd /c start "" appwiz.cpl` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "appwiz.cpl"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: timedate
+    category: 控制面板项
+    title: 日期和时间
+    description: >-
+      时区、时间同步。 通过 `cmd /c start "" timedate.cpl` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "timedate.cpl"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: powercfg
+    category: 控制面板项
+    title: 电源选项
+    description: >-
+      电源计划与睡眠设置。 通过 `cmd /c start "" powercfg.cpl` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "powercfg.cpl"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: desk
+    category: 控制面板项
+    title: 显示设置（显示属性）
+    description: >-
+      分辨率、缩放与多显示器。 通过 `cmd /c start "" desk.cpl` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "desk.cpl"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: mmsys
+    category: 控制面板项
+    title: 声音设置
+    description: >-
+      播放/录制设备与音量。 通过 `cmd /c start "" mmsys.cpl` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "mmsys.cpl"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: main
+    category: 控制面板项
+    title: 鼠标属性
+    description: >-
+      鼠标与指针设置。 通过 `cmd /c start "" main.cpl` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "main.cpl"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: bthprops
+    category: 控制面板项
+    title: 蓝牙设备
+    description: >-
+      蓝牙设备与配对（无蓝牙时可能打不开）。 通过 `cmd /c start "" bthprops.cpl` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "bthprops.cpl"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: osk
+    category: 辅助与工具
+    title: 屏幕键盘
+    description: >-
+      鼠标操作的软键盘。 通过 `cmd /c start "" osk.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "osk.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: magnify
+    category: 辅助与工具
+    title: 放大镜
+    description: >-
+      屏幕放大。 通过 `cmd /c start "" magnify.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "magnify.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: narrator
+    category: 辅助与工具
+    title: 讲述人
+    description: >-
+      屏幕朗读。 通过 `cmd /c start "" narrator.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "narrator.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: charmap
+    category: 辅助与工具
+    title: 字符映射表
+    description: >-
+      查找与复制特殊字符。 通过 `cmd /c start "" charmap.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "charmap.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: calc
+    category: 辅助与工具
+    title: 计算器
+    description: >-
+      计算器。 通过 `cmd /c start "" calc.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "calc.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: notepad
+    category: 辅助与工具
+    title: 记事本
+    description: >-
+      纯文本编辑器。 通过 `cmd /c start "" notepad.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "notepad.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: mspaint
+    category: 辅助与工具
+    title: 画图
+    description: >-
+      位图编辑。 通过 `cmd /c start "" paint.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "paint.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: explorer
+    category: 辅助与工具
+    title: 文件资源管理器
+    description: >-
+      打开资源管理器。 通过 `cmd /c start "" explorer.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "explorer.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: wt
+    category: 辅助与工具
+    title: Windows 终端
+    description: >-
+      打开 Windows 终端（未安装时会提示）。 通过 `cmd /c start "" wt.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "wt.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: cmd
+    category: 辅助与工具
+    title: 命令提示符
+    description: >-
+      打开一个命令提示符窗口。 通过 `cmd /c start "" cmd.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "cmd.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
+
+  - id: snipping
+    category: 辅助与工具
+    title: 截图工具
+    description: >-
+      截图与录屏。 通过 `cmd /c start "" SnippingTool.exe` 打开。
+    command: ""
+    executable: cmd.exe
+    fixedArgs: ["/c", "start", "", "SnippingTool.exe"]
+    sources:
+      - title: "Windows 命令索引（系统自带工具入口）"
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/windows-commands
+        retrieved: "2026-10-01"
+        note: "本包是**本地系统工具的快捷入口**，不是第三方命令的包装：每一项都是 Windows 自带程序，因此出处写系统的 windows-commands 索引页，具体行为以本机实测为准。"
+    fields: []
