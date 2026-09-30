@@ -289,6 +289,84 @@ actions:
     examples:
       - { title: "连到 192.0.2.1（TEST-NET-1，保留地址，不可路由，仅演示 argv）", args: ["-p", "2222", "-o", "ConnectTimeout=5", "192.0.2.1"] }
 
+  - id: run-command
+    category: 连接
+    title: 在远程主机上执行一条命令
+    description: >-
+      连上主机后执行给定命令并返回，不进入交互式 shell。**仍然会在真终端里运行**：
+      认证环节同样要输密码或确认主机指纹；而且远端命令自己也可能需要交互输入。
+      命令的参数请写在「命令参数」里，界面不会经过任何 shell 解析。
+    command: ""
+    execution: terminal
+    fields:
+      - id: port
+        label: 端口
+        type: number
+        style: attached
+        prefix: "-p"
+        required: false
+        doc: "ssh(1) -p port"
+      - id: user
+        label: 登录用户（-l）
+        type: text
+        style: attached
+        prefix: "-l"
+        required: false
+        save: true
+        doc: "ssh(1) -l login_name"
+      - id: identityFile
+        label: 身份（私钥）文件
+        type: file
+        style: attached
+        prefix: "-i"
+        required: false
+        doc: "ssh(1) -i identity_file"
+      - id: option
+        label: 配置项（-o）
+        type: text
+        style: separate
+        prefix: "-o"
+        required: false
+        placeholder: "BatchMode=yes"
+        doc: "ssh(1) -o option；可选名与取值见 ssh_config(5)"
+      - id: host
+        label: 目标主机
+        type: text
+        style: positional
+        required: true
+        placeholder: "user@example.com"
+        save: true
+        doc: "ssh(1) 语法行：destination [command [argument ...]]"
+      - id: command
+        label: 远端命令
+        type: text
+        style: positional
+        required: true
+        placeholder: "uname -a"
+        help: 第一个位置参数必须是目标主机，所以本字段声明在主机之后 —— 声明顺序就是 argv 顺序。
+        doc: "ssh(1) 语法行：destination [command [argument ...]]"
+      - id: commandArgs
+        label: 命令参数
+        type: text
+        style: positional
+        repeatable: true
+        required: false
+        help: 每行一个参数，按顺序追加到远端命令之后。
+        doc: "ssh(1) 语法行：destination [command [argument ...]]；手册页说明 If supplied, the arguments will be appended to the command, separated by spaces"
+    output:
+      showCommandLine: true
+      resultNote: 在真终端里运行；退出码是**远端命令**的退出码，连不上等客户端错误才是 255。
+    sources:
+      - title: OpenSSH 手册页 ssh(1) —— 远端命令与参数
+        url: https://man.openbsd.org/ssh
+        retrieved: "2026-09-30"
+        appliesTo: OpenSSH 9.5p2（本机实测）
+        note: "手册页原文：If a command is specified, it will be executed on the remote host instead of a login shell… the arguments will be appended to the command, separated by spaces；EXIT STATUS 一节：ssh exits with the exit status of the remote command or with 255 if an error occurred。"
+    examples:
+      - { title: "在 192.0.2.1 上跑一条命令（保留地址，连不通，仅演示 argv）", args: ["-o", "ConnectTimeout=5", "192.0.2.1", "uname", "-a"] }
+
+  # ==================================================== 密钥管理（本地）
+
   - id: keygen-generate
       executable: ssh-keygen.exe
     category: 密钥
@@ -603,80 +681,3 @@ actions:
     examples:
       - { title: "本地复制到保留地址 192.0.2.1（连不通，仅演示 argv）", args: ["-P", "2222", "-i", "%TEMP%\\openssh-smoke\\id_ed25519", "C:\\Windows\\win.ini", "192.0.2.1:/tmp/"] }
       - { title: "只给一个路径（scp 打印用法并退出 1）", args: ["C:\\Windows\\win.ini"], expectExitCode: 1 }
-  - id: run-command
-    category: 连接
-    title: 在远程主机上执行一条命令
-    description: >-
-      连上主机后执行给定命令并返回，不进入交互式 shell。**仍然会在真终端里运行**：
-      认证环节同样要输密码或确认主机指纹；而且远端命令自己也可能需要交互输入。
-      命令的参数请写在「命令参数」里，界面不会经过任何 shell 解析。
-    command: ""
-    execution: terminal
-    fields:
-      - id: port
-        label: 端口
-        type: number
-        style: attached
-        prefix: "-p"
-        required: false
-        doc: "ssh(1) -p port"
-      - id: user
-        label: 登录用户（-l）
-        type: text
-        style: attached
-        prefix: "-l"
-        required: false
-        save: true
-        doc: "ssh(1) -l login_name"
-      - id: identityFile
-        label: 身份（私钥）文件
-        type: file
-        style: attached
-        prefix: "-i"
-        required: false
-        doc: "ssh(1) -i identity_file"
-      - id: option
-        label: 配置项（-o）
-        type: text
-        style: separate
-        prefix: "-o"
-        required: false
-        placeholder: "BatchMode=yes"
-        doc: "ssh(1) -o option；可选名与取值见 ssh_config(5)"
-      - id: host
-        label: 目标主机
-        type: text
-        style: positional
-        required: true
-        placeholder: "user@example.com"
-        save: true
-        doc: "ssh(1) 语法行：destination [command [argument ...]]"
-      - id: command
-        label: 远端命令
-        type: text
-        style: positional
-        required: true
-        placeholder: "uname -a"
-        help: 第一个位置参数必须是目标主机，所以本字段声明在主机之后 —— 声明顺序就是 argv 顺序。
-        doc: "ssh(1) 语法行：destination [command [argument ...]]"
-      - id: commandArgs
-        label: 命令参数
-        type: text
-        style: positional
-        repeatable: true
-        required: false
-        help: 每行一个参数，按顺序追加到远端命令之后。
-        doc: "ssh(1) 语法行：destination [command [argument ...]]；手册页说明 If supplied, the arguments will be appended to the command, separated by spaces"
-    output:
-      showCommandLine: true
-      resultNote: 在真终端里运行；退出码是**远端命令**的退出码，连不上等客户端错误才是 255。
-    sources:
-      - title: OpenSSH 手册页 ssh(1) —— 远端命令与参数
-        url: https://man.openbsd.org/ssh
-        retrieved: "2026-09-30"
-        appliesTo: OpenSSH 9.5p2（本机实测）
-        note: "手册页原文：If a command is specified, it will be executed on the remote host instead of a login shell… the arguments will be appended to the command, separated by spaces；EXIT STATUS 一节：ssh exits with the exit status of the remote command or with 255 if an error occurred。"
-    examples:
-      - { title: "在 192.0.2.1 上跑一条命令（保留地址，连不通，仅演示 argv）", args: ["-o", "ConnectTimeout=5", "192.0.2.1", "uname", "-a"] }
-
-  # ==================================================== 密钥管理（本地）
