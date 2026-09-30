@@ -157,7 +157,7 @@ runtime:
 # **本机只实测到 740 这一条**（非管理员，DISM 在解析参数之前就拒了），其余三条的语义来自官方页面。
 exitCodes:
   # 块式写法，理由见 plugins/ping/manifest.yaml 的同一处注释。
-  - code: 0
+  - code: 0  # 实测（2026-09-30 提权会话实测：/?、/Online /Get-Features、/Online /Get-Packages、/Online /Cleanup-Image /CheckHealth、/Online /Get-Packages /Format:Table 全部 exit 0）
     meaning: 成功。中文系统上 DISM 的收尾提示是「操作成功完成。」（该字符串取自本机 zh-CN 资源）
     severity: ok
   - code: 50
@@ -165,7 +165,7 @@ exitCodes:
       ERROR_NOT_SUPPORTED —— 这个请求不受支持。官方定义见 System Error Codes (0-499)；
       在 DISM 上常见于「在不支持的目标上做这个操作」（例如对 Windows PE 用 /Online）
     severity: error
-  - code: 87
+  - code: 87  # 实测（2026-09-30 提权会话实测：/NoSuchSwitch 与 /Format Table（把枚举值拆成两个 token）都是 exit 87）
     meaning: >-
       ERROR_INVALID_PARAMETER —— 参数不正确。官方在 KB3082581 里把 /Apply-Image 失败报 87 当作已知现象；
       常见诱因是命令行写法不被接受、或用了版本不匹配的 DISM

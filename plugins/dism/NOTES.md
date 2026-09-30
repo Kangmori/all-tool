@@ -403,3 +403,43 @@ $ uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py
 | G3 | **`requiresAdmin` 没有"二进制级"位置** | DISM 是"整个 exe 都要提权"，本包在 12 个动作上逐个写 `requiresAdmin: true`（并同时写了包级），有冗余但没有更干净的表达方式 |
 | G4 | **`locate` 没有"从 exe 文件版本取版本"的能力**（与 `windows-commands.md` §7.3 记的同一条） | 不写 `versionArgs`/`versionPattern`/`minVersion`，把 exe 文件版本 `10.0.26100.8875` 记在本文与 manifest 注释里 |
 | G5 | **校验器的开关溯源覆盖不到非 `windows-commands` 出处的包**（§12.1） | 如实写在 §12.1，不为了让报告好看而伪造语料 |
+
+---
+
+## 提权会话实测（验收时补充，2026-09-30）
+
+**起因**：本包最初写「本机没有任何成功路径可实测」——那个前提是**过期的**（来自任务简报里的
+「当前账号是标准用户、无法提权」）。验收时实测发现 `Start-Process -Verb RunAs` 在本机
+**可以静默提权**（启动一个 `exit 7` 的提权 pwsh，8 秒内返回、退出码 7），于是补做了以下实测。
+
+### 方法
+把 7 条命令行写进一个临时脚本，用 `Start-Process pwsh -Verb RunAs -Wait` 执行，
+每条都 `RedirectStandardOutput/Error` 到文件、并单独记退出码，**之后直接 `ReadAllBytes` 判编码**
+（不经过 pwsh 的解码）。
+
+### 结果
+
+| 命令行 | 退出码 | 输出字节 | 严格 UTF-8 解码 | 按 cp936 解码 |
+|---|---|---|---|---|
+| `/?` | 0 | 3669 | **失败** | 「部署映像服务和管理工具」✔ |
+| `/Online /Get-Features` | 0 | 6943 | **失败** | 「部署映像服务和管理工具」✔ |
+| `/Online /Get-Packages` | 0 | 32909 | **失败** | 同上 ✔ |
+| `/Online /Cleanup-Image /CheckHealth` | 0 | 116 | **失败** | 同上 ✔ |
+| `/Online /Get-Packages /Format:Table` | **0** | 29783 | **失败** | 同上 ✔ |
+| `/Online /Get-Packages /Format Table` | **87** | 158 | **失败** | 「错误: 87」✔ |
+| `/NoSuchSwitch` | **87** | 200 | **失败** | 同上 ✔ |
+
+### 由此确认/修正的三件事
+
+1. **`runtime.encoding: oem` 得到实证**（原先只是推断）：所有输出严格 UTF-8 解码都失败，
+   按 cp936 解出来是可读中文。**本机非提权时那句英文提示只是因为没走到加载资源那一步。**
+2. **字段风格 `attached` 得到实证**（原先只能依据官方文档）：`/Format:Table` 一个 token → exit 0、
+   29783 字节；`/Format Table` 两个 token → **exit 87**、158 字节。**两者完全不同**，
+   与最初「非提权下返回值一样、判不出来」的观察形成对照。
+3. **退出码 0 与 87 得到实测**（原先标注未实测）；`50`（ERROR_NOT_SUPPORTED）仍未观察到，
+   保留官方出处标注。`740` 仍成立：**不提权时**任何命令行（含 `/?`）都在解析参数前返回 740。
+
+### 仍未实测的部分（刻意）
+- 12 个动作里 3 个 `execution: info` 的毁数据动作（apply-image / disable-feature / add-package）
+  与其余会改系统的模式**没有执行**——这是红线，不是漏测。
+- `50` 没有观察到（需要特定不受支持的请求）。
