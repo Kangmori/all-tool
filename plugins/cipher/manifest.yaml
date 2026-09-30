@@ -1,0 +1,694 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# cipher —— Windows 自带的 EFS（加密文件系统）工具（C:\Windows\System32\cipher.exe）：
+#           查看加密状态，以及加密 / 解密 / 擦除卷上未使用空间 / 生成密钥。
+#
+# ⚠⚠ 本包的红线（写给后来者，不要动这几条）：
+#   `cipher /w`（擦除卷上未使用空间，**不可中断**）、`/d`（解密）、`/e`（加密）、
+#   `/k`（新建证书与密钥）、`/r`（生成恢复密钥）—— 这五个**一个都没有实跑**。
+#   它们在清单里只以 `execution: info` 存在（宿主「执行」按钮灰掉，只把命令拼好摆出来），
+#   并且全部标了 `danger`。**任何情况下都不许把它们改成 `execution: run`。**
+#   本包真跑过的只有下面这些只读调用（全部在 %TEMP% 自建的探测目录上，或只读的系统路径上）：
+#     `cipher /?`、`cipher`（无参数）、`cipher /c <文件>`、`cipher /y`、`cipher /h`、
+#     `cipher /b /c <文件>`、`cipher /s:<目录>`、`cipher <文件|目录|通配符>`、`cipher /zz`。
+#   这五个写类动作**故意不给 `examples`**：实测宿主的「在终端中打开」是
+#   `cmd /k <完整命令行>`（src/AllTool.App/MainWindow.xaml.cs:979），**cmd /k 会立刻执行**，
+#   给一个能一键跑起来的预设等于把红线交给一次点击。会话型动作才是"开空终端"（同文件 948-971）。
+#
+# 参数知识来源（两边逐条核对，差异见 NOTES.md §5）：
+#   1) 官方文档（Microsoft Learn，单页到底；实测 HTTP 200、正文 53477 字节、
+#      Last updated 2023-02-03、页内只有 #syntax / #parameters / #remarks / #examples 四个锚点，
+#      **没有退出码章节**）：
+#      https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cipher
+#   2) 本机 `cipher /?` 的真实输出（**未入库**，随时可重取；实测 4088 字节中文 / 5455 字节英文，
+#      退出码 1、stderr 0 字节）。
+#      本机比官方页**多**的四处：`/P:filename.cer`、`/ECC:256|384|521`、
+#      `/FLUSHCACHE [/SERVER:servername]`、`/ADDUSER ... [/USER:username]`；
+#      官方页比本机多的写法：`/r:<filename>`（本机写 `/R:filename`）、`/adduser [/certhash|/certfile]`。
+#      按「官方为准、差异记录」（playbook §0.1），**只收录两边都能对应的开关**，
+#      本机独有的四个一律不收（NOTES.md §5.1 逐条记着）。
+#
+# 编码：**OEM 代码页（本机 936）** —— 实测判定，NOTES.md §4 有原始字节。
+#   ⚠ 判定条件必须写清（windows-commands.md §5.3 那条坑在 cipher 上是**反例**）：
+#   cipher 的输出语言跟着**控制台输出代码页**走，跟"有没有控制台"没有直接关系：
+#     · 控制台 CP=936（`cmd /c "chcp 936 & cipher /?"` 重定向到文件）→ 中文，首 4 字节
+#       cf d4 ca be =「显示」的 cp936，整份 4088 字节**严格 UTF-8 解码抛异常**；
+#     · 控制台 CP=65001（`chcp 65001`，或父进程把 [Console]::OutputEncoding 设成 UTF-8）
+#       → 退回英文资源、5455 字节**纯 ASCII**（0 个 >127 字节）；
+#     · **CreateNoWindow=true + 重定向 = 宿主 ProcessRunner 的真实条件**
+#       （src/AllTool.Core/Execution/ProcessRunner.cs:99-113）→ 子进程拿到新的
+#       隐藏控制台，其 CP = 系统 OEM = 936 → **中文 cp936**（与第一种条件字节完全相同）。
+#   宿主实际看到的就是 cp936，所以写 `oem`（不是写死 gbk：换英文/日文 Windows 同样正确）。
+#
+# 字段风格与顺序：实测判定，NOTES.md §6。
+#   · `/C` 是**旗标**、路径是位置参数：`cipher /c <文件>` → exit 0；
+#     `cipher /c:<文件>`（把值粘给 /c）→ **exit 1 并打印帮助**（cipher 只有 `/S:` `/W:` `/R:` 带冒号）。
+#   · `/S:` **只认单 token**：`cipher /c /s:<目录>` → exit 0；
+#     而 `cipher /c /s <目录>`（两个 token）→ **exit 1 并打印帮助**
+#     —— 所以 /s: 用 `style: attached` + `separator: ":"`。
+#   · 开关**大小写不敏感**（`/C` 与 `/c` 实测同效）；`/s:` 与 `/c` 的先后顺序不影响结果。
+#   · 本包所有动作的开关字段都声明在位置参数字段**之前**，与官方语法行
+#     `cipher [/e | /d | /c] [/s:<directory>] [/b] [/h] [pathname [...]]` 一致。
+#
+# 退出码：官方页**没有**退出码章节（已逐行核对），下面两个码全部来自实测，NOTES.md §7：
+#   0 = 成功；1 = "打印帮助"（`/?`、任何无法识别的开关、两 token 的 `/s` 写法）**或**
+#   "路径有问题"（`/s:` 空值、`/s:<不存在的路径>`、`/s:<文件>`，错误写 stderr）**或**
+#   `/y` 在没有 EFS 证书时的返回。除 0/1 外**没有观察到别的码**。
+#
+# 管理员权限：本包**所有只读动作在非管理员账号下实测全部 exit 0**（本机 Steve 账号，
+#   IsInRole(Administrator) = False），所以 `runtime.requiresAdmin: false`、动作级一个都没标。
+#   五个写类动作**没有实跑**、官方文档也没写权限要求 → 按规范 §2.5「不确定就不标」，一个都不标
+#   （NOTES.md §8 记着这个取舍）。
+
+spec: 1
+id: cipher
+name: EFS 文件加密（cipher）
+manifestVersion: 0.1.0
+appVersion: 10.0.26100.8875（Windows 11 26200 自带，实测文件版本）
+kind: system
+summary: 查看加密状态；加解密只给命令
+description: >-
+  Windows 自带的 EFS（加密文件系统）命令行工具：看一眼某个文件、某个目录、整棵目录树到底加没加密
+  （加密的标 E、没加密的标 U），也可以真的加密、解密文件与目录，还能擦除整个卷上未使用的空间、
+  生成新的密钥与恢复证书。本工具包**刻意只让"看"这一类动作由宿主直接执行**；加密、解密、擦除、
+  生成密钥这五个会改动数据的动作只把命令拼好摆出来（界面上标成"不直接执行"），要跑请自己点
+  「在终端中打开」——擦除不可中断、删掉的东西不会自己回来，这种决定该由你按下回车。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cipher
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, EFS, 加密, 解密, 数据擦除, 隐私]
+
+sources:
+  - title: Microsoft Learn —— cipher（Windows Server 命令行参考）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cipher
+    retrieved: "2026-10-01"
+    appliesTo: Windows 10 / Windows 11 / Server 2016–2025、Azure Local 2311.2+
+    note: >-
+      实测 HTTP 200、正文 53477 字节、Last updated 2023-02-03。
+      页面结构：一句 summary（Displays or alters the encryption of directories and files on NTFS
+      volumes. If used without parameters, cipher displays the encryption state of the current
+      directory and any files it contains.）+ Syntax 六行 + Parameters 表 + Remarks 四条 + Examples。
+      页内锚点只有 #syntax / #parameters / #remarks / #examples，**没有退出码章节、没有权限要求说明**。
+      关键语法行：`cipher [/e | /d | /c] [/s:<directory>] [/b] [/h] [pathname [...]]`（注意
+      `/s:` 带冒号）、`cipher /k`、`cipher /r:<filename> [/smartcard]`、`cipher /u [/n]`、
+      `cipher /w:<directory>`、`cipher /x[:efsfile] [filename]`、`cipher /y`、
+      `cipher /adduser [...]`、`cipher /removeuser /certhash:<hash> [...]`、`cipher /rekey`。
+      Parameters 表里 `/e` 的原文是 "Encrypts the specified files or directories. Directories are
+      marked so that files that are added afterward will be encrypted."；`/c` 是 "Displays
+      information on the encrypted file."；`/w:<directory>` 是 "Removes data from available unused
+      disk space on the entire volume. If you use the /w parameter, all other parameters are
+      ignored."。Examples 一节给了 `cipher`（标记 E/U 的样例输出）与 `cipher /e private`。
+  - title: 本机 `cipher /?` 的真实输出（**未入库**，随时可重取）
+    url: file:///%SystemRoot%/System32/cipher.exe
+    retrieved: "2026-10-01"
+    appliesTo: cipher.exe 文件版本 10.0.26100.8875（Windows 11 26200，中文帮助）
+    note: >-
+      实测：写 stdout、stderr 0 字节、**退出码 1**。同一台机器上同一份帮助，
+      在"控制台输出代码页 = 936"时是 4088 字节中文，在"控制台 CP = 65001"时是 5455 字节英文
+      —— 见本文件顶部的编码说明与 NOTES.md §4。
+      逐条核对结果（NOTES.md §5.1）：本机**多**出 `/P:filename.cer`、`/ECC:256|384|521`、
+      `/FLUSHCACHE [/SERVER:servername]`、`/ADDUSER` 的 `/USER:username` 四项；
+      本机把官方 `/r:<filename>` 写成 `/R:filename`；本机每条语法行都用大写（`CIPHER [/E | /D | /C]`），
+      官方用小写。开关名（/b /c /d /e /h /k /r /s /u /w /x /y /adduser /removeuser /rekey）两边一致。
+      本机 `/e` 的说明比官方多一句 "It is recommended that you encrypt the file and the parent
+      directory."（官方把这层意思放在 Remarks 里）。
+  - title: 本包真机冒烟（只读 31 条 argv：3 种控制台条件的编码判定 + 失败路径 + 字段风格对照 + 红线自检）
+    url: file:///%TEMP%/__AllToolProbe_cipherfindstr（**临时目录，收尾前已删除**）
+    retrieved: "2026-10-01"
+    appliesTo: Windows 11 26200 / cipher.exe 10.0.26100.8875
+    note: >-
+      全部在 %TEMP%\__AllToolProbe_cipherfindstr 自建的文件/目录上跑（明样本 plain.txt、
+      中文名样本 探测中文.txt、子目录 sub\inner.txt），只用只读开关；写类开关一个都没跑。
+      脚本自带两层红线自检（跑之前与启动进程之前各判一次）：argv 里一旦出现 /e /d /w /k /r /u /x
+      /p /rekey /adduser /removeuser /flushcache 里的任何一个就 throw 中止。
+      实测结果逐条抄进 NOTES.md §4 / §6 / §7。可复跑：`pwsh -NoProfile -File plugins/cipher/smoke.ps1`。
+
+locate:
+  executable: cipher.exe
+  searchPaths:
+    - '%SystemRoot%\System32\cipher.exe'
+    - '%SystemRoot%\SysWOW64\cipher.exe'
+  notFoundHint: cipher.exe 是 Windows 自带命令，正常情况下都在 C:\Windows\System32 下。
+
+runtime:
+  encoding: oem
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  usePseudoConsole: false
+
+# 退出码：官方页没有任何退出码章节（已逐行核对）；下面两个码全部来自实测，见 NOTES.md §7。
+exitCodes:
+  - code: 0
+    meaning: >-
+      成功。实测的情形：`cipher`（无参数）、`cipher <文件|目录|通配符>`、`cipher /c <文件>`、
+      `cipher /h`、`cipher /b /c <文件>`、`cipher /s:<存在的目录>`。**注意 `/c <不存在的文件>` 也是 0**
+      （它只把那一条从清单里省掉，不报错）。
+    severity: ok
+  - code: 1
+    meaning: >-
+      帮助输出或路径有问题，两种都会出现。帮助输出：`/?` 以及任何无法识别的写法
+      （`/zz`、粘值的 `/c:<文件>`、两 token 的 `/s <目录>`）都是"打印帮助 + exit 1"；
+      路径问题（错误写 stderr）：`/s:` 空值 → ": 文件名、目录名或卷标语法不正确。"、
+      `/s:<不存在的目录>` → "<路径>: 系统找不到指定的文件。"、`/s:<文件>` → "<路径>: 目录名称无效。"；
+      `cipher /y` 在当前用户没有 EFS 证书时也是 exit 1，且**两个流都是 0 字节**。
+      除 0/1 外本包没有观察到别的退出码。
+    severity: error
+
+quickActions:
+  - title: 查看某个文件的加密状态
+    action: list-state
+  - title: 递归列出目录树的加密状态
+    action: list-tree
+  - title: 显示当前 EFS 证书指纹
+    action: show-cert
+
+actions:
+
+  # ============================================================ 查看（宿主直接执行，只读）
+  - id: list-state
+    category: 查看加密状态
+    title: 查看加密状态（cipher <路径>）
+    command: ""
+    description: >-
+      这就是 cipher 最常用的用法：给它一个文件、一个目录或一个通配符模式，它把**所在目录的清单**
+      打出来，加密的条目标 E、没加密的标 U，并在开头写一句这个目录对"新加进来的文件"的默认策略。
+      注意它的视角是"目录"而不是"你给的那一个路径"：给它一个目录时，列出来的是**上一级目录**的清单；
+      想看**某个目录里面的**东西要写 `<目录>\*`（实测两条命令的输出长度一样）。
+    sources:
+      - title: cipher 官方参考 —— 语法行第一行与 <pathname> 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cipher
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方 summary 原文：Displays or alters the encryption of directories and files on NTFS
+          volumes. If used without parameters, cipher displays the encryption state of the current
+          directory and any files it contains. 语法行 `cipher [/e | /d | /c] [/s:<directory>] [/b]
+          [/h] [pathname [...]]` 里的 `[pathname [...]]` 就是本动作的位置参数；
+          Remarks 里写 "You can use multiple directory names and wildcards." 与
+          "You must put spaces between multiple parameters."。
+          Examples 一节给了不带参数的 `cipher` 的样例输出（E/U 标记与 "New files added to this
+          directory will not be encrypted."）。
+      - title: 本机 `cipher /?` 的真实输出 —— pathname 一节
+        url: file:///%SystemRoot%/System32/cipher.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / cipher.exe 10.0.26100.8875
+        note: >-
+          本机原文："pathname  Specifies a pattern, file or directory." 以及
+          "Used without parameters, CIPHER displays the encryption state of the current directory
+          and any files it contains. You may use multiple directory names and wildcards. You must
+          put spaces between multiple parameters."（与官方一致）。
+    fields:
+      - id: showHidden
+        label: 显示隐藏与系统文件（/H）
+        type: bool
+        style: flag
+        prefix: "/H"
+        group: 开关
+        default: false
+        help: >-
+          官方原文：/h "Displays files with hidden or system attributes. By default, these files are
+          not encrypted or decrypted."。看加密状态时它决定清单里要不要出现隐藏/系统文件
+          （实测 `cipher /h` 与 `cipher` 在本机没有可见差异，因为探测目录里没有隐藏文件）。
+        doc: 'official #parameters 的 /h'
+      - id: pathname
+        label: 文件、目录或通配符模式
+        type: paths
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 C:\Users\Steve\Documents\*
+        help: >-
+          可以填多个（每行一个），也可以用通配符（`*` 与 `?` 由 cipher 自己展开，不用管 shell 那一套）。
+          **想看某个目录里面的东西，要在末尾写 `\*`**：实测 `cipher <目录>\*` 与"把工作目录设在那个
+          目录再跑 `cipher`"输出完全一样（都列出该目录的内容），而 `cipher <目录>` 列出的是**上一级**
+          目录的清单、只把该目录本身标一个 E/U。请尽量填**绝对路径**：相对路径是按**进程的工作目录**
+          解析的，而当前工作目录由清单的 workingDirectory 决定（本包是 inherit = 宿主进程自己的目录）。
+        doc: 'official #parameters 的 <pathname>（配合 #remarks 的通配符与多参数说明）'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测（本机、非管理员、CreateNoWindow 条件）：`cipher C:\Windows\System32\drivers\etc\hosts`
+        → 退出码 0、82 字节；`cipher C:\Windows\System32\drivers\etc\*` → 退出码 0、413 字节。
+        输出形如 `清单 <目录>\` 换行 `不加密新加到此目录的文件。` 换行空行，然后每行一个 `E 名字`
+        或 `U 名字`（E = 已加密，U = 未加密）。cipher 对**不存在的路径**不报错：实测
+        `cipher /c <不存在的文件>` 退出码 0、只是清单里少了那一条。
+    examples:
+      - title: 看 hosts 文件的加密状态
+        args: ["C:\\Windows\\System32\\drivers\\etc\\hosts"]
+        expectExitCode: 0
+      - title: 看一个目录里的全部文件（末尾要写 \*）
+        args: ["C:\\Windows\\System32\\drivers\\etc\\*"]
+        expectExitCode: 0
+
+  - id: list-tree
+    category: 查看加密状态
+    title: 递归列出目录树的加密状态（/S:）
+    command: ""
+    description: >-
+      从给的目录开始，把它自己和下面每一层子目录的加密状态逐层列出来。排查"这个盘上到底有哪些
+      东西被加密了"最直接的一条命令：算法是"每个目录一段清单"，一眼能看出加密是从哪一层开始的。
+    sources:
+      - title: cipher 官方参考 —— /s:<directory>
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cipher
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/s:<directory> "Performs the specified operation on all subdirectories in the
+          specified directory."；语法行里它跟 `/e | /d | /c` 并列，所以"不带 /e /d /c 光有 /s:"
+          就是"递归列出状态"（实测确认）。
+      - title: 本机 `cipher /?` 的真实输出 —— /S 一节
+        url: file:///%SystemRoot%/System32/cipher.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / cipher.exe 10.0.26100.8875
+        note: >-
+          本机原文：/S "Performs the specified operation on the given directory and all files and
+          subdirectories within it."（比官方多说了 "all files"）。
+          本机语法行写 `[/S:directory]`、官方写 `[/s:<directory>]` —— 开关名与冒号形式两边一致。
+    fields:
+      - id: directory
+        label: 起始目录（/S:）
+        type: directory
+        style: attached
+        prefix: "/S"
+        separator: ":"
+        required: true
+        save: true
+        placeholder: 例 C:\Users\Steve\Documents
+        help: >-
+          **值必须与 /S 粘成一个 token**（`/S:C:\某个目录`）。实测两 token 的写法
+          `cipher /c /s C:\某个目录` 会让 cipher 直接打印帮助并以 1 退出 —— 这是本包唯一
+          实测出来的"只认单 token"开关。范围可能很大：整块盘递归出来的清单会很长。
+        doc: 'official #parameters 的 /s:<directory>'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测 `cipher /s:<探测目录>` → 退出码 0、1024 字节：树里有 `根\plain.txt`、`根\sub\inner.txt`
+        时，输出里**按目录分段**（`清单 <根>\` 一段、`清单 <根>\sub\` 一段，子目录里还有更深的段），
+        说明它确实递归。失败路径：`/s:<不存在的目录>` → 退出码 1 + stderr
+        `<路径>: 系统找不到指定的文件。`；`/s:<文件>` → 退出码 1 + stderr `<路径>: 目录名称无效。`。
+    examples:
+      - title: 递归列出一个目录树的加密状态
+        args: ["/S:C:\\Windows\\System32\\drivers\\etc"]
+        expectExitCode: 0
+
+  - id: show-file-info
+    category: 查看加密状态
+    title: 显示加密文件的信息（/C）
+    command: ""
+    description: >-
+      cipher 里专门看"这一个文件"的开关：官方说法是 "Displays information on the encrypted file"。
+      对**已加密**的文件它会多给出与加密相关的信息（这份清单没法在本机演示——造一个加密文件
+      必须跑 `/e`，那是本包的红线）；对没加密的文件，实测输出与不加 /C 的清单完全一样。
+    sources:
+      - title: cipher 官方参考 —— /c
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cipher
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/c "Displays information on the encrypted file."。语法行里 `/c` 与 `/e`、`/d`
+          并列（三者互斥），后面仍然跟着 `[pathname [...]]` —— 也就是说 **/c 是旗标、
+          路径是位置参数**，实测证实（`/c <文件>` 成功、`/c:<文件>` 打印帮助并 exit 1）。
+      - title: 本机 `cipher /?` 的真实输出 —— /C 一节
+        url: file:///%SystemRoot%/System32/cipher.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / cipher.exe 10.0.26100.8875
+        note: 本机原文：/C "Displays information on the encrypted file."（与官方一字不差）。
+    fields:
+      - id: detail
+        label: 显示文件信息（/C）
+        type: bool
+        style: flag
+        prefix: "/C"
+        group: 开关
+        default: true
+        help: >-
+          本动作按定义就要带 /C，所以默认勾上。取消勾选会生成一条**没有 /C 的清单命令**
+          （界面上的命令行预览会如实显示这一点），那时它的效果与「查看加密状态」完全一样。
+        doc: 'official #parameters 的 /c'
+      - id: pathname
+        label: 文件或目录
+        type: paths
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 C:\Users\Steve\Documents\report.docx
+        help: >-
+          可以填多个（每行一个）。路径写绝对路径最稳（相对路径按进程工作目录解析）。
+          同「查看加密状态」：它的视角是目录，给一个目录时列出来的是上一级目录的清单。
+        doc: 'official #parameters 的 <pathname>'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测（本机、非管理员）：`cipher /c <未加密文件>` → 退出码 0、117 字节，输出与
+        `cipher <未加密文件>`（同样 117 字节）**逐字节相同**；`cipher /c <中文名文件>` → 退出码 0、
+        120 字节（文件名的中文按 cp936 原样回显）。`cipher /c`（不给路径）→ 退出码 0，
+        列出的是**进程工作目录**的清单 —— 这也是本包不提供"裸 cipher"动作的原因，见 NOTES.md §9。
+    examples:
+      - title: 看一个文件的加密信息
+        args: ["/c", "C:\\Windows\\System32\\drivers\\etc\\hosts"]
+        expectExitCode: 0
+
+  - id: show-cert
+    category: 查看加密状态
+    title: 显示当前 EFS 证书指纹（/Y）
+    command: ""
+    description: >-
+      显示当前用户的 EFS 证书指纹。想知道"我这台机器上到底有没有、是哪一张 EFS 证书"时用它；
+      本机实测的结果是"没有"——命令以退出码 1 结束且什么都不输出，这本身就是一条有用的信息
+      （说明这个账号还没有 EFS 证书，第一次加密时系统才会签发）。
+    sources:
+      - title: cipher 官方参考 —— /y
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cipher
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/y "Displays your current EFS certificate thumbnail on the local computer."
+          （原文写的是 thumbnail，按上下文与本机帮助的 thumbprint 理解，是官方的笔误，照抄不改）。
+          语法行 `cipher /y` 没有位置参数，也没有别的开关。
+      - title: 本机 `cipher /?` 的真实输出 —— /Y 一节
+        url: file:///%SystemRoot%/System32/cipher.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / cipher.exe 10.0.26100.8875
+        note: 本机原文：/Y "Displays your current EFS certificate thumbprint on the local PC."（用词 thumbprint）。
+    fields:
+      - id: thumbprint
+        label: 显示证书指纹（/Y）
+        type: bool
+        style: flag
+        prefix: "/Y"
+        group: 开关
+        default: true
+        help: >-
+          本动作按定义就要带 /Y，所以默认勾上。取消勾选会生成一条**没有任何参数的 `cipher`**，
+          那时它列出的是进程工作目录的加密状态（而不是证书指纹）。
+        doc: 'official #parameters 的 /y'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测（本机、非管理员、CreateNoWindow 条件）：`cipher /y` → **退出码 1、stdout 0 字节、
+        stderr 0 字节**——当前账号没有 EFS 证书，cipher 连一句提示都不打。
+        因此这条动作在"没有证书"的机器上表现为"命令结束、什么都没有"，属实测行为，不是清单写错。
+    examples:
+      - title: 看当前用户的 EFS 证书指纹
+        args: ["/Y"]
+
+  # ============================================================ 改动数据（宿主**不执行**，只摆命令）
+  - id: encrypt
+    category: 加密与擦除（不直接执行）
+    title: 加密文件或目录（/E）
+    command: ""
+    execution: info
+    danger: overwrite
+    confirmText: >-
+      加密会把文件内容换成只有你的 EFS 密钥能解开的形式：**密钥丢了文件就打不开了**，
+      而且加密后若把文件复制到非 NTFS 卷（FAT32/exFAT、U 盘、网盘同步目录）会以失败或明文告终。
+      官方 Remarks 还特别提醒：只加密文件、不加密父目录时，文件被修改后可能又变成明文。
+      本动作宿主**不会替你执行**，命令只是拼好摆在这里。
+    description: >-
+      把指定的文件或目录标记为加密（目录被标记后，**之后加进去的文件**也会被自动加密）。
+      这是 EFS 的入口动作，也是本工具包里风险最高的三个动作之一，所以界面只摆命令、不代跑。
+      ⚠ 与官方一致的另一半语义：目录加密只对"之后新增的文件"生效，已有文件要一起加密。
+    sources:
+      - title: cipher 官方参考 —— /e
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cipher
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/e "Encrypts the specified files or directories. Directories are marked so that
+          files that are added afterward will be encrypted."；Remarks 第一条：
+          "If the parent directory is not encrypted, an encrypted file could become decrypted when it
+          is modified. Therefore, when you encrypt a file, you should also encrypt the parent
+          directory."；官方 Examples 里的 `cipher /e private` 与随后 `cipher` 显示 `E Private` 的对照。
+      - title: 本机 `cipher /?` 的真实输出 —— /E 一节
+        url: file:///%SystemRoot%/System32/cipher.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / cipher.exe 10.0.26100.8875
+        note: >-
+          本机原文与官方一致，另外多一句 "It is recommended that you encrypt the file and the parent
+          directory."。**本动作没有实跑**（本包红线：不跑 /e），所以字段风格按官方语法行与其它动作
+          的实测惯例（flag 在前、位置参数在后）确定，未做真机验证的部分记在 NOTES.md §10。
+    fields:
+      - id: encrypt
+        label: 加密（/E）
+        type: bool
+        style: flag
+        prefix: "/E"
+        group: 开关
+        default: true
+        help: >-
+          本动作按定义就要带 /E，默认勾上。取消勾选会生成一条**没有 /E 的命令**（等于只查看状态），
+          界面上的命令行预览会如实显示出来。
+        doc: 'official #parameters 的 /e'
+      - id: pathname
+        label: 要加密的文件或目录
+        type: paths
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 D:\projects\private
+        help: >-
+          可以填多个（每行一个），也支持通配符。**只加密 NTFS 卷上的对象**：官方说明整页都限定在
+          "NTFS volumes"。想让整个目录（含以后新加的文件）都加密，就填目录本身。
+        doc: 'official #parameters 的 <pathname>'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        **本动作没有实跑**（红线）。官方 Examples 给出的输出形态是：`Encrypting files in <目录>\`
+        换行 `<名字>             [OK]` 换行 `N file(s) [or directorie(s)] within M directorie(s) were
+        encrypted.`，之后再用 `cipher` 看会变成 `E <名字>`。危险等级：`danger: overwrite`
+        （不是 destructive —— 加密本身不销毁数据，但密钥丢失等于打不开）。
+
+  - id: decrypt
+    category: 加密与擦除（不直接执行）
+    title: 解密文件或目录（/D）
+    command: ""
+    execution: info
+    danger: overwrite
+    confirmText: >-
+      解密会把文件内容还原成明文：之后任何能读到这个文件的人都能直接看到内容，
+      而且这一步**不会**安全地擦掉盘上残留的密文/明文痕迹（要处理残留得用 /W 擦未使用空间）。
+      本动作宿主**不会替你执行**，命令只是拼好摆在这里。
+    description: >-
+      把指定的文件或目录解密回明文。与加密对称：目录被解密后，**之后加进去的文件**也不再自动加密
+      （已有文件要显式一起解密）。同样是只摆命令、不代跑的动作之一。
+    sources:
+      - title: cipher 官方参考 —— /d
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cipher
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/d "Decrypts the specified files or directories."。参数表里 /h 那一行补了一句
+          "By default, these files are not encrypted or decrypted."（隐藏/系统文件默认不参与）。
+      - title: 本机 `cipher /?` 的真实输出 —— /D 一节
+        url: file:///%SystemRoot%/System32/cipher.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / cipher.exe 10.0.26100.8875
+        note: >-
+          本机原文：/D "Decrypts the specified files or directories."（与官方一致）。
+          **本动作没有实跑**（本包红线：不跑 /d）。
+    fields:
+      - id: decrypt
+        label: 解密（/D）
+        type: bool
+        style: flag
+        prefix: "/D"
+        group: 开关
+        default: true
+        help: >-
+          本动作按定义就要带 /D，默认勾上。取消勾选会生成一条**没有 /D 的命令**（等于只查看状态）。
+        doc: 'official #parameters 的 /d'
+      - id: pathname
+        label: 要解密的文件或目录
+        type: paths
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 D:\projects\private
+        help: 可以填多个（每行一个），也支持通配符。
+        doc: 'official #parameters 的 <pathname>'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        **本动作没有实跑**（红线）。官方文档没有给 /d 的示例输出；对称地应当与 /e 的
+        `Decrypting files in <目录>\` + `[OK]` + 汇总句形态一致，但本包没有实测证据，故不写成结论。
+        危险等级：`danger: overwrite`。
+
+  - id: wipe
+    category: 加密与擦除（不直接执行）
+    title: 擦除卷上未使用空间（/W:）
+    command: ""
+    execution: info
+    danger: destructive
+    confirmText: >-
+      这会在**整个卷**上把未使用空间逐块覆盖一遍——已经删掉的文件、临时文件、旧版本文件的内容
+      从此不可恢复。它**不可中断**（Ctrl+C 甩不掉已经排进队列的工作），耗时可能以小时计，
+      而且 SSD 上还会带来可观的写入量。**本动作宿主绝对不执行**：命令只是拼好摆在这里，
+      要不要按下回车是你自己的决定（也请确认目标卷真的是你想擦的那一块）。
+    description: >-
+      cipher 的 /W 会擦除"卷上可用的未使用磁盘空间"：给一个**目录**，cipher 找出它所在的卷，
+      然后把这个卷上所有空闲空间覆盖一遍，让已经删除的数据再也恢复不出来。它是本工具包里
+      唯一标 `danger: destructive` 的动作，也是整包风险最高的一条，所以只摆命令、绝不代跑。
+    sources:
+      - title: cipher 官方参考 —— /w:<directory>
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cipher
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/w:<directory> "Removes data from available unused disk space on the entire
+          volume. If you use the /w parameter, all other parameters are ignored. The directory
+          specified can be located anywhere in a local volume. If it is a mount point or points to a
+          directory in another volume, the data on that volume is removed."。
+          **注意两点**：① 参数是"目录"，但被擦的是**整个卷**；② 给挂载点/另一卷上的目录时，
+          擦的是**那个卷**。
+      - title: 本机 `cipher /?` 的真实输出 —— /W 一节
+        url: file:///%SystemRoot%/System32/cipher.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / cipher.exe 10.0.26100.8875
+        note: >-
+          本机原文比官方更狠，明确写了"停不下来"的语义：/W "Removes data from available unused
+          disk space on the entire volume. If this option is chosen, all other options are ignored.
+          The directory specified can be anywhere in a local volume. If it is a mount point or points
+          to a directory in another volume, the data on that volume will be removed."。
+          **本动作没有实跑、也永远不许实跑**（本包红线）。
+    fields:
+      - id: directory
+        label: 目录（/W:，决定擦哪个卷）
+        type: directory
+        style: attached
+        prefix: "/W"
+        separator: ":"
+        required: true
+        save: false
+        placeholder: 例 D:\
+        help: >-
+          填**你要擦的那个卷上的任意一个目录**（例如 `D:\`），被擦的是这个目录**所在的整个卷**；
+          填到挂载点或另一卷上的目录时，擦的是那个卷。值必须与 /W 粘成一个 token。
+          **刻意不给 examples**：宿主的「在终端中打开」是 `cmd /k <命令>`（实测源码
+          MainWindow.xaml.cs:979），`cmd /k` 会立刻执行——给预设等于把不可逆操作交给一次点击。
+        doc: 'official #parameters 的 /w:<directory>'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        **本动作没有实跑**（红线：`/w` 会跑很久且不可中断）。官方与本机帮助都只说它"移除未使用空间"，
+        两处都**没有给输出样例、没有说退出码**。所以这里如实留白：输出形态未实测。
+        界面上的风险提示来自文档语义，不是实测行为。
+
+  - id: new-key
+    category: 加密与擦除（不直接执行）
+    title: 新建 EFS 证书与密钥（/K）
+    command: ""
+    execution: info
+    danger: overwrite
+    confirmText: >-
+      这会给当前用户**新签一张自签名 EFS 证书与密钥**，之后新加密的文件用它。
+      旧文件仍然靠旧密钥解密（前提是旧密钥还在），但"证书/密钥清单"会变——
+      如果这台机器上有别人依赖的加密数据，动之前请先备份证书（cipher /X，本包未收录）。
+      本动作宿主**不会替你执行**，命令只是拼好摆在这里。
+    description: >-
+      为当前用户创建一张 EFS 证书与配套密钥。什么时候需要它：账号还没有 EFS 证书、而你要开始用
+      加密；或者按组策略换密钥规格时。官方明确写了"选了它，其它参数全部被忽略"。
+    sources:
+      - title: cipher 官方参考 —— /k
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cipher
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/k "Creates a new certificate and key for use with Encrypting File System (EFS)
+          files. If the /k parameter is specified, all other parameters are ignored."；
+          语法行是单独的 `cipher /k`（没有位置参数）。官方参数表里 /k 这一行**没有** /ecc 之类的取值。
+      - title: 本机 `cipher /?` 的真实输出 —— /K 一节
+        url: file:///%SystemRoot%/System32/cipher.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / cipher.exe 10.0.26100.8875
+        note: >-
+          本机原文同样是"其它选项被忽略"，但**多了一个官方没有的 `/ECC:256|384|521`**
+          （本机语法行写 `CIPHER /K [/ECC:256|384|521]`）。按「官方为准」，**本包不收录 /ECC**
+          （NOTES.md §5.1）。**本动作没有实跑**（本包红线：不跑 /k）。
+    fields:
+      - id: newKey
+        label: 新建证书与密钥（/K）
+        type: bool
+        style: flag
+        prefix: "/K"
+        group: 开关
+        default: true
+        help: >-
+          本动作按定义就要带 /K，默认勾上。取消勾选会生成一条**没有任何参数的 `cipher`**
+          （列出工作目录的加密状态，不含新建密钥）。
+        doc: 'official #parameters 的 /k'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        **本动作没有实跑**（红线）。官方与本机帮助都没有给输出样例；本机 /? 只额外提示
+        "By default, /K creates a certificate and key that conform to current group policy."
+        （默认规格由组策略决定）。输出形态未实测，如实留白。
+
+  - id: recovery-key
+    category: 加密与擦除（不直接执行）
+    title: 生成 EFS 恢复密钥与证书（/R:）
+    command: ""
+    execution: info
+    danger: overwrite
+    confirmText: >-
+      这会写出一个 **.pfx（含私钥）+ 一个 .cer** 两个文件，同名文件会被覆盖。
+      .pfx 是恢复用的私钥：拿到它的人可以解开这套恢复策略覆盖的所有加密数据，请当作密码一样保管；
+      反过来，**没保管好它、又丢了用户密钥，加密的文件就真的打不开了**。
+      本动作宿主**不会替你执行**，命令只是拼好摆在这里。
+    description: >-
+      生成 EFS 恢复代理密钥与证书，写到 `<文件名>.pfx`（证书 + 私钥）与 `<文件名>.cer`
+      （只有证书）。管理员把 .cer 加进 EFS 恢复策略后，就能用 .pfx 恢复别人打不开的加密文件。
+      这是企业环境做 DRA（数据恢复代理）的标准入口。
+    sources:
+      - title: cipher 官方参考 —— /r:<filename> [/smartcard]
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cipher
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/r:<filename> [/smartcard] "Generates an EFS recovery agent key and certificate,
+          then writes them to a .pfx file (containing certificate and private key) and a .cer file
+          (containing only the certificate). If /smartcard is specified, it writes the recovery key
+          and certificate to a smart card, and no .pfx file is generated."；Remarks 第二条说明
+          管理员如何用 .cer 建恢复策略、用 .pfx 恢复单个文件。官方**没有** /ecc 的写法，
+          本包不收录 /smartcard（需要读卡器，无法验证）。
+      - title: 本机 `cipher /?` 的真实输出 —— /R 一节
+        url: file:///%SystemRoot%/System32/cipher.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / cipher.exe 10.0.26100.8875
+        note: >-
+          本机原文：/R "Generates an EFS recovery key and certificate, then writes them to a .PFX file
+          (containing certificate and private key) and a .CER file (containing only the certificate)."，
+          并写明 "By default, /R creates an 2048-bit RSA recovery key and certificate. If ECC is
+          specified, it must be followed by a key size of 256, 384, or 521."（/ECC 只有本机一侧，不收录）。
+          本机语法行写 `/R:filename`、官方写 `/r:<filename>`，冒号形式一致。
+          **本动作没有实跑**（本包红线：不跑 /r）。
+    fields:
+      - id: filename
+        label: 输出文件名（不含扩展名）
+        type: text
+        style: attached
+        prefix: "/R"
+        separator: ":"
+        required: true
+        save: false
+        placeholder: 例 D:\backup\efs-recovery
+        help: >-
+          官方语法是 `/r:<filename>`，值必须与 /R 粘成一个 token（本机帮助把它描述为
+          "filename  A filename without extensions."）——cipher 会自己补 `.pfx` 与 `.cer` 两个扩展名。
+          目标目录要已存在，且会**覆盖同名文件**。路径里有空格不用担心（宿主按 argv 数组传参）。
+        doc: 'official #parameters 的 /r:<filename> 与 <filename>'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        **本动作没有实跑**（红线：不跑 /r，它会写出私钥文件）。官方与本机帮助都没有输出样例与退出码。
+        输出形态未实测，如实留白。

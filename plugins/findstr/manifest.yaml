@@ -1,0 +1,919 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# findstr —— Windows 自带的文本搜索工具（C:\Windows\System32\findstr.exe），支持正则。
+#
+# 参数知识来源（两边逐条核对，冲突记进 NOTES.md §5）：
+#   1) 官方文档（Microsoft Learn，单页到底；实测 HTTP 200、正文 54374 字节、
+#      Last updated 2023-02-03、页内只有 #syntax / #parameters / #remarks / #examples 四个锚点，
+#      **没有退出码章节**）：
+#      https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/findstr
+#      官方语法行：findstr [/b] [/e] [/l | /r] [/s] [/i] [/x] [/v] [/n] [/m] [/o] [/p]
+#                  [/f:<file>] [/c:<string>] [/g:<file>] [/d:<dirlist>] [/a:<colorattribute>]
+#                  [/off[line]] <strings> [<drive>:][<path>]<filename>[ ...]
+#   2) 本机 `findstr /?` 的真实输出（**未入库**，随时可重取；退出码 0、写 stdout、stderr 0 字节）。
+#      本机比官方页**多**两处：`/Q:qflags`（Quiet mode flags: u）与 `/F:file` 说明里的
+#      "(/ stands for console)"。按「官方为准、差异记录」，`/Q:qflags` 本包**不收录**
+#      （NOTES.md §5.1）。开关名两边完全一致（/b /e /l /r /s /i /x /v /n /m /o /p /f /c /g /d /a /offline）。
+#      本机帮助的 "Use spaces to separate multiple search strings…" 与官方 Remarks 一致。
+#
+# 编码：**OEM 代码页（本机 936）** —— 实测判定，NOTES.md §4 有原始字节。
+#   ⚠ 判定条件必须写清（windows-commands.md §5.3 那条坑）：
+#   findstr 的**提示语言**跟着控制台输出代码页走：
+#     · 控制台 CP=936（`cmd /c "chcp 936 & findstr /?"` 重定向）→ 中文，首 4 字节
+#       d4 da ce c4 =「在文」的 cp936，1856 字节里 934 个 >127 字节、**严格 UTF-8 解码抛异常**；
+#     · 控制台 CP=65001（chcp 65001，或父进程设过 [Console]::OutputEncoding=UTF-8）
+#       → 退回英文资源、2535 字节**纯 ASCII**；
+#     · **CreateNoWindow=true + 重定向 = 宿主 ProcessRunner 的真实条件**
+#       （src/AllTool.Core/Execution/ProcessRunner.cs:99-113）→ 子进程拿到新的隐藏控制台，
+#       其 CP = 系统 OEM = 936 → **中文 cp936**（与第一种条件字节完全相同）。
+#   ⚠ 但 findstr 是**逐字节**工具，命中的行是**原样回显源文件的字节**，这与上面那条是两件事：
+#     实测「中文」在 GBK 文件里命中（输出的 10 字节严格 UTF-8 解码失败 = cp936），
+#     同一个词在 **UTF-8（含带 BOM）文件里 0 命中、exit 1**；而 ASCII 模式命中 UTF-8 文件时，
+#     回显出来的是 UTF-8 字节（宿主按 oem 解码会显示成乱码）。这是 findstr 的固有性质，
+#     不是清单写错——已写进每个动作的 resultNote：**非 ASCII 的搜索串只能在 OEM/ANSI 编码的文件里命中**。
+#
+# 字段风格与顺序：实测判定，NOTES.md §6。
+#   · **所有开关必须排在 strings 与 filename 之前**（官方 Remarks 原文 "All findstr command-line
+#     options must precede strings and filename in the command string."，实测证实：`alpha a.txt /i`
+#     → stderr "FINDSTR: 无法打开 /i"，findstr 把 /i 当成了文件名）。
+#     所以本包每个动作都把开关字段声明在位置参数字段**之前**（同 certutil 的规矩）。
+#   · `/c:` `/f:` `/g:` `/d:` `/a:` **只认单 token 的冒号写法**：`/f:filelist.txt` → exit 0；
+#     两 token 的 `/f filelist.txt` → stderr "FINDSTR: 忽略 /f" + "无法打开 alpha"，exit 1。
+#     所以这五个字段用 `style: attached` + `separator: ":"`。
+#   · **多个搜索串只能装在同一个 token 里**（findstr 自己按空格拆）：实测
+#     `findstr "alpha beta" a.txt`（一个 token 带空格）→ 命中 alpha 与 beta 两行、exit 0；
+#     而 `findstr alpha beta a.txt`（两个 token）→ stderr "无法打开 beta"、**beta 被当成文件名**。
+#     所以 `strings` 字段是 `type: text`、**刻意不 repeatable**（多行会变成多个 token = 多个文件名）。
+#     ⚠ 官方页 Examples 里那句 `findstr hello there x.y`（两个 token）与本机实测**对不上**，
+#     见 NOTES.md §5.2。
+#   · 开关大小写不敏感（实测 `/i` 与 `/I` 同效）。
+#
+# 退出码：官方页**没有**退出码章节（已逐行核对），三个码全部来自实测，NOTES.md §7：
+#   0 = 找到匹配；1 = 没找到匹配（**也包括"文件打不开"**：`alpha nope.txt` → exit 1 + stderr
+#   "FINDSTR: 无法打开 nope.txt"）；2 = 命令行本身有问题（无参数 → "FINDSTR: 错误的命令行"、
+#   `/f:<读不到的清单文件>` → "FINDSTR: 无法从 … 读取文件列表"、`/c:` 空串 → "FINDSTR: /c 后面缺少参数"）。
+#   ⚠ 认不出来的开关**不算错误**：`/zz alpha a.txt` → stderr "FINDSTR: 忽略 /z" 但 **exit 0**。
+#
+# 管理员权限：本包全部动作都是只读搜索，**非管理员账号下实测全部成功**（唯一的失败是"文件读不到"），
+#   所以 `runtime.requiresAdmin: false`、动作级一个都没标。
+#
+# ⚠ 一个宿主相关的实测结论（不是本包的问题，但会咬人）：不给文件名的调用（例如 `/c` 缺值）
+#   会让 findstr 去读 **stdin**。宿主会立刻关掉它那一端的 stdin（ProcessRunner.cs:176-183），
+#   所以不会挂住；本包的冒烟脚本也必须照做，否则脚本会永远等下去（作者本人踩过，NOTES.md §7.3）。
+
+spec: 1
+id: findstr
+name: 文本搜索（findstr）
+manifestVersion: 0.1.0
+appVersion: 10.0.26100.8875（Windows 11 26200 自带，实测文件版本）
+kind: system
+summary: 在文件里按字符串或正则搜文本
+description: >-
+  Windows 自带的文本搜索工具：在一个或多个文件里找字符串或正则匹配，支持递归目录、大小写开关、
+  行号、字符偏移、只列文件名、反选不匹配的行等。它是"命令行里的记事本查找"，在日志、配置、
+  源码里找东西比打开编辑器快得多。注意它是**逐字节**搜索：默认按正则解释模式（用 /L 变字面），
+  而且非 ASCII 的搜索串只在 OEM/ANSI 编码（本机 GBK）的文件里能命中，UTF-8 文件搜中文会是 0 命中。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/findstr
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 搜索, 文本, 正则, grep, 日志]
+
+sources:
+  - title: Microsoft Learn —— findstr（Windows Server 命令行参考）
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/findstr
+    retrieved: "2026-10-01"
+    appliesTo: Windows 10 / Windows 11 / Server 2016–2025、Azure Local 2311.2+
+    note: >-
+      实测 HTTP 200、正文 54374 字节、Last updated 2023-02-03。
+      页面结构：一句 summary（Searches for patterns of text in files.）+ Syntax 一行
+      （`findstr [/b] [/e] [/l | /r] [/s] [/i] [/x] [/v] [/n] [/m] [/o] [/p] [/f:<file>]
+      [/c:<string>] [/g:<file>] [/d:<dirlist>] [/a:<colorattribute>] [/off[line]] <strings>
+      [<drive>:][<path>]<filename>[ ...]`）+ Parameters 表 + Remarks + Examples。
+      页内锚点只有 #syntax / #parameters / #remarks / #examples，**没有退出码章节、没有权限说明**。
+      两条关键 Remark：① "All findstr command-line options must precede strings and filename in
+      the command string."；② 正则元字符表（`.` `*` `^` `$` `[class]` `[^class]` `[x-y]` `\x`
+      `\<string` `string\>`）。Parameters 表里 `/r` 写明 "This is the default setting."、
+      `/c:<string>` 写明 "Uses the specified text as a literal search string."。
+      Examples 给了 7 条，其中 `findstr hello there x.y`（多搜索串）、
+      `findstr /b /n /r /c:^ *FOR *.bas`（/c 与 /r 组合）、
+      `findstr /g:stringlist.txt /f:filelist.txt > results.out` 三条本包做了对照实测。
+  - title: 本机 `findstr /?` 的真实输出（**未入库**，随时可重取）
+    url: file:///%SystemRoot%/System32/findstr.exe
+    retrieved: "2026-10-01"
+    appliesTo: findstr.exe 文件版本 10.0.26100.8875（Windows 11 26200，中文帮助）
+    note: >-
+      实测：写 stdout、stderr 0 字节、**退出码 0**（与 cipher 的 /? 返回 1 不同）。
+      同一台机器上同一份帮助，在"控制台输出代码页 = 936"时是 1856 字节中文，
+      在"控制台 CP = 65001"时是 2535 字节英文 —— 见本文件顶部的编码说明与 NOTES.md §4。
+      逐条核对（NOTES.md §5.1）：开关名、`/off[line]` 的方括号写法、`/c:` `/f:` `/g:` `/d:` `/a:`
+      的冒号形式两边完全一致；差异只有两处：本机**多** `/Q:qflags`（"Quiet mode flags: u
+      Suppress warning about unsupported Unicode formats"），本机 `/F:file` 说明里多一句
+      "(/ stands for console)"。本机帮助末尾还带一节正则速查表与
+      "Use spaces to separate multiple search strings unless the argument is prefixed with /C."
+      的说明（配的例子是**带引号**的 `FINDSTR "hello there" x.y`，与实测一致）。
+  - title: 本包真机冒烟（只读 55 条 argv：3 种控制台条件的编码判定 + 退出码三态 + 字段风格与顺序对照 + 中文代码页）
+    url: file:///%TEMP%/__AllToolProbe_cipherfindstr（**临时目录，收尾前已删除**）
+    retrieved: "2026-10-01"
+    appliesTo: Windows 11 26200 / findstr.exe 10.0.26100.8875
+    note: >-
+      全部在 %TEMP%\__AllToolProbe_cipherfindstr\fs 自建的文本文件上跑（ASCII 样本 a.txt / b.txt /
+      sub\c.txt、中文样本分 GBK / UTF-8 / UTF-8+BOM / UTF-16LE 四种编码、清单文件 filelist.txt 与
+      搜索串文件 patterns.txt），没有任何写操作。脚本给每条用例都设了超时并**立刻关掉 stdin**
+      （宿主同款），否则"缺文件名的调用"会让 findstr 等 stdin 永不返回（作者踩过）。
+      原始数据逐条抄进 NOTES.md §4 / §6 / §7。可复跑：`pwsh -NoProfile -File plugins/findstr/smoke.ps1`。
+
+locate:
+  executable: findstr.exe
+  searchPaths:
+    - '%SystemRoot%\System32\findstr.exe'
+    - '%SystemRoot%\SysWOW64\findstr.exe'
+  notFoundHint: findstr.exe 是 Windows 自带命令，正常情况下都在 C:\Windows\System32 下。
+
+runtime:
+  encoding: oem
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  usePseudoConsole: false
+
+# 退出码：官方页没有任何退出码章节（已逐行核对）；下面三个码全部来自实测，见 NOTES.md §7。
+exitCodes:
+  - code: 0
+    meaning: >-
+      找到了匹配并已输出。实测的情形：命中一个/多个文件、`/c:` 字面命中、`/g:` 从清单文件取搜索串命中、
+      `/s` 递归命中。**注意认不出来的开关不影响它**：`/zz alpha a.txt` 会在 stderr 打
+      "FINDSTR: 忽略 /z" 但仍然 exit 0。
+    severity: ok
+  - code: 1
+    meaning: >-
+      没有匹配，**或者要搜的文件打不开**（两者同码）。实测：`notfound a.txt` → 0 字节输出、exit 1；
+      `alpha nope.txt` → exit 1 + stderr "FINDSTR: 无法打开 nope.txt"；
+      `alpha sub`（把目录当文件）→ exit 1；`alpha *.nomatch` → exit 1 + 无法打开；
+      空文件、UTF-8 文件里搜中文（0 命中）也是 1。实际含义要看 stderr 有没有那行"无法打开"。
+    severity: warning
+  - code: 2
+    meaning: >-
+      命令行本身有问题。实测三种：不带任何参数 → stderr "FINDSTR: 错误的命令行"；
+      `/f:<读不到的清单文件>` → "FINDSTR: 无法从 nope 读取文件列表"；
+      `/g:<读不到的搜索串文件>` → "FINDSTR: 无法从 nope 读取字符串"；
+      `/c:` 空串 → "FINDSTR: /c 后面缺少参数"。
+    severity: error
+
+quickActions:
+  - title: 在文件里搜文本
+    action: search-text
+  - title: 按字面搜含空格的整串
+    action: search-literal
+  - title: 递归搜索目录树
+    action: search-recursive
+
+actions:
+
+  # ============================================================ 常用搜索
+  - id: search-text
+    category: 搜索
+    title: 搜索文本（默认正则，可加 /I /N）
+    command: ""
+    description: >-
+      最常用的一条：给出要搜的内容和一个或多个文件，它把命中的行打出来。默认按**正则**解释
+      （官方写明 /r 是默认值，实测 `alp.a` 能命中 alpha），要按字面找就用「搜索模式」里的 /L。
+      默认**区分大小写**（实测搜 Alpha 不会命中 alpha），要不区分就勾 /I。
+    sources:
+      - title: findstr 官方参考 —— 语法行与 /i /n /o /r /l
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/findstr
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方语法行 `findstr [/b] [/e] [/l | /r] [/s] [/i] [/x] [/v] [/n] [/m] [/o] [/p] … <strings>
+          [<drive>:][<path>]<filename>[ ...]`；Parameters 表：/i "Ignores the case of the characters
+          when searching for the string."、/n "Prints the line number of each line that matches."、
+          /o "Prints character offset before each matching line."、/r "Processes search strings as
+          regular expressions. This is the default setting."、/l "Processes search strings literally."、
+          `<strings>` "Specifies the text to search for in filename. Required."、
+          `<filename>` "Specifies the location and file or files to search. At least one file name is
+          required."。Remarks 第一条就是"所有选项必须排在 strings 与 filename 之前"。
+      - title: 本机 `findstr /?` 的真实输出
+        url: file:///%SystemRoot%/System32/findstr.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / findstr.exe 10.0.26100.8875
+        note: >-
+          本机原文：/I "Specifies that the search is not to be case-sensitive."、/R "Uses search strings
+          as regular expressions."、/L "Uses search strings literally."，以及
+          "Use spaces to separate multiple search strings unless the argument is prefixed with /C."
+          ——这句话正是 `strings` 字段为什么"只能是一个 token"的依据（NOTES.md §6.2）。
+    fields:
+      - id: searchMode
+        label: 搜索模式（/L 或 /R）
+        type: enum
+        style: literal
+        switchBase: "/L"
+        group: 开关
+        help: >-
+          `/L` = 把搜索串当**字面文本**（不看 `.*[]^$` 这些元字符）；`/R` = 当**正则**。
+          不选 = 交给 findstr 自己的默认（官方写明 /r 是默认，实测 `findstr alp.a a.txt` 命中 alpha）。
+          **刻意不给默认值**：这是语义选择，不该由清单替用户定。
+          （本字段同时对应官方文档里的 /l 与 /r 两个开关，switchBase 只写代表性的 /l。）
+        doc: 'official #parameters 的 /l 与 /r（/r 是默认值）'
+        values:
+          - value: ""
+            label: 不指定（用 findstr 的默认 = 正则）
+            args: []
+            isDefault: true
+          - value: literal
+            label: /L —— 按字面文本搜索
+            args: ["/L"]
+          - value: regex
+            label: /R —— 显式按正则搜索
+            args: ["/R"]
+      - id: ignoreCase
+        label: 不区分大小写（/I）
+        type: bool
+        style: flag
+        prefix: "/I"
+        group: 开关
+        default: false
+        help: >-
+          官方原文：/i "Ignores the case of the characters when searching for the string."。
+          不勾时**区分大小写**（实测：搜 `Alpha` 只命中 `Alpha upper` 那一行）。
+        doc: 'official #parameters 的 /i'
+      - id: lineNumber
+        label: 显示行号（/N）
+        type: bool
+        style: flag
+        prefix: "/N"
+        group: 开关
+        default: false
+        help: 官方原文：/n "Prints the line number of each line that matches."。实测输出形态 `2:[fonts]`。
+        doc: 'official #parameters 的 /n'
+      - id: offset
+        label: 显示字符偏移（/O）
+        type: bool
+        style: flag
+        prefix: "/O"
+        group: 开关
+        advanced: true
+        default: false
+        help: >-
+          官方原文：/o "Prints character offset before each matching line."。实测输出形态 `0:alpha`
+          （偏移从文件开头算起，单位是字节）。与 /N 一起用时两个数字都会出现。
+        doc: 'official #parameters 的 /o'
+      - id: strings
+        label: 搜索内容（可以含空格）
+        type: text
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 windows 日志
+        help: >-
+          **整段会作为同一个参数交给 findstr**，所以里面写空格就等于"多个搜索串"：
+          实测 `findstr "alpha beta" a.txt` 命中 alpha 与 beta 两行。
+          ⚠ 反过来说，**不要把多个搜索串分成多个字段/多行**：实测两个独立 token
+          （`findstr alpha beta a.txt`）里第二个会被 findstr 当成**文件名**，
+          stderr 报 "FINDSTR: 无法打开 beta"。要搜一个含空格的**整串**请用「按字面搜含空格的整串」。
+          非 ASCII 字符（中文）只在 OEM/ANSI 编码的文件里能命中，见 resultNote。
+        doc: 'official #parameters 的 <strings>（配合 #remarks 的 "Use spaces to separate multiple search strings"）'
+      - id: files
+        label: 要搜索的文件
+        type: files
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 D:\logs\app.log
+        help: >-
+          一个或多个文件（每行一个 token）。官方要求"至少一个文件名"（`<filename>` 是 required），
+          也支持通配符（由 findstr 自己展开，实测 `*.txt` 可用）。**要递归整棵目录树请用
+          「递归搜索目录树（/S）」**：实测把目录本身放进这个字段不会递归（`findstr /s alpha <目录>` → exit 1）。
+        doc: 'official #parameters 的 [<drive>:][<path>]<filename>[ ...]'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测（本机、非管理员、CreateNoWindow 条件）：`findstr fonts C:\Windows\win.ini` → 退出码 0、
+        9 字节；`/i /n FONTS` → 退出码 0、11 字节、输出 `2:[fonts]`；`alp.a a.txt` → 命中 alpha（证明
+        默认是正则）；`/l alp.a a.txt` → 0 命中、退出码 1（证明 /L 是字面）。
+        多文件时输出带文件名前缀（`b.txt:alpha two`），单个文件时不带前缀。
+        ⚠ 编码：提示与错误是 cp936（= `oem`），但**命中的行是源文件的原始字节**——
+        在一个 UTF-8 文件里搜 ASCII 串，回显出来的是 UTF-8 字节，界面按 oem 解码会显示成乱码；
+        而**非 ASCII 搜索串在 UTF-8 文件里是 0 命中**（实测「中文」在 GBK 文件命中、在 UTF-8 与
+        UTF-8+BOM 文件都是 exit 1、无输出）。要搜 UTF-8 文件里的中文，先用编辑器转成 ANSI/GBK。
+    examples:
+      - title: 在 win.ini 里找 fonts（默认正则、区分大小写）
+        args: ["fonts", "C:\\Windows\\win.ini"]
+        expectExitCode: 0
+      - title: 不区分大小写 + 带行号
+        args: ["/i", "/n", "FONTS", "C:\\Windows\\win.ini"]
+        expectExitCode: 0
+
+  - id: search-literal
+    category: 搜索
+    title: 按字面搜含空格的整串（/C:）
+    command: ""
+    description: >-
+      要搜的是"一整句话"（里面有空格）时用它：官方 `/c:<string>` 会把这段文字当成**一个**
+      搜索串，不做空格拆分、也不按正则解释（除非同时给 /R 或默认模式）。
+      官方文档自己的例子就是 `findstr /c:"hello there" x.y`。
+    sources:
+      - title: findstr 官方参考 —— /c:<string>
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/findstr
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/c:<string> "Uses the specified text as a literal search string."；
+          Remarks 的收尾一句 "Use spaces to separate multiple search strings unless the argument is
+          prefixed with /c."；Examples 里两条相关例子：`findstr /c:"hello there" x.y` 与
+          `findstr /b /n /r /c:^ *FOR *.bas`（后者说明 /c 与 /r 一起用时按正则处理）。
+      - title: 本机 `findstr /?` 的真实输出 —— /C:string 一节
+        url: file:///%SystemRoot%/System32/findstr.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / findstr.exe 10.0.26100.8875
+        note: >-
+          本机原文：/C:string "Uses specified string as a literal search string."，示例
+          "'FINDSTR /C:\"hello there\" x.y' searches for \"hello there\" in file x.y."。
+          **注意本机与官方都写成 `/C:string` 这种带冒号的单 token 形式** —— 实测两 token 的
+          `/c "Hello There" a.txt` 会打 stderr "FINDSTR: 忽略 /c"（/c 被当成没有值），
+          所以本字段用 attached + separator ":"（NOTES.md §6.1）。
+    fields:
+      - id: literalString
+        label: 要搜的整串（/C:）
+        type: text
+        style: attached
+        prefix: "/c"
+        separator: ":"
+        required: true
+        save: true
+        placeholder: 例 for 16-bit app support
+        help: >-
+          **整段与 /c 粘成一个 token**（`/c:for 16-bit app support`），空格不会被拆成多个搜索串。
+          值里的 `"` 不用自己加（宿主按 argv 数组传参，不经过 shell）；值里若含元字符而你又想要字面
+          语义，本动作已经符合 /c 的字面语义（实测 `/c:alp.a a.txt` 是 0 命中）。
+        doc: 'official #parameters 的 /c:<string>'
+      - id: ignoreCase
+        label: 不区分大小写（/I）
+        type: bool
+        style: flag
+        prefix: "/I"
+        group: 开关
+        default: false
+        help: 官方原文：/i "Ignores the case of the characters when searching for the string."
+        doc: 'official #parameters 的 /i'
+      - id: lineNumber
+        label: 显示行号（/N）
+        type: bool
+        style: flag
+        prefix: "/N"
+        group: 开关
+        default: false
+        help: 官方原文：/n "Prints the line number of each line that matches."
+        doc: 'official #parameters 的 /n'
+      - id: files
+        label: 要搜索的文件
+        type: files
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 D:\logs\app.log
+        help: 一个或多个文件（每行一个 token），支持通配符。
+        doc: 'official #parameters 的 [<drive>:][<path>]<filename>[ ...]'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测：`/c:for 16-bit app support C:\Windows\win.ini` → 退出码 0、26 字节，输出整行
+        `; for 16-bit app support`；`/c:alpha beta a.txt`（字面整串，文件里没有）→ 退出码 1、0 字节。
+        对照：同样内容的两个独立 token `/c "Hello There" a.txt` → 仍是 exit 0 但 stderr 打
+        "FINDSTR: 忽略 /c"（/c 没吃到值），所以粘成一个 token 是硬要求。
+    examples:
+      - title: 按字面搜一整句（含空格）
+        args: ["/c:for 16-bit app support", "C:\\Windows\\win.ini"]
+        expectExitCode: 0
+
+  # ============================================================ 按行匹配
+  - id: search-line-position
+    category: 按行匹配
+    title: 整行 / 行首 / 行尾匹配（/X /B /E）
+    command: ""
+    description: >-
+      把"命中"的范围收紧到整行或行的某个位置：/X 要求整行完全一致、/B 只匹配行首、/E 只匹配行尾。
+      官方示例 `findstr /b /n /r /c:^ *FOR *.bas` 就是"行首 + 正则 + 行号"的组合。
+    sources:
+      - title: findstr 官方参考 —— /x /b /e
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/findstr
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/b "Matches the text pattern if it is at the beginning of a line."、
+          /e "Matches the text pattern if it is at the end of a line."、
+          /x "Prints lines that match exactly."；Examples 里
+          `findstr /b /n /r /c:^ *FOR *.bas` 与 `findstr /s /i /m \<computer\> *.*`。
+      - title: 本机 `findstr /?` 的真实输出 —— /B /E /X 三节
+        url: file:///%SystemRoot%/System32/findstr.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / findstr.exe 10.0.26100.8875
+        note: >-
+          本机原文：/B "Matches pattern if at the beginning of a line."、
+          /E "Matches pattern if at the end of a line."、/X "Prints lines that match exactly."。
+          本机帮助里还给了 `\<xyz`（词首）与 `xyz\>`（词尾）两个**正则**位置元字符
+          ——它们不是开关，所以本包不单独做字段，写在 help 里让人知道。
+    fields:
+      - id: exactLine
+        label: 整行完全一致（/X）
+        type: bool
+        style: flag
+        prefix: "/X"
+        group: 开关
+        default: false
+        help: >-
+          官方原文：/x "Prints lines that match exactly."。实测 `/x /n MAPI=1 win.ini` → 命中
+          `7:MAPI=1`（整行就是它）。
+        doc: 'official #parameters 的 /x'
+      - id: beginLine
+        label: 只匹配行首（/B）
+        type: bool
+        style: flag
+        prefix: "/B"
+        group: 开关
+        default: false
+        help: >-
+          官方原文：/b "Matches the text pattern if it is at the beginning of a line."。
+          实测 `/b \[fonts\] win.ini` → 命中 `[fonts]`（要把元字符转义才等于字面）。
+        doc: 'official #parameters 的 /b'
+      - id: endLine
+        label: 只匹配行尾（/E）
+        type: bool
+        style: flag
+        prefix: "/E"
+        group: 开关
+        default: false
+        help: >-
+          官方原文：/e "Matches the text pattern if it is at the end of a line."。
+          实测 `/e files\] win.ini` → 命中 `[files]`。
+        doc: 'official #parameters 的 /e'
+      - id: lineNumber
+        label: 显示行号（/N）
+        type: bool
+        style: flag
+        prefix: "/N"
+        group: 开关
+        default: false
+        help: 官方原文：/n "Prints the line number of each line that matches."
+        doc: 'official #parameters 的 /n'
+      - id: strings
+        label: 搜索内容（正则）
+        type: text
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 ^\s*FOR
+        help: >-
+          这里通常写**正则**（默认就是正则模式），元字符按官方表：`.` `*` `^` `$` `[class]`
+          `[^class]` `[x-y]` `\x` `\<` `\>`。想要字面量就自己转义，或者改用「搜索文本」动作里的 /L。
+        doc: 'official #remarks 的正则元字符表与 #parameters 的 <strings>'
+      - id: files
+        label: 要搜索的文件
+        type: files
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 C:\Windows\win.ini
+        help: 一个或多个文件（每行一个 token），支持通配符。
+        doc: 'official #parameters 的 [<drive>:][<path>]<filename>[ ...]'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测三条（都退出码 0）：`/x /n MAPI=1 C:\Windows\win.ini` → 10 字节、`7:MAPI=1`；
+        `/b \[fonts\] C:\Windows\win.ini` → 9 字节、`[fonts]`；
+        `/e files\] C:\Windows\win.ini` → 9 字节、`[files]`。
+        官方示例的 `/c:` 与 `/r` 组合也复现过：`/b /n /r /c:^ *FOR *.txt` → 命中 `1:FOR loop`
+        （同一份文本上不加 /r 时 `/b /n /c:^FOR` 是 0 命中，说明 **/c 遇到 /r 会按正则处理**，
+        这条差异记在 NOTES.md §5.2）。
+    examples:
+      - title: 整行完全一致 + 行号
+        args: ["/x", "/n", "MAPI=1", "C:\\Windows\\win.ini"]
+        expectExitCode: 0
+      - title: 只匹配行首（元字符要转义）
+        args: ["/b", "\\[fonts\\]", "C:\\Windows\\win.ini"]
+        expectExitCode: 0
+
+  - id: search-not-match
+    category: 按行匹配
+    title: 显示**不**匹配的行（/V）
+    command: ""
+    description: >-
+      反选：把"不包含搜索串"的行打出来（对应 grep -v）。看一份配置里"除了这几行还有什么"、
+      或者从日志里排除掉刷屏的噪声行时很顺手。
+    sources:
+      - title: findstr 官方参考 —— /v
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/findstr
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/v "Prints only lines that don't contain a match."；
+          语法行里 /v 与 /n /m /o /p 并列，都排在 `<strings>` 之前。
+      - title: 本机 `findstr /?` 的真实输出 —— /V 一节
+        url: file:///%SystemRoot%/System32/findstr.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / findstr.exe 10.0.26100.8875
+        note: 本机原文：/V "Prints only lines that do not contain a match."（与官方同义）。
+    fields:
+      - id: notMatch
+        label: 只看不匹配的行（/V）
+        type: bool
+        style: flag
+        prefix: "/V"
+        group: 开关
+        default: true
+        help: >-
+          本动作按定义就要带 /V，所以默认勾上。取消勾选会变成一条**普通的**搜索
+          （命令行预览会如实显示），那时它的效果与「搜索文本」一样。
+        doc: 'official #parameters 的 /v'
+      - id: lineNumber
+        label: 显示行号（/N）
+        type: bool
+        style: flag
+        prefix: "/N"
+        group: 开关
+        default: false
+        help: 官方原文：/n "Prints the line number of each line that matches."
+        doc: 'official #parameters 的 /n'
+      - id: strings
+        label: 要排除的内容
+        type: text
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 fonts
+        help: 与「搜索文本」的搜索内容同一条规则：整段是一个 token，空格 = 多个搜索串。
+        doc: 'official #parameters 的 <strings>'
+      - id: files
+        label: 要搜索的文件
+        type: files
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 C:\Windows\win.ini
+        help: 一个或多个文件（每行一个 token），支持通配符。
+        doc: 'official #parameters 的 [<drive>:][<path>]<filename>[ ...]'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测 `/v /n fonts C:\Windows\win.ini` → 退出码 0、95 字节，输出 win.ini 里除 `[fonts]`
+        之外的 6 行（`1:; for 16-bit app support`、`3:[extensions]`、`4:[mci extensions]`…）。
+        **没有匹配反而是失败**：`/v` 下一行都没排除掉时退出码是 1（沿用 findstr 的
+        "1 = 没有输出任何行"语义，实测 `/v` 与普通搜索同码）。
+    examples:
+      - title: 看 win.ini 里除 fonts 之外的内容
+        args: ["/v", "/n", "fonts", "C:\\Windows\\win.ini"]
+        expectExitCode: 0
+
+  # ============================================================ 批量与递归
+  - id: search-recursive
+    category: 批量与递归
+    title: 递归搜索目录树（/S，可只列文件名）
+    command: ""
+    description: >-
+      从当前目录开始（或从你给的路径模式开始）连同所有子目录一起搜。
+      配 /M 就只列出"命中过"的**文件名**，这是"哪些文件里有这个词"最快的回答方式。
+      ⚠ 路径参数要写成**带通配符的模式**（`C:\dir\*.log`）：实测把目录本身交给它不会递归、直接 exit 1。
+    sources:
+      - title: findstr 官方参考 —— /s 与 /m
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/findstr
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/s "Searches the current directory and all subdirectories."、
+          /m "Prints only the file name if a file contains a match."；
+          Examples 里两条 /s 的用法：`findstr /s /i Windows *.*` 与
+          `findstr /s /i /m \<computer\> *.*`（后者正是"只列文件名 + 递归 + 不区分大小写"）。
+      - title: 本机 `findstr /?` 的真实输出 —— /S /M /P /OFF[LINE] 四节
+        url: file:///%SystemRoot%/System32/findstr.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / findstr.exe 10.0.26100.8875
+        note: >-
+          本机原文：/S "Searches for matching files in the current directory and all subdirectories."、
+          /M "Prints only the filename if a file contains a match."、
+          /P "Skip files with non-printable characters."、
+          /OFF[LINE] "Do not skip files with offline attribute set."（方括号表示可省，实测 /OFF 与
+          /OFFLINE 都可用，均 exit 0）。
+    fields:
+      - id: recursive
+        label: 连同子目录（/S）
+        type: bool
+        style: flag
+        prefix: "/S"
+        group: 开关
+        default: true
+        help: >-
+          官方原文：/s "Searches the current directory and all subdirectories."。
+          实测 `/s alpha *.txt`（相对模式）会连 `sub\c.txt` 一起搜到，并在输出里保留相对路径。
+        doc: 'official #parameters 的 /s'
+      - id: fileNameOnly
+        label: 只列文件名（/M）
+        type: bool
+        style: flag
+        prefix: "/M"
+        group: 开关
+        default: true
+        help: >-
+          官方原文：/m "Prints only the file name if a file contains a match."。
+          实测 `/m alpha a.txt b.txt` 只输出两行文件名；与 /N 同时用时 /M 生效（实测输出只有文件名）。
+        doc: 'official #parameters 的 /m'
+      - id: ignoreCase
+        label: 不区分大小写（/I）
+        type: bool
+        style: flag
+        prefix: "/I"
+        group: 开关
+        default: false
+        help: 官方原文：/i "Ignores the case of the characters when searching for the string."
+        doc: 'official #parameters 的 /i'
+      - id: skipBinary
+        label: 跳过二进制文件（/P）
+        type: bool
+        style: flag
+        prefix: "/P"
+        group: 开关
+        advanced: true
+        default: false
+        help: >-
+          官方原文：/p "Skips files with non-printable characters."。递归搜目录时建议勾上，
+          否则会往终端里倒一堆二进制垃圾（实测在 C:\Windows 这样的树里一定会撞上）。
+        doc: 'official #parameters 的 /p'
+      - id: includeOffline
+        label: 包含脱机属性文件（/OFFLINE）
+        type: bool
+        style: flag
+        prefix: "/OFFLINE"
+        group: 开关
+        advanced: true
+        default: false
+        help: >-
+          官方原文：/off[line] "Does not skip files that have the offline attribute set."
+          （方括号表示可省略；本字段按完整写法生成 `/OFFLINE`）。
+        doc: 'official #parameters 的 /off[line]'
+      - id: patterns
+        label: 搜索范围（路径 + 通配符）
+        type: paths
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 D:\projects\*.cs
+        help: >-
+          **必须带通配符**（每行一个 token）：实测 `/s alpha <目录>`（光给目录）→ exit 1、无输出；
+          `/s alpha <目录>\*.txt` → exit 0 并递归命中子目录。`*` 与 `?` 由 findstr 展开，
+          不要指望 shell。范围越大越慢：作者实测在 C:\Windows 上递归 `*.ini` 要 **23.9 秒**，
+          而且会打出"不支持 Unicode 格式"的警告；请尽量指向具体的工程/日志目录。
+        doc: 'official #parameters 的 [<drive>:][<path>]<filename>[ ...]（配合 #remarks 的 "current directory and all subdirectories"）'
+      - id: strings
+        label: 搜索内容（正则）
+        type: text
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 TODO
+        help: >-
+          默认按正则解释，整段是一个 token（空格 = 多个搜索串）。
+          想按"单词"匹配可以用官方帮助里的 `\<xyz`（词首）与 `xyz\>`（词尾）写法，
+          例如 `\<computer\>`（本机帮助的示例就是这么写的）。
+        doc: 'official #parameters 的 <strings> 与 #parameters 的 /m 示例'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测：`/s alpha *.txt`（工作目录=探测目录）→ 退出码 0、71 字节，输出
+        `a.txt:alpha`、`b.txt:alpha two`、`patterns.txt:alpha`、`sub\c.txt:alpha sub`
+        —— 递归到了子目录，且相对路径保留原样；`/s /m /i ALPHA <绝对>\*.txt` → 退出码 0、303 字节，
+        输出的是**完整的绝对路径**（带通配符时前缀是完整的）。
+        ⚠ 两个实测的坑：① 目录本身当参数**不递归**（exit 1）；② 在 C:\Windows 这类大树上跑
+        `*.ini` 要 23.9 秒并伴随 "FINDSTR: 警告 - 输入文件 … 不支持 Unicode 格式"（该警告可用
+        本机独有的 /Q:u 压掉，本包未收录）。
+        示例里带 `D:\projects\*` 的那条是**预设**（作者机器上没这个目录，没有真跑），
+        带 `C:\Windows\System32\drivers\etc\*` 的那条跑过（退出码随 hosts 内容而定，故未标 expectExitCode）。
+    examples:
+      - title: 列出目录树里所有含该词的文件（把路径换成你的工程目录）
+        args: ["/s", "/m", "/i", "TODO", "D:\\projects\\*"]
+      - title: 在一个小目录里递归搜（范围小、跑得快）
+        args: ["/s", "/m", "/i", "localhost", "C:\\Windows\\System32\\drivers\\etc\\*"]
+
+  - id: search-strings-from-file
+    category: 批量与递归
+    title: 从文件里读搜索串（/G:）
+    command: ""
+    description: >-
+      搜索串很多、或者要反复用时，把它们**一行一个**写进一个文本文件，用 /G: 交给 findstr。
+      这是"一次搜几十个关键词"的正规做法（官方 Remarks 也建议这么做）。
+    sources:
+      - title: findstr 官方参考 —— /g:<file>
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/findstr
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/g:<file> "Gets search strings from the specified file."；
+          Remarks 第三条 "To search for multiple strings in a set of files, you must create a text
+          file that contains each search criterion on a separate line."；
+          Examples 里 `findstr /g:stringlist.txt /f:filelist.txt > results.out`。
+      - title: 本机 `findstr /?` 的真实输出 —— /G:file 一节
+        url: file:///%SystemRoot%/System32/findstr.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / findstr.exe 10.0.26100.8875
+        note: >-
+          本机原文：/G:file "Gets search strings from the specified file(/ stands for console)."
+          ——括号里那句 "(/ stands for console)" 只有本机一侧有（官方页没有），记为差异（NOTES.md §5.1）。
+          ⚠ 那意味着 `findstr /g:/ …` 会去读 **stdin**；宿主会立刻关掉 stdin（EOF），
+          所以真这么写会立刻结束而不是挂住。
+    fields:
+      - id: stringsFile
+        label: 搜索串清单文件（/G:）
+        type: file
+        style: attached
+        prefix: "/g"
+        separator: ":"
+        required: true
+        save: true
+        placeholder: 例 D:\patterns.txt
+        help: >-
+          一行一个搜索串（默认按正则解释）。**读不到这个文件时退出码是 2**：实测
+          `/g:nope a.txt` → stderr "FINDSTR: 无法从 nope 读取字符串"。
+        doc: 'official #parameters 的 /g:<file>'
+      - id: recursive
+        label: 连同子目录（/S）
+        type: bool
+        style: flag
+        prefix: "/S"
+        group: 开关
+        default: false
+        help: 官方原文：/s "Searches the current directory and all subdirectories."（实测 `/g:patterns.txt /s *.txt` 可用，exit 0）。
+        doc: 'official #parameters 的 /s'
+      - id: files
+        label: 要搜索的文件
+        type: files
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 D:\logs\*.log
+        help: >-
+          一个或多个文件（每行一个 token），支持通配符。官方 Examples 的形态是
+          `/g:搜索串清单 /f:文件清单`（连文件清单也从文件读）——那种写法请用「从文件读文件清单（/F:）」。
+        doc: 'official #parameters 的 [<drive>:][<path>]<filename>[ ...]'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测：`/g:patterns.txt a.txt` → 退出码 0、13 字节，输出 `alpha` 与 `beta` 两行
+        （patterns.txt 里就是这两行）；`/g:patterns.txt /s *.txt` → 退出码 0、102 字节，递归命中 4 个文件。
+        官方 Examples 的 `/g:stringlist.txt /f:filelist.txt` 组合也复现过（退出码 0、42 字节）。
+        示例里的 `D:\patterns.txt` 是**预设**（作者机器上没这个文件，没有真跑；
+        机制用 %TEMP% 自建的 patterns.txt 验证过，见 NOTES.md §7.2）。
+    examples:
+      - title: 用一份搜索串清单搜一批日志（路径换成你自己的）
+        args: ["/g:D:\\patterns.txt", "/s", "D:\\logs\\*.log"]
+
+  - id: search-filelist
+    category: 批量与递归
+    title: 从文件里读文件清单（/F:）
+    command: ""
+    description: >-
+      要搜的文件很多（几十上百个，或者每次都不一样）时，把文件名**一行一个**写进一个文本文件，
+      用 /F: 交给 findstr，命令行就短了。与「从文件里读搜索串（/G:）」正好是一对，
+      官方把两者放在同一个例子里用。
+    sources:
+      - title: findstr 官方参考 —— /f:<file>
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/findstr
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/f:<file> "Gets a file list from the specified file."；
+          Examples：`findstr /g:stringlist.txt /f:filelist.txt > results.out`
+          （"to list the exact files that you want to search in a text file … and then to store the
+          results in results.out"）。
+      - title: 本机 `findstr /?` 的真实输出 —— /F:file 一节
+        url: file:///%SystemRoot%/System32/findstr.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / findstr.exe 10.0.26100.8875
+        note: >-
+          本机原文：/F:file "Reads file list from the specified file(/ stands for console)."
+          ——"(/ stands for console)" 只有本机一侧有（差异记进 NOTES.md §5.1）。
+          读不到清单文件时退出码 2：实测 `/f:nope alpha` → stderr "FINDSTR: 无法从 nope 读取文件列表"。
+    fields:
+      - id: listFile
+        label: 文件清单（/F:）
+        type: file
+        style: attached
+        prefix: "/f"
+        separator: ":"
+        required: true
+        save: true
+        placeholder: 例 D:\filelist.txt
+        help: >-
+          一行一个文件名（相对路径按**进程工作目录**解析，所以建议写绝对路径）。
+          **读不到这个文件时退出码是 2**（实测）。
+        doc: 'official #parameters 的 /f:<file>'
+      - id: stringsFile
+        label: 搜索串清单文件（/G:，可选）
+        type: file
+        style: attached
+        prefix: "/g"
+        separator: ":"
+        group: 开关
+        advanced: true
+        save: true
+        placeholder: 例 D:\patterns.txt
+        help: >-
+          官方 Examples 的标准组合就是 `/g:搜索串清单 /f:文件清单` 一起用（两边都从文件读）。
+          填了它以后就不必再填下面的「搜索内容」。
+        doc: 'official #parameters 的 /g:<file>（配合 #examples 的 /g:stringlist.txt /f:filelist.txt）'
+      - id: strings
+        label: '搜索内容（正则，配合 /G: 时可留空）'
+        type: text
+        style: positional
+        save: true
+        placeholder: 例 TODO
+        help: >-
+          默认按正则解释，整段是一个 token（空格 = 多个搜索串）。
+          与上面的 /G: 二选一：官方 Examples 是把搜索串放进文件（`/g:` + `/f:` 一起用）。
+          ⚠ **一个搜索串都没有时 findstr 会退到 exit 2**（"错误的命令行"），
+          所以这一项与 /G: 至少要有一个有值。
+        doc: 'official #parameters 的 <strings> 与 #parameters 的 /f:<file>'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测：`/f:filelist.txt alpha`（filelist.txt 里是 a.txt 与 b.txt）→ 退出码 0、30 字节，
+        输出 `a.txt:alpha` 与 `b.txt:alpha two`；`/f:nope alpha` → 退出码 2 +
+        stderr "FINDSTR: 无法从 nope 读取文件列表"。
+        示例里的 `D:\filelist.txt` 是**预设**（作者机器上没这个文件，没有真跑；
+        机制用 %TEMP% 自建的 filelist.txt 验证过，见 NOTES.md §7.2）。
+    examples:
+      - title: 用一份文件清单去搜（路径换成你自己的）
+        args: ["/f:D:\\filelist.txt", "TODO"]
+
+  - id: search-directories
+    category: 批量与递归
+    title: 在指定的目录列表里搜（/D:）
+    command: ""
+    description: >-
+      把"要去哪几个目录找"直接写在开关里（分号分隔）。它与 /S 的区别是：/S 是一棵树往下钻，
+      /D: 是你点名几个目录。适合"这几台机器/这几个工程目录里都有没有这个配置项"。
+    sources:
+      - title: findstr 官方参考 —— /d:<dirlist>
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/findstr
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10/11
+        note: >-
+          官方原文：/d:<dirlist> "Searches the specified list of directories. Each directory must be
+          separated with a semicolon (;), for example dir1;dir2;dir3."；
+          语法行里它排在 `<strings>` 之前。
+      - title: 本机 `findstr /?` 的真实输出 —— /D:dir 一节
+        url: file:///%SystemRoot%/System32/findstr.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / findstr.exe 10.0.26100.8875
+        note: >-
+          本机原文：/D:dir "Search a semicolon delimited list of directories"（与官方一致）。
+          实测 `/d:<目录> alpha *.txt` → 退出码 0，输出先打目录名再打 `a.txt:alpha`；
+          给一个不存在/没有目标文件的目录时 → 退出码 1，stderr "FINDSTR: 无法打开 <目录>"。
+    fields:
+      - id: dirList
+        label: 目录列表（/D:，分号分隔）
+        type: text
+        style: attached
+        prefix: "/d"
+        separator: ":"
+        required: true
+        save: true
+        placeholder: 例 D:\proj1;D:\proj2
+        help: >-
+          **多个目录用分号 `;` 分隔**（官方原文），整段与 /d 粘成一个 token。
+          目录里找什么文件仍然由下面的「要搜索的文件」决定（通常是通配符）。
+        doc: 'official #parameters 的 /d:<dirlist>'
+      - id: strings
+        label: 搜索内容（正则）
+        type: text
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 TODO
+        help: 默认按正则解释，整段是一个 token（空格 = 多个搜索串）。
+        doc: 'official #parameters 的 <strings>'
+      - id: files
+        label: 在这些目录里找哪些文件
+        type: files
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 *.config
+        help: >-
+          通常是通配符（由 findstr 展开）。要搜的文件名本身也允许带相对目录。
+        doc: 'official #parameters 的 [<drive>:][<path>]<filename>[ ...]'
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测：`/d:<探测目录> alpha *.txt` → 退出码 0、120 字节，输出先一行
+        `  <目录>:`（注意前面两个空格与行尾冒号）再逐行 `a.txt:alpha`；
+        `/d:<TEMP> alpha a.txt` → 退出码 1（TEMP 里没有 a.txt 命中）并打印目录头。
+        示例里 D:\proj1 这类路径是**预设**（作者机器上没有，没有真跑）。
+    examples:
+      - title: 在几个工程目录里找同一个配置项
+        args: ["/d:D:\\proj1;D:\\proj2", "TODO", "*.config"]
