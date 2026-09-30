@@ -1,0 +1,907 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# reg —— Windows 自带的注册表命令行工具（C:\Windows\System32\reg.exe）。
+#
+# ============================ 只读边界（本包最重要的一条） ============================
+# 本工具包**只收录只读的 reg query**。
+# reg 的其它操作 reg add / delete / copy / save / restore / load / unload / import / export
+# 都会写注册表或写文件，**一个都不收录**（包括只写文件的 reg export）。
+# 这样"这个包能做的事"在清单层面就是可穷举的：全部是查询。
+#
+# ============================ 参数知识来源 ============================
+# 1) 官方文档（Microsoft Learn），两页，均实测 HTTP 200：
+#      reg 命令索引   .../windows-server/administration/windows-commands/reg
+#      reg query      .../windows-server/administration/windows-commands/reg-query
+# 2) 本机 `reg /?`、`reg query /?` 的真实输出（两页都实跑过）。
+#    与官方页对不上的地方只有一处，见 NOTES.md §7.1：
+#    官方 reg-query 的 /t 参数表列 6 种类型（无 REG_QWORD），本机 /? 列 7 种（含 REG_QWORD）
+#    → 按"只写两边都能对应的"口径，本清单**不收录 REG_QWORD**。
+#
+# ============================ 编码（实测，本包特有） ============================
+# **oem（本机 cp936）**。判定依据见 NOTES.md §4：
+#   在**与宿主一致的"无控制台"条件**（ProcessStartInfo + CreateNoWindow=true + 重定向）下，
+#   带中文的输出原始字节 utf8strict=False、按 cp936 解出正常中文：
+#     `reg query HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts`
+#     第一个非 ASCII 位置起 12 字节 = e5 8d 8e e6 96 87 e4 b8 ad e5 ae 8b …（那是 UTF-8 的条件下）
+#     —— 而在无控制台条件下同一处是 `bb aa ce c4 d6 d0 cb ce`（cp936 的「华文中宋」）。
+#   ⚠ 本包踩到一个真实的坑：**编码会随"有没有控制台 / 控制台输出代码页"变**。
+#   同一台机器、同一条命令：
+#     无控制台（宿主的条件）        → cp936，且"搜索结束"这类汇总行是**中文**
+#     继承控制台且输出代码页=65001  → **UTF-8**，且同一行是**英文**（End of search: …）
+#     全新控制台（默认 936）        → cp936 + 中文
+#   所以"用带中文的输出判原始字节"这一步必须写清当时的控制台条件，
+#   在探针里 [Console]::OutputEncoding = UTF8 会把自己量出假的 utf-8。
+#   本清单选 oem：宿主是无控制台条件（cp936），且 cp936 解码对纯 ASCII 的英文回退也安全。
+#
+# ============================ 退出码（实测） ============================
+# 官方 reg-query 的 Remarks 与 `reg /?` 都只给两个码：0 = Successful，1 = Failed。
+# 实测 1 同时涵盖"没找到"与"真失败"，两类要靠流与文本区分，见 NOTES.md §5。
+#
+# 版本：Windows 自带命令没有 --version 开关，故不写 versionArgs/versionPattern/minVersion（R1）。
+#       exe 文件版本实测 10.0.26100.8875（读 VersionInfo；规范无此能力，只记进 NOTES）。
+
+spec: 1
+id: reg
+name: 注册表查询
+manifestVersion: 0.1.0
+appVersion: "10.0.26100"
+kind: system
+summary: 只读查询注册表键与值
+description: >-
+  只读地查询 Windows 注册表：列出一个键下的全部值、按名查某个值、查默认值、递归查询整棵子树、
+  按数据或名称过滤搜索。**本工具包只收录只读的 reg query** —— 会写注册表或写文件的
+  reg add / delete / copy / save / restore / load / unload / import / export 一律不收录。
+  读绝大多数键不需要管理员；HKLM\SECURITY 这类受保护的键普通用户读会得到「拒绝访问」（退出码 1）。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/reg-query
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 注册表, 只读, 查询]
+
+sources:
+  - title: reg 命令索引（Microsoft Learn）—— reg 的全部操作列表
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/reg
+    retrieved: "2026-10-01"
+    appliesTo: Windows 10 / 11 / Windows Server 2016-2025
+    note: >-
+      索引页列出 11 个操作（add / compare / copy / delete / export / import / load / query /
+      restore / save / unload）。本工具包只做 query；其余 10 个操作会写注册表或写文件，全部不做。
+  - title: reg query 官方参考 —— 语法、参数表、返回码、官方示例
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/reg-query
+    retrieved: "2026-10-01"
+    appliesTo: Windows 10 / 11
+    note: >-
+      官方语法行 reg query <keyname> [{/v <valuename> | /ve}] [/s] [/se <separator>] [/f <data>]
+      [{/k | /d}] [/c] [/e] [/t <Type>] [/z] [/reg:32] [/reg:64]。
+      Remarks 给出返回码 0 = Success、1 = Failure。本清单的字段依据全部来自这一页的参数表。
+  - title: 本机 reg.exe 自带的帮助输出（reg /? 与 reg query /?）
+    url: file:///%SystemRoot%/System32/reg.exe
+    retrieved: "2026-10-01"
+    appliesTo: Windows 11 26200 / reg.exe 文件版本 10.0.26100.8875
+    note: >-
+      两个帮助页都实跑：`reg /?` 退出 0、`reg query /?` 退出 0，都写 stdout。
+      帮助文本随控制台条件在中文（cp936）与英文（纯 ASCII）之间切换，两种都抓到了。
+      它是程序自带的官方文档，对本机这个版本更权威；与官方网页的唯一分歧（/t 是否含
+      REG_QWORD）按"只写两边都能对应的"处理，见 NOTES.md §7.1。
+
+locate:
+  executable: reg.exe
+  searchPaths:
+    - ${SystemRoot}\System32\reg.exe
+    - ${SystemRoot}\SysWOW64\reg.exe
+  notFoundHint: 找不到 reg.exe。它是 Windows 自带命令，正常情况下就在 C:\Windows\System32 下。
+
+runtime:
+  encoding: oem
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  usePseudoConsole: false
+
+# 退出码：官方 reg-query 的 Remarks 与 `reg /?` 都只列 0/1 两个码（"Except for REG COMPARE"）。
+# 实测结论：**1 这一个码同时代表"没找到"与"真失败"**，见 NOTES.md §5 的完整证据。
+exitCodes:
+  - code: 0
+    meaning: >-
+      成功。查询到结果，也包括"键存在但下面没有值/没有子键"这种空结果
+      （实测 `reg query HKLM\SAM` 与 `reg query HKCC` 都返回 0，只打印键名）。
+    severity: ok
+  - code: 1
+    meaning: >-
+      官方只给这一个码表示 Failure，但实测它同时覆盖两类完全不同的情形：
+      (a) **没找到** —— 键或值不存在（stderr「系统找不到指定的注册表项或值。」），
+          或 /f 搜索 0 命中（stdout 写「搜索结束: 找到 0 匹配。」而 stderr 为空）；
+      (b) **真失败** —— 语法错误、选项组合非法（stderr「无效语法。」）、
+          根键名写错（stderr「无效项名。」）、权限不足（stderr「拒绝访问。」）。
+      怎么区分：**看 stderr 与 stdout 落在哪个流上**，不要只看数字。详见 NOTES.md §5。
+      严重度定为 warning 而不是 error：本包里 1 最常见的成因是"没查到"（打错键名、搜索无命中），
+      把这种正常查询结论染成红色错误会误导用户；真失败的文本在输出区里看得很清楚。
+    severity: warning
+
+actions:
+
+  # ================================================================= 查询
+  - id: query-key
+    category: 查询
+    title: 列出一个键下的全部值
+    description: >-
+      列出指定注册表项**这一层**的全部值（名字、类型、数据），以及它的直接子项名。
+      这就是不带参数跑 `reg query <键>` 的结果。要往下递归请看「递归查询整棵子树」。
+    command: query
+    fields:
+      - id: keyName
+        label: 注册表项路径
+        type: text
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion
+        help: >-
+          完整路径，根键必须是 HKLM、HKCU、HKCR、HKU、HKCC 之一（实测 HKCR / HKCC 也可用）。
+          查远程机器要写成 \\计算机名\HKLM\... 的形式，且远程只支持 HKLM 与 HKU。
+          **名字里有空格不要自己加引号** —— 宿主按 argv 数组直接传参、不经过 shell，
+          手写的引号会被当成键名的一部分（见 NOTES.md §6.3）。
+        doc: official reg-query 参数表的 <keyname>（完整子键路径；远程写 \\<computername>\；只支持 HKLM/HKU）
+      - id: separator
+        label: REG_MULTI_SZ 的分隔符（/se）
+        type: text
+        style: separate
+        prefix: /se
+        group: 显示
+        advanced: true
+        placeholder: '例 #'
+        help: >-
+          官方说明：指定 REG_MULTI_SZ 数据字符串里的**单字符**分隔符，不给时用 \0。
+          实测长度不是 1 个字符（例如两个字符）或给空串都会「无效语法」并以 1 退出。
+          留空 = 不产生 /se（用默认的 \0）。
+        doc: official reg-query 参数表的 /se <separator>（单个字符；缺省为 \0）
+      - id: type
+        label: 只看某种值类型（/t）
+        type: enum
+        style: separate
+        prefix: /t
+        group: 显示
+        advanced: true
+        help: >-
+          官方参数表列的 6 种类型（本机 /? 还多一个 REG_QWORD，官方页没有，
+          按"只写两边都能对应的"口径**不收录**，见 NOTES.md §7.1）。
+          留空 = 不产生 /t（按官方说明＝搜所有类型）。
+        doc: official reg-query 参数表的 /t <Type>（REG_SZ / REG_MULTI_SZ / REG_EXPAND_SZ / REG_DWORD / REG_BINARY / REG_NONE）
+        values:
+          - value: ""
+            label: 不指定（所有类型）
+            isDefault: true
+          - value: REG_SZ
+            label: REG_SZ —— 字符串
+          - value: REG_EXPAND_SZ
+            label: REG_EXPAND_SZ —— 含环境变量的字符串
+          - value: REG_MULTI_SZ
+            label: REG_MULTI_SZ —— 多字符串
+          - value: REG_DWORD
+            label: REG_DWORD —— 32 位数字
+          - value: REG_BINARY
+            label: REG_BINARY —— 二进制
+          - value: REG_NONE
+            label: REG_NONE —— 无类型
+      - id: verbose
+        label: 显示类型的数字等值（/z）
+        type: bool
+        style: flag
+        prefix: /z
+        group: 显示
+        advanced: true
+        default: false
+        help: >-
+          官方原文：Specifies to include the numeric equivalent for the registry type in search results。
+          实测：加 /z 后类型列从 `REG_SZ` 变成 `REG_SZ (1)`。
+        doc: official reg-query 参数表的 /z（在结果里附上注册表类型的数字等值）
+      - id: view
+        label: 注册表视图（/reg:32 或 /reg:64）
+        type: enum
+        style: literal
+        switchBase: /reg
+        group: 视图
+        advanced: true
+        default: default
+        help: >-
+          64 位进程默认读 64 位视图。要看被 WOW6432Node 重定向的 32 位视图就选 /reg:32。
+          官方语法把它们写成并列的两个开关，本机 /? 写成 `/reg:32 | /reg:64`；
+          实测两个都给会「无效语法」并以 1 退出，所以这里做成三选一。
+          实测同一键在两个视图下的输出不同（5913 字节 vs 11962 字节）。
+        doc: official reg-query 参数表的 /reg:32 与 /reg:64
+        values:
+          - value: default
+            label: 不指定（用进程默认视图）
+            args: []
+            isDefault: true
+          - value: view32
+            label: 32 位视图（/reg:32）
+            args: ["/reg:32"]
+          - value: view64
+            label: 64 位视图（/reg:64）
+            args: ["/reg:64"]
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测本机 `reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion"` 输出 11962 字节、退出码 0。
+        值行形如「    CurrentVersion    REG_SZ    6.3」；键存在但没有值时只打印一行键名（退出码仍是 0）。
+    sources:
+      - title: reg query 官方参考 —— 语法与 <keyname> 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/reg-query
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10 / 11
+        note: >-
+          官方原文（本动作的形态）：Returns a list of the next tier of subkeys and entries that are
+          located under a specified subkey in the registry。官方示例 reg query HKLM\SOFTWARE /ve 与
+          reg query HKLM\Software\Microsoft\ResKit /v Version 都只用键名 + 一个开关。
+      - title: 本机 `reg query /?` 的真实输出
+        url: file:///%SystemRoot%/System32/reg.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / reg.exe 10.0.26100.8875
+        note: 语法行 REG QUERY KeyName [/v [ValueName] | /ve] [/s] [/f Data [/k] [/d] [/c] [/e]] [/t Type] [/z] [/se Separator] [/reg:32 | /reg:64]；退出码 0。
+    nextSteps:
+      - title: 查询上面列出的某一个具体值（/v）
+        action: query-value
+        when: '(?m)^\s{4}\S.*?\s{4}REG_[A-Z_]+'
+        reason: 上面每个值都能单独查；把值名填进「查询某个值」就不用翻整段输出
+      - title: 递归看这棵子树（输出可能很大）
+        action: query-recursive
+        reason: 这一层只列直接子项；要看整棵子树就改用递归查询
+    examples:
+      - title: 列出 Windows 版本键的全部值
+        args: ['query', 'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion']
+        expectExitCode: 0
+
+  # ================================================================= 查询
+  - id: query-recursive
+    category: 查询
+    title: 递归查询整棵子树（/s）
+    description: >-
+      从指定键往下**递归**列出所有子键与所有值（官方说法：like dir /s）。
+      ⚠ **输出可能非常大、也可能很慢**：递归根键（例如 HKLM 或 HKCU）会产生几 MB 到几十 MB 的文本，
+      请一定先缩到具体的小键上（例如 HKCU\Environment），或者改用「按数据或名称搜索」配合 /s 收窄。
+    command: query
+    fields:
+      - id: keyName
+        label: 注册表项路径
+        type: text
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 HKCU\Environment
+        help: >-
+          完整路径，根键必须是 HKLM、HKCU、HKCR、HKU、HKCC 之一。
+          名字里有空格不要自己加引号（宿主按 argv 数组传参，不经过 shell）。
+          ⚠ 尽量填**最具体**的键：/s 的作用范围就是这棵子树。
+        doc: official reg-query 参数表的 <keyname>
+      - id: recursive
+        label: 递归所有子键和值（/s）
+        type: bool
+        style: flag
+        prefix: /s
+        default: true
+        help: >-
+          官方原文：Specifies to query all subkeys and value names recursively；本机帮助写作
+          「循环查询所有子项和值(如 dir /s)」。本动作默认勾上（这就是它的用途）；
+          取消勾选就退化成「列出一个键下的全部值」。
+          ⚠ 递归大键（HKLM、HKCU、HKLM\SOFTWARE）会输出非常多：本机实测对一个只有 10 来个值、
+          带少量子项的小键 `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion /s` 也有 16 KB；
+          根键级别的递归没有实跑（按红线只在小键上递归），量级只会更大。
+        doc: official reg-query 参数表的 /s（递归查询所有子键与值名）
+      - id: separator
+        label: REG_MULTI_SZ 的分隔符（/se）
+        type: text
+        style: separate
+        prefix: /se
+        group: 显示
+        advanced: true
+        placeholder: '例 #'
+        help: 官方说明：REG_MULTI_SZ 数据字符串里的单字符分隔符，缺省 \0。长度不是 1 个字符会「无效语法」。留空 = 不产生 /se。
+        doc: official reg-query 参数表的 /se <separator>
+      - id: type
+        label: 只看某种值类型（/t）
+        type: enum
+        style: separate
+        prefix: /t
+        group: 显示
+        advanced: true
+        help: 官方参数表的 6 种类型。留空 = 不产生 /t（所有类型）。REG_QWORD 只有本机帮助一侧列了它，未收录，见 NOTES.md §7.1。
+        doc: official reg-query 参数表的 /t <Type>
+        values:
+          - value: ""
+            label: 不指定（所有类型）
+            isDefault: true
+          - value: REG_SZ
+            label: REG_SZ —— 字符串
+          - value: REG_EXPAND_SZ
+            label: REG_EXPAND_SZ —— 含环境变量的字符串
+          - value: REG_MULTI_SZ
+            label: REG_MULTI_SZ —— 多字符串
+          - value: REG_DWORD
+            label: REG_DWORD —— 32 位数字
+          - value: REG_BINARY
+            label: REG_BINARY —— 二进制
+          - value: REG_NONE
+            label: REG_NONE —— 无类型
+      - id: verbose
+        label: 显示类型的数字等值（/z）
+        type: bool
+        style: flag
+        prefix: /z
+        group: 显示
+        advanced: true
+        default: false
+        help: 官方原文：Specifies to include the numeric equivalent for the registry type in search results。
+        doc: official reg-query 参数表的 /z
+      - id: view
+        label: 注册表视图（/reg:32 或 /reg:64）
+        type: enum
+        style: literal
+        switchBase: /reg
+        group: 视图
+        advanced: true
+        default: default
+        help: 64 位进程默认读 64 位视图；要看 WOW6432Node 重定向后的 32 位视图选 /reg:32。两个都给会「无效语法」。
+        doc: official reg-query 参数表的 /reg:32 与 /reg:64
+        values:
+          - value: default
+            label: 不指定（用进程默认视图）
+            args: []
+            isDefault: true
+          - value: view32
+            label: 32 位视图（/reg:32）
+            args: ["/reg:32"]
+          - value: view64
+            label: 64 位视图（/reg:64）
+            args: ["/reg:64"]
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测小键递归：`reg query HKCU\Environment /s` 1449 字节 / 12 ms、退出码 0；
+        `reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion" /f Current /k /s` 16565 字节 / 285 ms、退出码 0。
+        ⚠ HKLM / HKCU 根级别的递归按红线**没有实跑**（会输出几十 MB），量级只是估计，见 NOTES.md §8。
+    sources:
+      - title: reg query 官方参考 —— /s 与官方示例
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/reg-query
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10 / 11
+        note: >-
+          官方原文：/s "Specifies to query all subkeys and value names recursively"；
+          官方示例 `reg query \\ABC\HKLM\Software\Microsoft\ResKit\Nt\Setup /s`（远程递归）。
+      - title: 本机 `reg query /?` 的真实输出
+        url: file:///%SystemRoot%/System32/reg.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / reg.exe 10.0.26100.8875
+        note: 本机帮助原文：/s 「循环查询所有子项和值(如 dir /s)」。
+    nextSteps:
+      - title: 缩小到某个子项再看
+        action: query-key
+        reason: 递归输出太大时，换成只看某一层会好读很多
+      - title: 改成按名称或数据搜索
+        action: query-search
+        reason: 想在整棵子树里找某个名字/数据，用 /f 配 /s 比人眼翻更省事
+    examples:
+      - title: 递归列出当前用户的环境变量键（小键，安全）
+        args: ['query', 'HKCU\Environment', '/s']
+        expectExitCode: 0
+
+  # ================================================================= 查询
+  - id: query-value
+    category: 查询
+    title: 查询某个命名的值（/v）
+    description: >-
+      按值名称查一个具体的注册表值，输出「键路径 / 值名 类型 数据」一行。
+      官方示例里最常用的一条（reg query HKLM\Software\Microsoft\ResKit /v Version）。
+    command: query
+    fields:
+      - id: keyName
+        label: 注册表项路径
+        type: text
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion
+        help: 完整路径，根键必须是 HKLM、HKCU、HKCR、HKU、HKCC 之一。名字里有空格不要自己加引号。
+        doc: official reg-query 参数表的 <keyname>
+      - id: valueName
+        label: 值名称（/v）
+        type: text
+        style: separate
+        prefix: /v
+        required: true
+        save: true
+        placeholder: 例 CurrentVersion
+        help: >-
+          官方说明：不给 /v 就返回该项的所有值名。**值名里有空格不用手动加引号**
+          （宿主按 argv 数组传参）—— 本机实测用中文带空格的值名 `华文中宋 (TrueType)` 查
+          HKLM\...\CurrentVersion\Fonts 成功、退出码 0。
+          ⚠ /v 与 /ve 互斥：实测两个都给会「无效语法」并以 1 退出。
+        doc: official reg-query 参数表的 /v <valuename>
+      - id: verbose
+        label: 显示类型的数字等值（/z）
+        type: bool
+        style: flag
+        prefix: /z
+        group: 显示
+        advanced: true
+        default: false
+        help: 官方原文：Specifies to include the numeric equivalent for the registry type in search results。
+        doc: official reg-query 参数表的 /z
+      - id: view
+        label: 注册表视图（/reg:32 或 /reg:64）
+        type: enum
+        style: literal
+        switchBase: /reg
+        group: 视图
+        advanced: true
+        default: default
+        help: 64 位进程默认读 64 位视图；要看 WOW6432Node 重定向后的 32 位视图选 /reg:32。
+        doc: official reg-query 参数表的 /reg:32 与 /reg:64
+        values:
+          - value: default
+            label: 不指定（用进程默认视图）
+            args: []
+            isDefault: true
+          - value: view32
+            label: 32 位视图（/reg:32）
+            args: ["/reg:32"]
+          - value: view64
+            label: 64 位视图（/reg:64）
+            args: ["/reg:64"]
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测成功：106 字节、退出码 0。实测失败（值不存在）：stdout 只有 4 字节空行、
+        stderr「系统找不到指定的注册表项或值。」、退出码 1。
+    sources:
+      - title: reg query 官方参考 —— /v 与官方示例
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/reg-query
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10 / 11
+        note: >-
+          官方原文：/v <valuename> "Specifies the registry value name that is to be queried. If omitted,
+          all value names for keyname are returned. Valuename for this parameter is optional if the /f
+          option is also used."；官方示例 reg query HKLM\Software\Microsoft\ResKit /v Version。
+      - title: 本机 `reg query /?` 的真实输出
+        url: file:///%SystemRoot%/System32/reg.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / reg.exe 10.0.26100.8875
+        note: 本机帮助原文：/v「具体的注册表项值的查询。如果省略，会查询该项的所有值。」
+    nextSteps:
+      - title: 看这个键下的全部值
+        action: query-key
+        reason: 只看一个值不过瘾时，列全这一层方便对照
+    examples:
+      - title: 查 Windows 的 CurrentVersion 值（官方示例形态）
+        args: ['query', 'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion', '/v', 'CurrentVersion']
+        expectExitCode: 0
+
+  # ================================================================= 查询
+  - id: query-default-value
+    category: 查询
+    title: 查询默认值（/ve）
+    description: >-
+      查询一个键的**默认值**（值名为空的那个，界面上显示成“(默认)”）。
+      官方示例：reg query HKLM\SOFTWARE /ve。
+    command: query
+    fields:
+      - id: keyName
+        label: 注册表项路径
+        type: text
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 HKLM\SOFTWARE
+        help: 完整路径，根键必须是 HKLM、HKCU、HKCR、HKU、HKCC 之一。名字里有空格不要自己加引号。
+        doc: official reg-query 参数表的 <keyname>
+      - id: defaultOnly
+        label: 查询默认值（/ve）
+        type: bool
+        style: flag
+        prefix: /ve
+        default: true
+        help: >-
+          官方原文：/ve "Runs a query for value names that are empty."；本机帮助写作
+          「查询默认值或空值名称(默认)」。本动作默认勾上（这就是它的用途）。
+          ⚠ /ve 与 /v 互斥：实测两个都给会「无效语法」并以 1 退出。
+          实测：默认值没设置时退出码仍为 0，数据列显示「(数值未设置)」。
+        doc: official reg-query 参数表的 /ve
+      - id: verbose
+        label: 显示类型的数字等值（/z）
+        type: bool
+        style: flag
+        prefix: /z
+        group: 显示
+        advanced: true
+        default: false
+        help: 官方原文：Specifies to include the numeric equivalent for the registry type in search results。
+        doc: official reg-query 参数表的 /z
+      - id: view
+        label: 注册表视图（/reg:32 或 /reg:64）
+        type: enum
+        style: literal
+        switchBase: /reg
+        group: 视图
+        advanced: true
+        default: default
+        help: 64 位进程默认读 64 位视图；要看 WOW6432Node 重定向后的 32 位视图选 /reg:32。
+        doc: official reg-query 参数表的 /reg:32 与 /reg:64
+        values:
+          - value: default
+            label: 不指定（用进程默认视图）
+            args: []
+            isDefault: true
+          - value: view32
+            label: 32 位视图（/reg:32）
+            args: ["/reg:32"]
+          - value: view64
+            label: 64 位视图（/reg:64）
+            args: ["/reg:64"]
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测 `reg query HKCU\Environment /ve` 输出 73 字节、退出码 0，
+        行内容为「    (默认)    REG_SZ    (数值未设置)」——默认值未设置也算成功。
+    sources:
+      - title: reg query 官方参考 —— /ve 与官方示例
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/reg-query
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10 / 11
+        note: >-
+          官方原文：/ve "Runs a query for value names that are empty."；
+          官方示例 `reg query HKLM\SOFTWARE /ve`（Display the value and data for value names of null
+          (default) under HKLM\SOFTWARE）。
+      - title: 本机 `reg query /?` 的真实输出
+        url: file:///%SystemRoot%/System32/reg.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / reg.exe 10.0.26100.8875
+        note: 本机帮助原文：/ve「查询默认值或空值名称(默认)」，并在示例里给了 REG QUERY HKLM\SOFTWARE /ve。
+    examples:
+      - title: 查 HKLM\SOFTWARE 的默认值（官方示例）
+        args: ['query', 'HKLM\SOFTWARE', '/ve']
+        expectExitCode: 0
+
+  # ================================================================= 搜索
+  - id: query-search
+    category: 搜索
+    title: 按数据或名称搜索（/f）
+    description: >-
+      在指定键里按「数据」或「项名」搜索一段文本或通配模式（官方默认模式是 *）。
+      官方示例：reg query HKLM /f SYSTEM /t REG_SZ /c /e、reg query HKCU /f 0F /d /t REG_BINARY。
+    command: query
+    fields:
+      - id: keyName
+        label: 注册表项路径
+        type: text
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion
+        help: 完整路径，根键必须是 HKLM、HKCU、HKCR、HKU、HKCC 之一。名字里有空格不要自己加引号。
+        doc: official reg-query 参数表的 <keyname>
+      - id: recursive
+        label: 连所有子键一起搜（/s）
+        type: bool
+        style: flag
+        prefix: /s
+        default: false
+        help: >-
+          官方示例 `reg query HKLM\SOFTWARE\Microsoft /s /f asp.net` 就是这么用的。
+          ⚠ 打开它 = 递归整棵子树，键选大了输出会非常多（见「递归查询整棵子树」动作的警告）。
+        doc: official reg-query 参数表的 /s
+      - id: pattern
+        label: 要搜索的数据或模式（/f）
+        type: text
+        style: separate
+        prefix: /f
+        required: true
+        save: true
+        placeholder: 例 asp.net 或 0F 或 *
+        help: >-
+          官方说明：不给就默认用通配符 *；字符串里有空格不用手动加引号（宿主按 argv 数组传参）。
+          实测带空格的数据也能匹配（`/f "Multiprocessor Free"` 命中 1 处、退出码 0）。
+        doc: official reg-query 参数表的 /f <data>
+      - id: searchScope
+        label: 搜索范围（{/k | /d}）
+        type: enum
+        style: literal
+        switchBase: /k
+        group: 过滤
+        default: any
+        help: >-
+          官方语法把这两个写成互斥的 {/k | /d}，所以这里做成三选一。官方对 /k 另有
+          "Must be used with /f" 的要求（本动作必然带 /f，满足）。
+          实测两个都给**不会**报参数错，而是输出「搜索结束: 找到 0 匹配。」并以 1 退出
+          —— 也就是说互斥是靠这里的枚举保证的，程序自己不拦。
+        doc: official reg-query 参数表的 {/k | /d}（/k = 只在项名中搜索、必须配 /f；/d = 只在数据中搜索）
+        values:
+          - value: any
+            label: 不限制（项名与数据都搜）
+            args: []
+            isDefault: true
+          - value: keyNames
+            label: 只在项名中搜索（/k）
+            args: ["/k"]
+          - value: data
+            label: 只在数据中搜索（/d）
+            args: ["/d"]
+      - id: caseSensitive
+        label: 区分大小写（/c）
+        type: bool
+        style: flag
+        prefix: /c
+        group: 过滤
+        default: false
+        help: >-
+          官方原文：Specifies that the query is case sensitive. By default, queries are not case sensitive。
+          实测：`/f CURRENT /c /e` 命中 0 处（因为值名是 CurrentBuild 这种大小写），退出码 1。
+        doc: official reg-query 参数表的 /c
+      - id: exactMatch
+        label: 只返回完全匹配（/e）
+        type: bool
+        style: flag
+        prefix: /e
+        group: 过滤
+        default: false
+        help: >-
+          官方原文：Specifies to return only exact matches. By default, all the matches are returned。
+          实测配 /f CurrentBuild /c /e 命中 1 处、退出码 0。
+        doc: official reg-query 参数表的 /e
+      - id: type
+        label: 只看某种值类型（/t）
+        type: enum
+        style: separate
+        prefix: /t
+        group: 过滤
+        advanced: true
+        help: 官方参数表的 6 种类型；官方示例 reg query HKLM /f SYSTEM /t REG_SZ /c /e 就是配 /t 用的。留空 = 不产生 /t。
+        doc: official reg-query 参数表的 /t <Type>
+        values:
+          - value: ""
+            label: 不指定（所有类型）
+            isDefault: true
+          - value: REG_SZ
+            label: REG_SZ —— 字符串
+          - value: REG_EXPAND_SZ
+            label: REG_EXPAND_SZ —— 含环境变量的字符串
+          - value: REG_MULTI_SZ
+            label: REG_MULTI_SZ —— 多字符串
+          - value: REG_DWORD
+            label: REG_DWORD —— 32 位数字
+          - value: REG_BINARY
+            label: REG_BINARY —— 二进制
+          - value: REG_NONE
+            label: REG_NONE —— 无类型
+      - id: verbose
+        label: 显示类型的数字等值（/z）
+        type: bool
+        style: flag
+        prefix: /z
+        group: 显示
+        advanced: true
+        default: false
+        help: 官方原文：Specifies to include the numeric equivalent for the registry type in search results。
+        doc: official reg-query 参数表的 /z
+      - id: view
+        label: 注册表视图（/reg:32 或 /reg:64）
+        type: enum
+        style: literal
+        switchBase: /reg
+        group: 视图
+        advanced: true
+        default: default
+        help: 64 位进程默认读 64 位视图；要看 WOW6432Node 重定向后的 32 位视图选 /reg:32。
+        doc: official reg-query 参数表的 /reg:32 与 /reg:64
+        values:
+          - value: default
+            label: 不指定（用进程默认视图）
+            args: []
+            isDefault: true
+          - value: view32
+            label: 32 位视图（/reg:32）
+            args: ["/reg:32"]
+          - value: view64
+            label: 64 位视图（/reg:64）
+            args: ["/reg:64"]
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测命中时退出码 0（`/f Current` 373 字节、6 处），末尾追加一行汇总
+        「搜索结束: 找到 N 匹配。」；**0 命中时退出码是 1 而 stderr 是空的**，
+        所以"1"在这里通常只是"没搜到"，不是出错（见 NOTES.md §5.2）。
+        ⚠ 这行汇总是**本地化**的：有控制台且输出代码页 65001 时它变成英文
+        「End of search: N match(es) found.」——所以不要拿它的措辞做正则判断。
+    sources:
+      - title: reg query 官方参考 —— /f /k /d /c /e /t 与官方示例
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/reg-query
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10 / 11
+        note: >-
+          官方语法 [{/v <valuename> | /ve}] [/s] [/se <separator>] [/f <data>] [{/k | /d}] [/c] [/e]
+          [/t <Type>]；官方原文：/f "Specifies the data or pattern to search for... If not specified,
+          a wildcard (*) is used as the search pattern."、/k "Must be used with /f."。
+          官方示例四条（HKLM /f SYSTEM /t REG_SZ /c /e、HKCU /f 0F /d /t REG_BINARY、
+          /s /f asp.net、/s /f asp.net /k）。
+      - title: 本机 `reg query /?` 的真实输出
+        url: file:///%SystemRoot%/System32/reg.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / reg.exe 10.0.26100.8875
+        note: 本机 HELP 把 /k /d /c /e 写成嵌在 /f 里的 `[/f Data [/k] [/d] [/c] [/e]]`；官方页把它们平铺。字段都存在，两处一致。
+    examples:
+      - title: 在 Windows 版本键里搜 Current（官方示例形态）
+        args: ['query', 'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion', '/f', 'Current']
+        expectExitCode: 0
+      - title: 只在数据里搜、只看 REG_SZ（官方 /d /t 形态）
+        args: ['query', 'HKCU\Environment', '/f', 'USERPROFILE', '/d']
+        expectExitCode: 0
+
+  # ================================================================= 搜索
+  - id: query-search-value-names
+    category: 搜索
+    title: 只在值名称中搜索（/v 配 /f）
+    description: >-
+      把搜索限制在**值名称**里（不带参数的 /v + /f）。
+      官方帮助原文：/v 的参数"只有与 /f 开关一起指定的情况下才是可选的，它指定只在值名称中搜索"。
+      要找"名字里含某个词的注册表值"就用这条。
+    command: query
+    fields:
+      - id: keyName
+        label: 注册表项路径
+        type: text
+        style: positional
+        required: true
+        save: true
+        placeholder: 例 HKCU\Environment
+        help: 完整路径，根键必须是 HKLM、HKCU、HKCR、HKU、HKCC 之一。名字里有空格不要自己加引号。
+        doc: official reg-query 参数表的 <keyname>
+      - id: valueNamesOnly
+        label: 只在值名称中搜索（/v，不带值名参数）
+        type: bool
+        style: flag
+        prefix: /v
+        default: true
+        help: >-
+          本机帮助原文：/v 的参数「只有与 /f 开关一起指定的情况下，此开关的参数才是可选的。
+          它指定只在值名称中搜索」；官方页也写 /v 的 valuename "is optional if the /f option is also used"。
+          **这个字段产生的就是那个「不带参数、后面紧跟 /f」的 /v**，所以它后面必须紧跟 /f ——
+          字段声明顺序已经保证这一点（见 NOTES.md §6.4）。
+          ⚠ 如果改成「查某个具名值」，请用「查询某个命名的值（/v）」动作，不要在 /v 上再补值名。
+        doc: official reg-query 参数表的 /v（valuename 在同时使用 /f 时可省略，此时只在值名中搜索）
+      - id: recursive
+        label: 连所有子键一起搜（/s）
+        type: bool
+        style: flag
+        prefix: /s
+        default: false
+        help: 官方示例 `reg query HKLM\SOFTWARE\Microsoft /s /f asp.net /k` 一类用法就是递归 + 过滤；打开它键选大了输出会很多。
+        doc: official reg-query 参数表的 /s
+      - id: pattern
+        label: 要搜索的值名模式（/f）
+        type: text
+        style: separate
+        prefix: /f
+        required: true
+        save: true
+        placeholder: 例 Path 或 OneDrive
+        help: 官方说明：不给就用通配符 *；字符串里有空格不用手动加引号（宿主按 argv 数组传参）。
+        doc: official reg-query 参数表的 /f <data>
+      - id: type
+        label: 只看某种值类型（/t）
+        type: enum
+        style: separate
+        prefix: /t
+        group: 过滤
+        advanced: true
+        help: 官方参数表的 6 种类型。留空 = 不产生 /t。
+        doc: official reg-query 参数表的 /t <Type>
+        values:
+          - value: ""
+            label: 不指定（所有类型）
+            isDefault: true
+          - value: REG_SZ
+            label: REG_SZ —— 字符串
+          - value: REG_EXPAND_SZ
+            label: REG_EXPAND_SZ —— 含环境变量的字符串
+          - value: REG_MULTI_SZ
+            label: REG_MULTI_SZ —— 多字符串
+          - value: REG_DWORD
+            label: REG_DWORD —— 32 位数字
+          - value: REG_BINARY
+            label: REG_BINARY —— 二进制
+          - value: REG_NONE
+            label: REG_NONE —— 无类型
+      - id: verbose
+        label: 显示类型的数字等值（/z）
+        type: bool
+        style: flag
+        prefix: /z
+        group: 显示
+        advanced: true
+        default: false
+        help: 官方原文：Specifies to include the numeric equivalent for the registry type in search results。
+        doc: official reg-query 参数表的 /z
+      - id: view
+        label: 注册表视图（/reg:32 或 /reg:64）
+        type: enum
+        style: literal
+        switchBase: /reg
+        group: 视图
+        advanced: true
+        default: default
+        help: 64 位进程默认读 64 位视图；要看 WOW6432Node 重定向后的 32 位视图选 /reg:32。
+        doc: official reg-query 参数表的 /reg:32 与 /reg:64
+        values:
+          - value: default
+            label: 不指定（用进程默认视图）
+            args: []
+            isDefault: true
+          - value: view32
+            label: 32 位视图（/reg:32）
+            args: ["/reg:32"]
+          - value: view64
+            label: 64 位视图（/reg:64）
+            args: ["/reg:64"]
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测 `reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion" /v /f Current` 退出码 0、
+        输出与 `reg query <同一个键> /f Current` 完全一致（373 字节）——本机这个键的值名里没有
+        非值名位置的匹配，所以两者结果相同；这同时**证明了「/v 紧跟 /f」这种无参数写法能被接受**。
+    sources:
+      - title: reg query 官方参考 —— /v 与 /f 的组合
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/reg-query
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10 / 11
+        note: >-
+          官方原文：/v <valuename> "Valuename for this parameter is optional if the /f option is also used."；
+          /f "Specifies the data or pattern to search for."。
+      - title: 本机 `reg query /?` 的真实输出
+        url: file:///%SystemRoot%/System32/reg.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / reg.exe 10.0.26100.8875
+        note: 本机帮助原文：/v 的「参数只有在与 /f 开关一起指定时才是可选的。它指定只在值名称中搜索。」
+    examples:
+      - title: 只在值名里搜 Current（/v 配 /f）
+        args: ['query', 'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion', '/v', '/f', 'Current']
+        expectExitCode: 0
+
+  # ================================================================= 帮助
+  - id: query-help
+    category: 帮助
+    title: 查看 reg query 的用法与开关一览（reg query /?）
+    description: >-
+      reg 没有 --version 之类的版本开关，`reg query /?` 是它自带的、只讲 query 的用法输出。
+      本工具包把它原样摆出来，方便对照官方文档核对每个开关。
+    command: query
+    commandArgs: ["/?"]
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测退出码 **0**（与 netstat / ipconfig 那种"帮助返回非 0"不同，reg 的帮助是 0）。
+        帮助文本随控制台条件变化：无控制台时是中文（本机 2282 字节、cp936），
+        继承 65001 控制台时是英文（3015 字节、纯 ASCII）。
+    sources:
+      - title: 本机 `reg query /?` 的真实输出
+        url: file:///%SystemRoot%/System32/reg.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / reg.exe 10.0.26100.8875
+        note: >-
+          两页帮助都实跑：`reg /?` 与 `reg query /?` 都写 stdout、退出码都是 0。
+          `reg /?` 里写明了返回码约定「0 - Successful / 1 - Failed」。
+      - title: reg query 官方参考 —— /? 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/reg-query
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10 / 11
+        note: 官方参数表最后一行：/? "Displays help at the command prompt."。
+    examples:
+      - title: 查看 reg query 的用法
+        args: ['query', '/?']
+        expectExitCode: 0

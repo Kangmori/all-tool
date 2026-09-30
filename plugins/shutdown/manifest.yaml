@@ -1,0 +1,822 @@
+# yaml-language-server: $schema=../../docs/spec/manifest-v1.schema.json
+#
+# shutdown —— Windows 自带的关机/重启工具（C:\Windows\System32\shutdown.exe）。
+#
+# ==================== 本包的红线：除 /? 之外一个动作都不由宿主执行 ====================
+# shutdown 的每一个动词（/s 关机、/sg 关机+自动登录、/r 重启、/g 完全重启、
+# /h 休眠、/l 注销、/p 直接断电式关闭、/o 重启进高级启动、/i 远程关机界面）
+# 都会立刻改变这台机器的运行状态，**可能丢掉用户没保存的工作**。
+# 连 /a（取消关机）也不例外：万一用户真的挂着一个关机计划，替他把 /a 跑掉就是副作用。
+#
+# 所以本包按项目既定做法（见 docs/spec/manifest-v1.md §2.6 的 execution: info，
+# 以及 plugins/diskpart 对 clean / format 的处理）：
+#   **除 help（shutdown /?）之外，全部动作 execution: info** ——
+#   宿主不执行，只把完整命令行摊开、给解释、可复制、可在终端中打开，由用户自己回车。
+# 这与"极高风险只给信息、不代为执行"是同一条口径。
+#
+# ==================== 参数知识来源 ====================
+# 1) 官方文档（Microsoft Learn）：
+#      https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/shutdown
+#    实测 HTTP 200，语法行 + 参数表 + 原因码表 + 5 个官方示例，本清单字段依据全部来自该页参数表。
+# 2) 本机 `shutdown /?` 的真实输出（两种语言/编码条件都抓到了）。
+#    与官方页对不上的地方，见 NOTES.md §7：
+#      (a) 本机帮助的语法行里有一个 [/soft]，**官方页与帮助正文都没有说明它做什么**
+#          → 按 R1「不发明参数」不收录，只记进 NOTES。
+#      (b) 本机帮助正文第一行明确写「No args  Display help. This is the same as typing /?.」
+#          —— 官方页**没有**这句（这是"不带参数会怎样"的权威出处）。
+#      (c) 官方页有一句"必须被授予 Shut down the system 用户权限"，本机帮助没有。
+#
+# ==================== 编码（实测，本包特有） ====================
+# **oem（本机 cp936）**。判定依据见 NOTES.md §4：本机帮助是中文，在"无控制台"条件
+# （ProcessStartInfo + CreateNoWindow=true + 重定向，= 宿主条件）下原始字节以
+# d3 c3 b7 a8 开头 = cp936 的「用法」，严格 UTF-8 解码**失败**。
+# ⚠ 同一台机器、同一条 `shutdown /?`，输出会随控制台条件整份变化：
+#     无控制台（宿主条件）            → 中文、cp936、3222 字节
+#     全新控制台（默认代码页 936）    → 中文、cp936、3222 字节（与上面逐字节相同）
+#     控制台输出代码页 65001          → **退回英文资源、纯 ASCII、4414 字节**
+#   所以"这条命令是什么编码"必须在写清控制台条件的前提下说；本清单按宿主条件写 oem。
+#
+# ==================== 退出码（实测） ====================
+# 官方页**完全没有退出码章节**（已逐条核对）。下面两条全部来自实测，见 NOTES.md §5。
+#
+# 版本：Windows 自带命令没有 --version 开关，故不写 versionArgs/versionPattern/minVersion（R1）。
+#       exe 文件版本实测 10.0.26100.8875（读 VersionInfo；规范无此能力，只记进 NOTES）。
+
+spec: 1
+id: shutdown
+name: 关机与重启
+manifestVersion: 0.1.0
+appVersion: "10.0.26100"
+kind: dangerous
+summary: 关机、重启、注销与休眠（只给命令，不代执行）
+description: >-
+  关闭、重启、休眠、注销这台（或远程）计算机，并可以附带超时秒数、注释、原因代码与强制关闭选项。
+  **本工具包不会替你执行其中任何一条**：除「查看用法」外，所有动作都是 execution: info ——
+  界面只把完整命令行拼好、摊开给你看，可复制、可在终端中打开，回车由你自己按。
+  理由：这些动词会立刻改变机器状态、可能丢掉你还没保存的工作；连取消关机的 /a 也不替你做，
+  因为万一你正挂着一个关机计划，替你取消掉同样是副作用。
+homepage: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/shutdown
+license: 随 Windows 操作系统分发（微软最终用户许可协议）
+tags: [windows, 自带命令, 关机, 重启, 注销, 休眠, 高风险]
+
+sources:
+  - title: shutdown 官方参考（Microsoft Learn）—— 语法、参数表、原因码表、官方示例
+    url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/shutdown
+    retrieved: "2026-10-01"
+    appliesTo: Windows 10 / 11 / Windows Server 2016-2025 / Azure Local 2311.2+
+    note: >-
+      官方语法 shutdown [/i | /l | /s | /sg | /r | /g | /a | /p | /h | /e | /o] [/hybrid] [/fw] [/f]
+      [/m \\computer][/t xxx][/d [p|u:]xx:yy [/c "comment"]]。
+      该页**没有退出码章节**，也**没有**"不带参数会显示帮助"的说明（后者只有本机帮助有）。
+  - title: 本机 shutdown.exe 自带的帮助输出（shutdown /? 与不带参数）
+    url: file:///%SystemRoot%/System32/shutdown.exe
+    retrieved: "2026-10-01"
+    appliesTo: Windows 11 26200 / shutdown.exe 文件版本 10.0.26100.8875
+    note: >-
+      帮助正文第一行就是「No args  Display help. This is the same as typing /?.」
+      —— 这是"不带参数不会关机"的权威依据（本机帮助即程序自带的官方文档）。
+      帮助里还附有这台机器上的关机原因代码表（Type / Major / Minor / Title）。
+      帮助的语法行比官方页多一个 [/soft]，两处都没有它的说明，不收录。
+
+locate:
+  executable: shutdown.exe
+  searchPaths:
+    - ${SystemRoot}\System32\shutdown.exe
+    - ${SystemRoot}\SysWOW64\shutdown.exe
+  notFoundHint: 找不到 shutdown.exe。它是 Windows 自带命令，正常情况下就在 C:\Windows\System32 下。
+
+runtime:
+  encoding: oem
+  useShell: false
+  requiresAdmin: false
+  workingDirectory: inherit
+  timeoutSeconds: 0
+  preventConcurrentRuns: false
+  usePseudoConsole: false
+
+# 退出码：官方页没有章节 → 下面两条全部实测（见 NOTES.md §5）。
+# 实测条件写清楚：本包不执行任何动词，凡涉及"真的去关机"的路径**没有也无法实测**。
+exitCodes:
+  - code: 0
+    meaning: >-
+      成功。实测命中这一码的是**不带参数运行**：它显示帮助并返回 0
+      （帮助原文：No args "Display help. This is the same as typing /?"）。
+      本包会把这一条讲清楚，但**没有**把它做成动作 —— 它的输出与 /? 逐字节相同（见 NOTES.md §5.1）。
+    severity: ok
+  - code: 1
+    meaning: >-
+      实测三类都返回 1：(a) `shutdown /?` 请求帮助；(b) 无法识别的开关（例如 /zzz）；
+      (c) 非法的参数组合（例如把 /l 与别的动词一起用）。
+      三类都以"打印用法"结束，stderr 为空。
+      严重度定为 warning 而不是 error：本包**唯一会真跑的动作就是 /?**，把它染成红色错误会误导用户。
+      ⚠ 真正去关机/重启时的失败码（例如权限不足）**没有实测**，因为本包不执行任何动词。
+    severity: warning
+
+actions:
+
+  # ================================================================= 帮助（本包唯一会由宿主执行的动作）
+  - id: help
+    category: 帮助
+    title: 查看用法与开关一览（shutdown /?）
+    description: >-
+      显示 shutdown 的完整用法：全部动词、全部开关、以及**这台机器上已定义的关机原因代码表**
+      （Type / Major / Minor / Title）——填「关机原因代码（/d）」时就照这张表抄。
+      这也是本工具包里**唯一会由宿主真正执行**的动作。
+    command: ""
+    commandArgs: ["/?"]
+    execution: run
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+      resultNote: >-
+        实测退出码是 **1**（帮助输出也是这个码），输出写 stdout、stderr 为空。
+        输出内容随控制台条件整份变化：无控制台（宿主条件）时是中文 cp936、3222 字节；
+        控制台输出代码页为 65001 时退回英文、纯 ASCII、4414 字节。
+    sources:
+      - title: 本机 `shutdown /?` 的真实输出
+        url: file:///%SystemRoot%/System32/shutdown.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / shutdown.exe 10.0.26100.8875
+        note: >-
+          实测退出码 1、stdout 3222 字节（中文 cp936，无控制台条件）。
+          帮助正文第一行「No args  Display help. This is the same as typing /?.」
+          与官方页的 /? 参数（Displays help at the command prompt, including a list of the major and
+          minor reasons that are defined on your local computer）对应。
+      - title: shutdown 官方参考 —— /? 参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/shutdown
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10 / 11
+        note: 官方参数表最后一行：/? "Displays help at the command prompt, including a list of the major and minor reasons that are defined on your local computer."。
+    examples:
+      - title: 查看 shutdown 的用法
+        args: ["/?"]
+        expectExitCode: 1
+
+  # ================================================================= 关机
+  - id: shutdown
+    category: 关机
+    title: 关闭计算机（/s）
+    description: >-
+      **会关机**：立即（或等 /t 指定的秒数后）关闭这台计算机。
+      **本工具包不会替你执行它**（execution: info）—— 命令拼好放在下面，请复制到终端里自己回车。
+      不填「等待秒数（/t）」时，Windows 的默认等待是 **30 秒**。
+    command: ""
+    commandArgs: ["/s"]
+    execution: info
+    danger: destructive
+    confirmText: >-
+      这会关闭计算机（官方原文：Shuts down the computer），未保存的工作可能丢失。
+      本工具包不会代你执行：只在下面显示完整命令，由你自己复制到终端里回车。
+    fields:
+      - id: hybrid
+        label: 关机并准备快速启动（/hybrid）
+        type: bool
+        style: flag
+        prefix: /hybrid
+        group: 关机方式
+        default: false
+        help: >-
+          官方与帮助一致：关机并让系统准备好"快速启动"。官方注明**必须与 /s 一起用**
+          （本动作就是用 /s 的，满足）。
+        doc: official 参数表的 /hybrid（Shuts down the device and prepares it for fast startup；must be used with /s）
+      - id: firmware
+        label: 下次启动进固件界面（/fw）
+        type: bool
+        style: flag
+        prefix: /fw
+        group: 关机方式
+        default: false
+        help: >-
+          官方原文：Combining this option with a shutdown option causes the next restart to go to the
+          firmware user interface。若想改主意，可以用 /a 配 /fw 清除挂起的"下次进固件界面"。
+        doc: official 参数表的 /fw
+      - id: force
+        label: 强制关闭程序、不提醒（/f）
+        type: bool
+        style: flag
+        prefix: /f
+        default: false
+        help: >-
+          官方对 /f 有一句 Caution：Using the /f option might result in loss of unsaved data。
+          官方另注：**/t 给了大于 0 的值时会隐含 /f**（本机帮助也写了这一句）。
+        doc: official 参数表的 /f（含 Caution；官方注：/t 大于 0 时隐含 /f）
+      - id: target
+        label: 目标计算机（/m）
+        type: text
+        style: separate
+        prefix: /m
+        group: 目标
+        advanced: true
+        placeholder: 例 \\MyServer
+        help: >-
+          官方原文：Specifies the target computer；写法是 \\计算机名。
+          官方另注：/l 不能与 /m 或 /d 一起用（所以「注销」动作里没有这个字段）。
+          **本包不执行这条命令，因此这个字段没有实测**，见 NOTES.md §8。
+        doc: official 参数表的 /m <\\computername>
+      - id: timeout
+        label: 关机前等待秒数（/t）
+        type: number
+        style: separate
+        prefix: /t
+        group: 时间
+        placeholder: 例 60
+        help: >-
+          官方与帮助一致：合法范围 0-315360000 秒（10 年），**默认 30 秒**；大于 0 时会隐含 /f。
+          ⚠ **留空 = 用默认的 30 秒** —— 不要以为"什么都不填"就等于不管机；想立刻关机要显式填 0。
+        doc: official 参数表的 /t <xxx>（合法范围 0-315360000，默认 30；大于 0 时隐含 /f）
+      - id: reason
+        label: 关机原因代码（/d）
+        type: text
+        style: separate
+        prefix: /d
+        group: 原因
+        advanced: true
+        placeholder: 例 p:4:1
+        help: >-
+          官方说明的形态是 [p|u:]xx:yy：p 表示计划内、u 表示用户自定义（都不写＝非计划）；
+          xx 是主原因码（小于 256 的正整数）、yy 是次原因码（小于 65536）。
+          「查看用法」动作的输出末尾就带着**这台机器**已定义的原因表，照抄里面的数字即可
+          （例如 U 0 0 = Other (Unplanned)、E P 1 1 = Hardware: Maintenance (Planned)）。
+          官方另注：原因代码要先在目标机器上定义过，否则"关机事件跟踪器"记不下正确的原因文本。
+        doc: official 参数表的 /d（p 计划内、u 用户自定义、xx 主原因码小于 256、yy 次原因码小于 65536）
+      - id: eventTracker
+        label: 记录意外关机的原因（/e）
+        type: bool
+        style: flag
+        prefix: /e
+        group: 原因
+        advanced: true
+        default: false
+        help: >-
+          官方原文：Enables you to document the reason for an unexpected shutdown of a computer in the
+          Shutdown Event Tracker。官方示例把它与 /s /t /d /c 一起用。
+        doc: official 参数表的 /e（在"关机事件跟踪器"里记录意外关机的原因）
+      - id: comment
+        label: 注释（/c）
+        type: text
+        style: separate
+        prefix: /c
+        group: 原因
+        advanced: true
+        placeholder: 例 计划内维护
+        help: >-
+          官方说明：最多 512 个字符，并**要求用双引号括起来**。
+          界面里**不要自己写引号** —— 宿主按 argv 数组直接传参、不经过 shell，
+          手写的引号会变成注释内容的一部分（帮助与官方示例里的 /c "comment" 是命令行写法，不必照抄）。
+        doc: official 参数表的 /c <comment>（最多 512 个字符，需用双引号括起来）
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: shutdown 官方参考 —— /s 与全部附属参数
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/shutdown
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10 / 11
+        note: >-
+          官方原文：/s "Shuts down the computer."。附属参数（/hybrid /fw /f /m /t /d /c /e）
+          都在同一页的参数表里；官方示例 shutdown.exe /s /t 600 /d p:0:0 /e /c "Scheduled maintenance"。
+      - title: 本机 `shutdown /?` 的真实输出
+        url: file:///%SystemRoot%/System32/shutdown.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / shutdown.exe 10.0.26100.8875
+        note: 本机帮助逐条对得上官方页（/s、/hybrid 必须配 /s、/fw、/f、/m、/t 默认 30、/d、/e、/c）。差异只有语法行多出的 [/soft]，未收录。
+
+  # ================================================================= 关机
+  - id: shutdown-signon
+    category: 关机
+    title: 关闭计算机并在下次启动时自动登录（/sg）
+    description: >-
+      **会关机**：与 /s 一样关闭计算机，区别是——如果启用了"自动重启登录"，
+      下一次启动时会自动登录并锁定上次的交互用户，登录后重启那些已注册的应用程序。
+      **本工具包不会替你执行它**（execution: info），请复制到终端里自己回车。
+    command: ""
+    commandArgs: ["/sg"]
+    execution: info
+    danger: destructive
+    confirmText: >-
+      这会关闭计算机，并安排下次启动自动登录那个用户（官方原文：On the next boot, if Automatic
+      Restart Sign-On is enabled, automatically sign in and lock last interactive user）。
+      "自动登录"本身就是一个需要你自己判断的安全决定。本工具包不会代你执行。
+    fields:
+      - id: firmware
+        label: 下次启动进固件界面（/fw）
+        type: bool
+        style: flag
+        prefix: /fw
+        group: 关机方式
+        default: false
+        help: 官方原文：Combining this option with a shutdown option causes the next restart to go to the firmware user interface。
+        doc: official 参数表的 /fw
+      - id: force
+        label: 强制关闭程序、不提醒（/f）
+        type: bool
+        style: flag
+        prefix: /f
+        default: false
+        help: 官方对 /f 有一句 Caution：Using the /f option might result in loss of unsaved data。官方另注：/t 大于 0 时隐含 /f。
+        doc: official 参数表的 /f
+      - id: target
+        label: 目标计算机（/m）
+        type: text
+        style: separate
+        prefix: /m
+        group: 目标
+        advanced: true
+        placeholder: 例 \\MyServer
+        help: 官方原文：Specifies the target computer；写法是 \\计算机名。**本包不执行，故未实测**。
+        doc: official 参数表的 /m <\\computername>
+      - id: timeout
+        label: 关机前等待秒数（/t）
+        type: number
+        style: separate
+        prefix: /t
+        group: 时间
+        placeholder: 例 60
+        help: >-
+          官方与帮助一致：合法范围 0-315360000 秒，**默认 30 秒**；大于 0 时隐含 /f。
+          ⚠ 留空 = 用默认的 30 秒。
+        doc: official 参数表的 /t <xxx>（0-315360000，默认 30）
+      - id: reason
+        label: 关机原因代码（/d）
+        type: text
+        style: separate
+        prefix: /d
+        group: 原因
+        advanced: true
+        placeholder: 例 p:4:1
+        help: 形态 [p|u:]xx:yy（p 计划内、u 用户自定义；xx 主原因码小于 256、yy 次原因码小于 65536）。数字照抄「查看用法」输出末尾的原因表。
+        doc: official 参数表的 /d
+      - id: eventTracker
+        label: 记录意外关机的原因（/e）
+        type: bool
+        style: flag
+        prefix: /e
+        group: 原因
+        advanced: true
+        default: false
+        help: 官方原文：Enables you to document the reason for an unexpected shutdown of a computer in the Shutdown Event Tracker。
+        doc: official 参数表的 /e
+      - id: comment
+        label: 注释（/c）
+        type: text
+        style: separate
+        prefix: /c
+        group: 原因
+        advanced: true
+        placeholder: 例 计划内维护
+        help: 官方说明：最多 512 个字符，并要求用双引号括起来。界面里不要自己写引号（宿主按 argv 数组传参、不经过 shell）。
+        doc: official 参数表的 /c <comment>（最多 512 个字符）
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: shutdown 官方参考 —— /sg
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/shutdown
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10 / 11
+        note: >-
+          官方原文：/sg "Shuts down the computer. On the next boot, if Automatic Restart Sign-On is
+          enabled, the device automatically signs in and locks based on the last interactive user.
+          After sign in, it restarts any registered applications."。
+      - title: 本机 `shutdown /?` 的真实输出
+        url: file:///%SystemRoot%/System32/shutdown.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / shutdown.exe 10.0.26100.8875
+        note: 本机帮助对 /sg 的说明与官方页逐条对应（自动登录并锁定上次交互用户、登录后重启已注册的应用程序）。
+
+  # ================================================================= 关机
+  - id: power-off
+    category: 关机
+    title: 立即关闭本机、不给超时也不给警告（/p）
+    description: >-
+      **会立刻关机**：关闭**本地**计算机，**没有超时、没有警告**。
+      官方注明它只能与 /d 或 /f 一起用。
+      **本工具包不会替你执行它**（execution: info）—— 这是最"猛"的一条，请复制到终端里自己回车。
+    command: ""
+    commandArgs: ["/p"]
+    execution: info
+    danger: destructive
+    confirmText: >-
+      官方原文：Turns off the local computer only (not a remote computer) with no time-out period or
+      warning。没有超时就没有"改主意"的窗口（/a 也救不回来），未保存的工作会丢。
+      本工具包不会代你执行。
+    fields:
+      - id: force
+        label: 强制关闭程序、不提醒（/f）
+        type: bool
+        style: flag
+        prefix: /f
+        default: false
+        help: >-
+          官方说明（/p 那段）：You can use /p only with /d or /f options。
+          官方对 /f 另有一句 Caution：Using the /f option might result in loss of unsaved data。
+        doc: official 参数表的 /p（Can be used with /d and /f options）与 /f
+      - id: reason
+        label: 关机原因代码（/d）
+        type: text
+        style: separate
+        prefix: /d
+        group: 原因
+        advanced: true
+        placeholder: 例 p:4:1
+        help: 官方说明（/p 那段）：Can be used with /d and /f options。形态 [p|u:]xx:yy，数字照抄「查看用法」输出末尾的原因表。
+        doc: official 参数表的 /p（Can be used with /d and /f options）与 /d
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: shutdown 官方参考 —— /p
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/shutdown
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10 / 11
+        note: >-
+          官方原文：/p "Turns off the local computer only (not a remote computer) with no time-out
+          period or warning. You can use /p only with /d or /f."；并注明不支持电源关闭功能的机器上
+          它会关机但电源仍开着。
+      - title: 本机 `shutdown /?` 的真实输出
+        url: file:///%SystemRoot%/System32/shutdown.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / shutdown.exe 10.0.26100.8875
+        note: 本机帮助原文：/p「关闭本地计算机，没有超时或警告。可以与 /d 和 /f 选项一起使用。」——与官方页一致。
+
+  # ================================================================= 重启
+  - id: restart
+    category: 重启
+    title: 重启计算机（/r）
+    description: >-
+      **会重启**：完全关闭并重新启动这台计算机。
+      **本工具包不会替你执行它**（execution: info）—— 请复制到终端里自己回车。
+      不填「等待秒数（/t）」时默认等待 30 秒。
+    command: ""
+    commandArgs: ["/r"]
+    execution: info
+    danger: destructive
+    confirmText: >-
+      这会重启计算机（官方原文：Restarts the computer after shutdown），未保存的工作可能丢失。
+      本工具包不会代你执行。
+    fields:
+      - id: firmware
+        label: 下次启动进固件界面（/fw）
+        type: bool
+        style: flag
+        prefix: /fw
+        group: 重启方式
+        default: false
+        help: 官方原文：Combining this option with a shutdown option causes the next restart to go to the firmware user interface。想改主意可以用 /a 配 /fw 清除挂起的固件引导。
+        doc: official 参数表的 /fw
+      - id: force
+        label: 强制关闭程序、不提醒（/f）
+        type: bool
+        style: flag
+        prefix: /f
+        default: false
+        help: 官方对 /f 有一句 Caution：Using the /f option might result in loss of unsaved data。官方示例 shutdown /r /t 60 /c "..." /f /d p:4:1 就是这么配的。
+        doc: official 参数表的 /f
+      - id: target
+        label: 目标计算机（/m）
+        type: text
+        style: separate
+        prefix: /m
+        group: 目标
+        advanced: true
+        placeholder: 例 \\MyServer
+        help: 官方原文：Specifies the target computer；写法是 \\计算机名。官方示例 shutdown /r /m \\myremoteserver /t 60 /c "..." /f /d p:4:1。**本包不执行，故未实测**。
+        doc: official 参数表的 /m <\\computername>
+      - id: timeout
+        label: 重启前等待秒数（/t）
+        type: number
+        style: separate
+        prefix: /t
+        group: 时间
+        placeholder: 例 60
+        help: >-
+          官方与帮助一致：合法范围 0-315360000 秒，**默认 30 秒**；大于 0 时隐含 /f。
+          ⚠ 留空 = 用默认的 30 秒。
+        doc: official 参数表的 /t <xxx>（0-315360000，默认 30）
+      - id: reason
+        label: 重启原因代码（/d）
+        type: text
+        style: separate
+        prefix: /d
+        group: 原因
+        advanced: true
+        placeholder: 例 p:4:1
+        help: >-
+          形态是 [p|u:]xx:yy（p 计划内、u 用户自定义；xx 主原因码小于 256、yy 次原因码小于 65536）。
+          官方示例用的就是 /d p:4:1，即 Application: Maintenance (Planned)。
+          数字照抄「查看用法」输出末尾的原因表。
+        doc: official 参数表的 /d
+      - id: eventTracker
+        label: 记录意外关机/重启的原因（/e）
+        type: bool
+        style: flag
+        prefix: /e
+        group: 原因
+        advanced: true
+        default: false
+        help: 官方示例 shutdown /r /t 300 /e /c "Security Update" /m \\myremoteserver 用的就是它。
+        doc: official 参数表的 /e
+      - id: comment
+        label: 注释（/c）
+        type: text
+        style: separate
+        prefix: /c
+        group: 原因
+        advanced: true
+        placeholder: 例 Reconfiguring myapp.exe
+        help: 官方说明：最多 512 个字符，并要求用双引号括起来。界面里不要自己写引号（宿主按 argv 数组传参、不经过 shell）。
+        doc: official 参数表的 /c <comment>（最多 512 个字符）
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: shutdown 官方参考 —— /r 与官方示例
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/shutdown
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10 / 11
+        note: >-
+          官方原文：/r "Restarts the computer after shutdown."。官方示例二条：
+          shutdown /r /t 60 /c "Reconfiguring myapp.exe" /f /d p:4:1 与
+          shutdown /r /m \\myremoteserver /t 60 /c "Reconfiguring myapp.exe" /f /d p:4:1。
+      - title: 本机 `shutdown /?` 的真实输出
+        url: file:///%SystemRoot%/System32/shutdown.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / shutdown.exe 10.0.26100.8875
+        note: 本机帮助原文：/r「完全关闭并重启计算机。」；字段与官方页逐条对应。
+
+  # ================================================================= 重启
+  - id: restart-full
+    category: 重启
+    title: 完全关闭并重启（/g）
+    description: >-
+      **会重启**：完全关闭并重新启动；重启后如果启用了"自动重启登录"，会自动登录并锁定上次的交互用户，
+      登录后重启那些已注册的应用程序。官方说明它与 /r 的区别就在"完全关闭"与这套自动登录行为。
+      **本工具包不会替你执行它**（execution: info）。
+    command: ""
+    commandArgs: ["/g"]
+    execution: info
+    danger: destructive
+    confirmText: >-
+      这会完全关闭并重启计算机（官方原文：Fully shuts down and restarts the computer），
+      并可能安排自动登录上次的交互用户。本工具包不会代你执行。
+    fields:
+      - id: force
+        label: 强制关闭程序、不提醒（/f）
+        type: bool
+        style: flag
+        prefix: /f
+        default: false
+        help: 官方对 /f 有一句 Caution：Using the /f option might result in loss of unsaved data。
+        doc: official 参数表的 /f
+      - id: target
+        label: 目标计算机（/m）
+        type: text
+        style: separate
+        prefix: /m
+        group: 目标
+        advanced: true
+        placeholder: 例 \\MyServer
+        help: 官方原文：Specifies the target computer；写法是 \\计算机名。**本包不执行，故未实测**。
+        doc: official 参数表的 /m <\\computername>
+      - id: timeout
+        label: 重启前等待秒数（/t）
+        type: number
+        style: separate
+        prefix: /t
+        group: 时间
+        placeholder: 例 60
+        help: >-
+          官方与帮助一致：合法范围 0-315360000 秒，**默认 30 秒**；大于 0 时隐含 /f。
+          ⚠ 留空 = 用默认的 30 秒。
+        doc: official 参数表的 /t <xxx>（0-315360000，默认 30）
+      - id: reason
+        label: 重启原因代码（/d）
+        type: text
+        style: separate
+        prefix: /d
+        group: 原因
+        advanced: true
+        placeholder: 例 p:4:1
+        help: 形态 [p|u:]xx:yy；数字照抄「查看用法」输出末尾的原因表。
+        doc: official 参数表的 /d
+      - id: eventTracker
+        label: 记录意外关机/重启的原因（/e）
+        type: bool
+        style: flag
+        prefix: /e
+        group: 原因
+        advanced: true
+        default: false
+        help: 官方原文：Enables you to document the reason for an unexpected shutdown of a computer in the Shutdown Event Tracker。
+        doc: official 参数表的 /e
+      - id: comment
+        label: 注释（/c）
+        type: text
+        style: separate
+        prefix: /c
+        group: 原因
+        advanced: true
+        placeholder: 例 计划内维护
+        help: 官方说明：最多 512 个字符，并要求用双引号括起来。界面里不要自己写引号（宿主按 argv 数组传参、不经过 shell）。
+        doc: official 参数表的 /c <comment>（最多 512 个字符）
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: shutdown 官方参考 —— /g
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/shutdown
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10 / 11
+        note: >-
+          官方原文：/g "Fully shuts down and restarts the computer. On restart, if Automatic Restart
+          Sign-On is enabled, the device automatically signs in and locks based on the last interactive
+          user. After sign in, it restarts any registered applications."。
+      - title: 本机 `shutdown /?` 的真实输出
+        url: file:///%SystemRoot%/System32/shutdown.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / shutdown.exe 10.0.26100.8875
+        note: 本机帮助对 /g 的说明与官方页一致（完全关闭并重启、自动登录并锁定上次交互用户、重启已注册的应用程序）。
+
+  # ================================================================= 重启
+  - id: restart-advanced-boot
+    category: 重启
+    title: 重启并进入高级启动选项（/r /o）
+    description: >-
+      **会重启**：重新启动计算机并进入**高级启动选项菜单**（官方与帮助都注明 /o "Must be used with /r"，
+      所以这里固定是 /r /o 两条一起）。
+      **本工具包不会替你执行它**（execution: info）。
+      官方页没有为 /o 列出附属参数，所以这个动作**只有这一个开关**，不带其它字段。
+    command: ""
+    commandArgs: ["/r", "/o"]
+    execution: info
+    danger: destructive
+    confirmText: >-
+      这会重启计算机并直接进入高级启动选项菜单（官方原文：Goes to the Advanced boot options menu
+      and restarts the device. This option must be used with the /r option.）。
+      进了那个菜单之后能做的事包括恢复环境与启动设置，请自行判断。本工具包不会代你执行。
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: shutdown 官方参考 —— /o
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/shutdown
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10 / 11
+        note: 官方原文：/o "Goes to the Advanced boot options menu and restarts the device. This option must be used with the /r option."。
+      - title: 本机 `shutdown /?` 的真实输出
+        url: file:///%SystemRoot%/System32/shutdown.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / shutdown.exe 10.0.26100.8875
+        note: 本机帮助原文：/o「转到高级启动选项说明并重启计算机。必须与 /r 选项一起使用。」——与官方页一致。
+
+  # ================================================================= 注销与休眠
+  - id: logoff
+    category: 注销与休眠
+    title: 注销当前用户（/l）
+    description: >-
+      **会立刻注销当前用户**：官方原文 Signs out the current user immediately with no time-out period。
+      官方与帮助都注明 /l **不能与任何其它参数一起用**，所以这个动作没有字段。
+      **本工具包不会替你执行它**（execution: info）。
+    command: ""
+    commandArgs: ["/l"]
+    execution: info
+    danger: destructive
+    confirmText: >-
+      这会**立刻**注销当前用户、没有超时也没有警告（官方原文：Signs out the current user immediately
+      with no time-out period），所有正在运行的程序会被关掉。本工具包不会代你执行。
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: shutdown 官方参考 —— /l
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/shutdown
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10 / 11
+        note: >-
+          官方原文：/l "Signs out the current user immediately with no time-out period. The /l parameter
+          works independently and can't be combined with any other parameters. Attempts to combine /l
+          with any other parameter is ignored."。
+      - title: 本机 `shutdown /?` 的真实输出
+        url: file:///%SystemRoot%/System32/shutdown.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / shutdown.exe 10.0.26100.8875
+        note: 本机帮助原文：/l「注销。这不能与 /m 或 /d 选项一起使用。」——所以本动作不给任何字段。
+
+  # ================================================================= 注销与休眠
+  - id: hibernate
+    category: 注销与休眠
+    title: 休眠本机（/h）
+    description: >-
+      **会休眠**：把本机进入休眠状态（前提是这台机器启用了休眠）。
+      **本工具包不会替你执行它**（execution: info）—— 请复制到终端里自己回车。
+    command: ""
+    commandArgs: ["/h"]
+    execution: info
+    danger: destructive
+    confirmText: >-
+      这会让本机进入休眠（官方原文：Puts the local computer into hibernation, if hibernation is
+      enabled）。配了 /f 时程序会被强制关闭、未保存的工作可能丢失。本工具包不会代你执行。
+    fields:
+      - id: force
+        label: 强制关闭程序、不提醒（/f）
+        type: bool
+        style: flag
+        prefix: /f
+        default: false
+        help: >-
+          官方说明（/h 那段）：The /f switch can be used with the /h switch。
+          官方对 /f 本身另有一句 Caution：Using the /f option might result in loss of unsaved data。
+        doc: official 参数表的 /h（The /f switch can be used with the /h switch）与 /f
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: shutdown 官方参考 —— /h 与 /f
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/shutdown
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10 / 11
+        note: 官方原文：/h "Puts the local computer into hibernation, if hibernation is enabled. The /f switch can be used with the /h switch."。
+      - title: 本机 `shutdown /?` 的真实输出
+        url: file:///%SystemRoot%/System32/shutdown.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / shutdown.exe 10.0.26100.8875
+        note: 本机帮助原文：/h「休眠本地计算机。可以与 /f 选项一起使用。」——与官方页一致。
+
+  # ================================================================= 取消关机
+  - id: abort
+    category: 取消关机
+    title: 取消挂起的关机（/a）
+    description: >-
+      **会取消一个已经排定的关机**（只能在超时窗口内使用）。
+      ⚠ 本工具包**同样不替你执行它**，而且理由和其它动作不一样：万一你（或别的程序、
+      或一条系统策略）真的挂着一个关机计划，替你把 /a 跑掉就是**替你做掉了取消这个决定** ——
+      那本身就是一个副作用。要取消请自己复制到终端里回车。
+    command: ""
+    commandArgs: ["/a"]
+    execution: info
+    danger: overwrite
+    confirmText: >-
+      这会中止一个正在倒计时的系统关机（官方原文：Aborts a pending system shutdown. This must be
+      run as a separate command in a new command prompt window during the time-out period.）。
+      如果你确实有计划中的关机，跑它等于把它取消掉。本工具包不会代你执行。
+    fields:
+      - id: firmware
+        label: 顺便清除挂起的固件引导（/fw）
+        type: bool
+        style: flag
+        prefix: /fw
+        default: false
+        help: >-
+          官方与帮助一致：与 /a 组合可以清除"任何挂起的、下次启动进固件界面"的引导
+          （官方原文：Combine with /fw to clear any pending boots to firmware）。
+        doc: official 参数表的 /a（Combine with /fw to clear any pending boots to firmware）
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: shutdown 官方参考 —— /a 与 /fw
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/shutdown
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10 / 11
+        note: >-
+          官方原文：/a "Aborts a pending system shutdown. This must be run as a separate command in a
+          new command prompt window during the time-out period (for example, shutdown /a). Combine with
+          /fw to clear any pending boots to firmware."。
+      - title: 本机 `shutdown /?` 的真实输出
+        url: file:///%SystemRoot%/System32/shutdown.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / shutdown.exe 10.0.26100.8875
+        note: 本机帮助原文：/a「中止系统关闭。这只能在超时期间使用。与 /fw 结合使用，以清除任何未完成的至固件的引导。」——与官方页一致。
+
+  # ================================================================= 远程
+  - id: remote-gui
+    category: 远程
+    title: 打开远程关机界面（/i）
+    description: >-
+      **会弹出一个图形界面**（Remote Shutdown 对话框），在里面选目标计算机和要做的操作。
+      官方与帮助都注明 /i **必须是第一个选项**、且指定它之后**其它选项全部被忽略**。
+      本包按红线把它也标成 execution: info（宿主只显示命令，不打开界面）。
+      真正的关机动作在那个对话框里，风险也由你当场判断。
+    command: ""
+    commandArgs: ["/i"]
+    execution: info
+    fields: []
+    output:
+      mode: stream
+      showCommandLine: true
+    sources:
+      - title: shutdown 官方参考 —— /i
+        url: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/shutdown
+        retrieved: "2026-10-01"
+        appliesTo: Windows 10 / 11
+        note: >-
+          官方原文：/i "Displays the Remote Shutdown box. The /i option must be the first parameter
+          following the command. If /i is specified, all other options are ignored."。
+      - title: 本机 `shutdown /?` 的真实输出
+        url: file:///%SystemRoot%/System32/shutdown.exe
+        retrieved: "2026-10-01"
+        appliesTo: Windows 11 26200 / shutdown.exe 10.0.26100.8875
+        note: 本机帮助原文：/i「显示图形用户界面(GUI)。这必须是第一个选项。」——与官方页一致。
