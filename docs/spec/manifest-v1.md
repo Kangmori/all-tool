@@ -105,7 +105,10 @@ quickActions:
 
 `visibleWhen` 同样属于这一类（见 §4 的说明）。
 
-
+另外一条**已知限制**（dism 实测暴露）：`execution` 与 `danger` 都是**动作级**的，
+无法表达「同一动作里既有只读模式又有不可逆模式」——例如 `dism /Cleanup-Image` 的
+`/CheckHealth`（只看）与 `/ResetBase`（不可逆）。目前的写法是把警告同时写进
+`confirmText` 与字段的 `help`（dism 就是这么做的），而不是给 enum 取值加执行方式。
 ### 2.5 两条容易写错的约定（Windows 自带命令集撞出来的）
 
 **① `command` 允许为空字符串。** 有一类程序根本没有子命令——Windows 自带命令是典型：
@@ -260,6 +263,10 @@ kind: system        # user（默认）/ system / interactive / dangerous
 |---|---|---|
 | `positional` | 值本身即一个 token；`positionalMode: perLine` 时按行拆成多个 token | `archive` → `archive.zip`；`rn` 的映射表 → `old.txt new.txt` |
 | `attached` | `prefix + separator + value`（`separator` 默认空） | `-o` + `D:\out` → `-oD:\out` |
+
+  > `separator` 允许的取值是 `""`（紧贴）、`" "`（空格）、`"="` 与 **`":"`**。
+  > Windows 那批程序的 `/Switch:Value` 就属于最后一种；写成 `separator: ":"` 比
+  > 「把冒号塞进 prefix」更直白（两种都合法，宿主本来就按 `prefix + separator + 值` 拼）。
 | `separate` | `prefix` 与 `value` 两个独立 token | 本工具包未用到（留给 `--output dir` 这类写法） |
 | `flag` | `true` → 输出 `prefix`；`false` → 不输出 | `-sfx`、`-y` |
 | `literal` | 把所选选项的 `args` 数组原样展开 | `-r-` / `-r0` / `-aoa` / `-slfh`；`args: []` 表示该选项不产生参数 |

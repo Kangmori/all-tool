@@ -289,4 +289,29 @@ public class ArgvBuilderTests
 
         Assert.Equal("\"C:\\Program Files\\7-Zip\\7z.exe\" x \"D:\\my docs\\a.zip\"", display);
     }
+
+    [Fact]
+    public void 冒号分隔符也合成为一个_token()
+    {
+        // Windows 那批程序的 /Switch:Value 写法：schema 现在允许 separator: ":"
+        var action = new ManifestAction
+        {
+            Id = "demo",
+            Command = "packages",
+            Fields =
+            [
+                new ManifestField
+                {
+                    Id = "format",
+                    Style = "attached",
+                    Prefix = "/Format",
+                    Separator = ":",
+                },
+            ],
+        };
+
+        var argv = ArgvBuilder.Build(action, new Dictionary<string, object?> { ["format"] = "Table" });
+
+        Assert.Equal(new[] { "/Format:Table" }, argv);
+    }
 }
