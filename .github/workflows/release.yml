@@ -1,0 +1,105 @@
+name: 发布
+
+# 触发策略（刻意保守，理由见 ci.yml 的同类注释：私有仓库 Windows runner 按 2 倍分钟计费）：
+#   · 打 tag（v*）→ 真发布：构建 + 打包 + 建 Release 并附上 zip
+#   · 手动触发   → **只构建并上传工作流产物，不建 Release**（用来验证 Windows 运行器上能不能构建成功）
+#
+# 与既有工作流的关系：**完全不改 ci.yml**。ci.yml 目前只编译核心库、不含 WinUI 应用
+# （它的注释说"等应用建好并本地验证通过后再纳入"），本工作流的职责正是把应用**发布**出去。
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: 构建并打包（Windows）
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: 校验工具包清单（发布前必须全绿）
+        # 发布包里的 plugins/ 会原样带走，所以先把清单校验拉进来。
+        # 用与 ci.yml 相同的 setup-uv 动作（不自己下载脚本执行）。
+        shell: pwsh
+        run: uv run --with pyyaml --with jsonschema python scripts/validate-plugins.py
+
+      - name: 检查 tag 与应用版本是否一致（避免发错版本号）
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = $env:GITHUB_REF_NAME              # 形如 v0.3.0
+          $tagVersion = $tag.TrimStart('v')
+          $csproj = [xml](Get-Content src/AllTool.App/AllTool.App.csproj -Raw)
+          $appVersion = ($csproj.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1)
+          Write-Host "tag=$tagVersion  应用版本=$appVersion"
+          if ($tagVersion -ne $appVersion) {
+            throw "tag（$tagVersion）与 AllTool.App.csproj 里的 Version（$appVersion）不一致：先改版本号再打 tag。"
+          }
+
+      - name: 构建发布目录（复用本机验证过的 publish-app.ps1）
+        shell: pwsh
+        run: ./scripts/publish-app.ps1 -OutputDirectory dist/AllTool
+
+      - name: 打包并算摘要
+        id: pack
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = if (startsWith($env:GITHUB_REF, 'refs/tags/')) { $env:GITHUB_REF_NAME.TrimStart('v') } else { 'dev' }
+          $zipName = "AllTool-v$version-win-x64.zip"
+          $zipPath = Join-Path 'dist' $zipName
+          Compress-Archive -Path 'dist/AllTool/*' -DestinationPath $zipPath -CompressionLevel Optimal
+          $hash = (Get-FileHash $zipPath -Algorithm SHA256).Hash
+          $sizeMb = [math]::Round((Get-Item $zipPath).Length / 1MB, 1)
+          "zipName=$zipName"       >> $env:GITHUB_OUTPUT
+          "zipPath=$zipPath"       >> $env:GITHUB_OUTPUT
+          "sha256=$hash"           >> $env:GITHUB_OUTPUT
+          "sizeMb=$sizeMb"         >> $env:GITHUB_OUTPUT
+          Write-Host "$zipName  $sizeMb MB  SHA256=$hash"
+          "$zipName`nSHA256: $hash`n大小: $sizeMb MB" | Out-File -FilePath dist/摘要.txt -Encoding utf8
+
+      - name: 上传构建产物（手动触发时的产物，不是 Release）
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pack.outputs.zipName }}
+          path: ${{ steps.pack.outputs.zipPath }}
+          if-no-files-found: error
+
+      - name: 建 Release 并附上 zip（只有打 tag 时）
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $zip = '${{ steps.pack.outputs.zipPath }}'
+          $notes = @"
+          自动构建于 GitHub Actions（Windows 运行器）。
+
+          - 产物：${{ steps.pack.outputs.zipName }}
+          - 大小：${{ steps.pack.outputs.sizeMb }} MB
+          - SHA256：${{ steps.pack.outputs.sha256 }}
+
+          解压后运行 AllTool.exe；这是未签名的自包含包，SmartScreen 可能提示。
+          "@
+          $notes | Out-File -FilePath dist/发布说明.md -Encoding utf8
+          gh release create $env:GITHUB_REF_NAME $zip `
+            --title $env:GITHUB_REF_NAME `
+            --notes-file dist/发布说明.md
