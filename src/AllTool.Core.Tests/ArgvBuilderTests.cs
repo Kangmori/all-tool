@@ -290,4 +290,18 @@ public class ArgvBuilderTests
         Assert.Equal("\"C:\\Program Files\\7-Zip\\7z.exe\" x \"D:\\my docs\\a.zip\"", display);
     }
 
+
+    [Fact]
+    public void 冒号分隔符合成为一个_token()
+    {
+        // Windows 那批程序的 /Switch:Value 写法：规范现在允许 separator: ":"，
+        // 宿主本来就是按 prefix + separator + 值 拼的（见 ArgvBuilder）。
+        // 这条测试把它钉住，免得哪天真去掉了冒号又没人发现。
+        var action = Action(
+            new ManifestField { Id = "format", Label = "format", Type = "text", Style = FieldStyle.Attached, Prefix = "/Format", Separator = ":" });
+
+        var argv = ArgvBuilder.Build(action, Values(("format", "Table")));
+
+        Assert.Equal(["cmd", "/Format:Table"], argv);
+    }
 }
