@@ -116,6 +116,13 @@ foreach ($tool in $watch.tools) {
 
     # ---------------- 文档探测 ----------------
     foreach ($doc in $tool.docs) {
+        # 没有 snapshot 的条目只做登记：本项目转公开后不再随仓库分发第三方文档，
+        # 所以这类条目跳过快照比对（否则每周 CI 都会报一串"快照文件不存在"的噪声）。
+        if (-not $doc.snapshot) {
+            Add-Line "  [仅登记] $($doc.url)" 'Gray'
+            continue
+        }
+
         $snapshotPath = Join-Path $RepoRoot $doc.snapshot.Replace('/', [IO.Path]::DirectorySeparatorChar)
 
         if (-not (Test-Path $snapshotPath)) {
