@@ -1,0 +1,17 @@
+{
+  "command": "taskkill",
+  "capturedAt": "2026-10-01",
+  "source": "本机 /? 快照（快照本身不入库：它是微软的文本；本文件只保留派生出的开关名）",
+  "note": "用 scripts/capture-command-help.py 重新抓取后，本文件由同目录的生成逻辑刷新",
+  "switchCount": 8,
+  "switches": [
+    "/F",
+    "/FI",
+    "/IM",
+    "/P",
+    "/PID",
+    "/S",
+    "/T",
+    "/U"
+  ]
+}

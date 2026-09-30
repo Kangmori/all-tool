@@ -244,8 +244,16 @@ def load_own_switch_entry(plugin_id: str) -> tuple[str, int]:
         return "", 0
     if not isinstance(data, dict):
         return "", 0
-    # 优先用本项目自己抓的"每命令一份 /? 快照"——它是程序自己的输出，
-    # 不是我们的 NOTES，避免自证循环。
+    # 语料查找顺序（都是"程序自己的输出"或其派生事实，不用我们的 NOTES，避免自证循环）：
+    #   1. win-switches/<id>.json —— 从本机 /? 快照派生的**开关名清单**（入库，纯事实）
+    #   2. win-help/<id>.txt     —— 本机 /? 快照原文（不入库：微软的文本，转公开前不能随仓库发布）
+    own_json = ROOT / "docs" / "reference" / "win-switches" / f"{plugin_id}.json"
+    if own_json.exists():
+        try:
+            return own_json.read_text(encoding="utf-8"), 1
+        except OSError:
+            pass
+
     help_txt = ROOT / "docs" / "reference" / "win-help" / f"{plugin_id}.txt"
     if help_txt.exists():
         try:
