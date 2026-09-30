@@ -273,7 +273,8 @@ public sealed partial class MainWindow : Window
                 Margin = new Thickness(0, 8, 0, 2),
             });
 
-            var wrap = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            // 用会换行的面板：工具包一多，横向 StackPanel 会一路往右溢出、被窗口裁掉
+            var wrap = new WrapPanel { HorizontalSpacing = 6, VerticalSpacing = 6 };
 
             foreach (var entry in members)
             {

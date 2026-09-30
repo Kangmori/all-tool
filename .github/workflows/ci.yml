@@ -30,11 +30,21 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, pathlib
-          for path in ["docs/spec/manifest-v1.schema.json", "本机专属库的 host-dev/project-state.json"]:
-              json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
-              print(f"OK  {path}")
-          PY
 
+          # 校验仓库里**所有** JSON（规范 schema、我们提取的事实性数据等）。
+          # 注意：不要在这里引用仓库之外的路径——宿主的状态文件在本机专属库里，CI 上没有它。
+          skip = {".git", "bin", "obj", "node_modules", "dist"}
+          targets = sorted(
+              p for p in pathlib.Path(".").rglob("*.json")
+              if not (skip & set(p.parts))
+          )
+
+          for path in targets:
+              json.loads(path.read_text(encoding="utf-8"))
+              print(f"OK  {path}")
+
+          print(f"共 {len(targets)} 个 JSON 文件都是合法的")
+          PY
   build-and-test:
     name: 编译与测试（Windows）
     runs-on: windows-latest
