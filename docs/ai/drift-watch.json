@@ -47,6 +47,16 @@
           "snapshot": "docs/reference/scoop-wiki/Persistent-data.md"
         }
       ]
+    },
+    {
+      "plugin": "uv",
+      "displayName": "uv",
+      "versionProbe": {
+        "kind": "gitTags",
+        "url": "https://github.com/astral-sh/uv.git",
+        "note": "取最高版本号的 tag（本机实测 0.11.15）。uv 的 CLI 参考是随版本生成的 HTML，而公开仓库不保存第三方文档快照，所以这里只做版本探测——版本一变就说明该重新核对清单。"
+      },
+      "docs": []
     }
   ]
 }
