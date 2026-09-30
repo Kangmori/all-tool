@@ -166,6 +166,22 @@ public sealed class ProcessRunner : IProcessRunner
             throw new InvalidOperationException($"无法启动进程：{request.Executable}");
         }
 
+        // **立刻关掉我们这一端的 stdin**：让子进程看到的是「已关闭」，而不是
+        // 「打开着、永远不会有数据、也不会 EOF」的管道。
+        //
+        // 实测（N52）：sqlite3 在 `-init 脚本` 模式下，**只要 stdin 还开着就不会退出**，
+        // 哪怕脚本最后一行是 `.quit` —— 于是 WaitForExitAsync 永不返回，
+        // RunAsync 之后的会话状态更新与刷新整段都不执行（表现为「命令跑了但状态永不写入」）。
+        // 实验对照见 plugins/sqlite3/NOTES.md 与 project-state 的 N52 记录。
+        try
+        {
+            process.StandardInput.Close();
+        }
+        catch (InvalidOperationException)
+        {
+            // 没有重定向 stdin 时（别的调用方）忽略即可
+        }
+
         using var timeoutSource = request.Timeout is { } timeout
             ? new CancellationTokenSource(timeout)
             : new CancellationTokenSource();
